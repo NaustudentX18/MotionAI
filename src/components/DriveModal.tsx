@@ -151,7 +151,7 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
               <Loader2 className="animate-spin text-amber-500 shrink-0" size={18} />
               <div className="text-xs">
                 <div className="font-bold text-amber-800 dark:text-amber-400">Organizing Workspace...</div>
-                <div className="text-amber-600/80 dark:text-amber-500/80">Setting up "Notion Architect Workspace" folder tree structures.</div>
+                <div className="text-amber-600/80 dark:text-amber-500/80">Setting up "MotionAI Workspace" folder tree structures.</div>
               </div>
             </div>
           ) : structuredFolderInfo ? (
@@ -159,7 +159,7 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
               <div className="flex items-center justify-between text-xs pb-2 border-b border-purple-100/20">
                 <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-purple-400">
                   <Folder size={14} className="text-purple-500" />
-                  <span>Notion Architect Storage Box Built!</span>
+                  <span>MotionAI Workspace Storage Box Built!</span>
                 </div>
                 <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full font-mono flex items-center gap-1 font-bold">
                   <CheckCircle size={10} /> Unified Tree Active

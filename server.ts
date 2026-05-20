@@ -24,7 +24,7 @@ async function startServer() {
     const { command, context, prompt } = req.body;
 
     try {
-      let systemInstruction = `You are the **Notion AI Core Engine**. You operate as a high-performance document processor. 
+      let systemInstruction = `You are the **MotionAI Core Engine**. You operate as a high-performance document processor. 
 Your primary goal is to transform, generate, and refine content within a rich-text workspace. 
 You are NOT a conversational assistant. You are a background utility.
 
@@ -161,6 +161,50 @@ NO PREAMBLE. NO APOLOGIES. NO CHAT.`;
       }
     } catch (err: any) {
       console.error('Spellcheck API error:', err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  // Dynamic MotionAI Chat Proxy Endpoint
+  app.post('/api/ai/chat', async (req, res) => {
+    if (!ai) {
+      return res.status(500).json({ error: 'Gemini API not configured. Please add GEMINI_API_KEY.' });
+    }
+    const { history, message } = req.body;
+    if (!message) {
+      return res.status(400).json({ error: 'Missing chat message' });
+    }
+
+    try {
+      const conversationHistory = Array.isArray(history) ? history : [];
+      
+      const contents = conversationHistory.map(h => ({
+        role: h.role === 'user' ? 'user' : 'model',
+        parts: [{ text: h.text }]
+      }));
+      
+      contents.push({
+        role: 'user',
+        parts: [{ text: message }]
+      });
+
+      const systemInstruction = `You are a helpful, professional, and elite Workspace Assistant named **MotionAI**. You live in the mobile workspace of Jake Malby.
+- Answer user queries with professional poise and clarity in Markdown format.
+- Assist with content generation, summarization, general questions, and technical advice.
+- Keep your tone friendly, helpful, highly organized, and compact. Match the beautiful minimalist Workspace aesthetic.
+- Avoid preachy or overly verbose intros unless necessary. Deliver exact solutions directly.`;
+
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: contents,
+        config: {
+          systemInstruction: systemInstruction,
+        }
+      });
+
+      res.json({ text: response.text });
+    } catch (err: any) {
+      console.error('MotionAI Chat endpoint error:', err);
       res.status(500).json({ error: err.message });
     }
   });

@@ -70,7 +70,7 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
     "Mapping typographic styles and codeblocks..."
   ];
 
-  // Rotate simulator steps for engaging visual cue
+  // Rotate generator steps for engaging visual cue
   useEffect(() => {
     if (loading) {
       setCurrentStepIndex(0);
@@ -397,7 +397,7 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
               )}
             </div>
 
-            {/* Simulated Loading/Rendering viewport */}
+            {/* Generator Loading/Rendering viewport */}
             <div className="flex-1 overflow-y-auto p-6 font-sans">
               {loading ? (
                 <div className="h-full flex flex-col items-center justify-center py-20 text-center space-y-4">

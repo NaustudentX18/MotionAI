@@ -39,6 +39,24 @@ const BG_COLORS = [
   { name: 'Red', value: '#FDEBEC' },
 ];
 
+const INLINE_AI_PRESETS = {
+  'ai-summary': [
+    { label: "⚡ TL;DR", prompt: "Summarize this into a single, punchy TL;DR paragraph." },
+    { label: "📋 Deliverables", prompt: "Extract and summarize all action items and meeting deliverables as a structured list." },
+    { label: "💡 Key Insights", prompt: "Identify and outline the 3 most critical insights and lessons from the text." },
+  ],
+  'ai-draft': [
+    { label: "📅 Agenda", prompt: "Create a detailed meeting agenda outline including standard timers and discussion goals." },
+    { label: "✉️ Email", prompt: "Draft a polished, professional email summarizing these points for executive stakeholders." },
+    { label: "🚀 Launch Pitch", prompt: "Write an inspiring release announcement for a product launch highlighting the key impacts." },
+  ],
+  'ai-rewrite': [
+    { label: "👔 Corporate", prompt: "Rewrite this content to be highly professional, elegant, and corporate suited." },
+    { label: "✂️ Concise", prompt: "Rewrite this text to be short and direct. Eliminate all fluff while preserving core facts." },
+    { label: "👶 Simple", prompt: "Simplify the language and terminology. Explain this complex concept as if I am 10 years old." },
+  ]
+};
+
 export function parseMarkdownToHtml(text: string): string {
   if (!text) return text;
   
@@ -127,6 +145,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
   const [slashQuery, setSlashQuery] = useState('');
+  const [slashSelectedIndex, setSlashSelectedIndex] = useState(0);
   
   const [aiMenuOpen, setAiMenuOpen] = useState(false);
   const [aiMenuPos, setAiMenuPos] = useState({ top: 0, left: 0 });
@@ -164,6 +183,11 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const [lastSavedTime, setLastSavedTime] = useState<string>(() => new Date().toLocaleTimeString());
   const isFirstRender = useRef(true);
 
+  // Reset slash index on query change
+  useEffect(() => {
+    setSlashSelectedIndex(0);
+  }, [slashQuery]);
+
   // Mark status as dirty on user adjustments (skip first render mount)
   useEffect(() => {
     if (isFirstRender.current) {
@@ -173,7 +197,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     setSaveStatus('dirty');
   }, [blocks, title]);
 
-  // Handle auto-save at a regular interval (30 seconds)
+  // Handle auto-save at a regular interval (5 seconds)
   useEffect(() => {
     const timer = setInterval(() => {
       // Rotate state to saving
@@ -185,7 +209,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
           timestamp: Date.now()
         };
         // Back up current content to local storage to avoid any data loss
-        localStorage.setItem(`notion_clone_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
+        localStorage.setItem(`motion_ai_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
         
         // Propagate state to the parent component
         onChangeRef.current(blocks);
@@ -198,7 +222,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
         console.error("Auto-save error:", err);
         setSaveStatus('error');
       }
-    }, 30000); // 30 seconds interval
+    }, 5000); // 5 seconds interval
 
     return () => clearInterval(timer);
   }, [blocks, title]);
@@ -212,7 +236,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
         blocks,
         timestamp: Date.now()
       };
-      localStorage.setItem(`notion_clone_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
+      localStorage.setItem(`motion_ai_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
       onChangeRef.current(blocks);
       
       setTimeout(() => {
@@ -257,6 +281,32 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>, index: number) => {
     const block = blocks[index];
     const el = e.currentTarget;
+
+    if (slashMenuOpen) {
+      if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        setSlashSelectedIndex(prev => (prev + 1) % filteredSlashActions.length);
+        return;
+      }
+      if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        setSlashSelectedIndex(prev => (prev - 1 + filteredSlashActions.length) % filteredSlashActions.length);
+        return;
+      }
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        const action = filteredSlashActions[slashSelectedIndex];
+        if (action) {
+          handleSlashAction(action);
+        }
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSlashMenuOpen(false);
+        return;
+      }
+    }
 
     if (e.key === 'Tab') {
       e.preventDefault();
@@ -457,6 +507,33 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
       e.currentTarget.innerHTML = '';
       focusBlock(id, true);
     }
+
+    // Keep track of Slash command live inputs and search terms
+    const slashIndex = textContent.lastIndexOf('/');
+    if (slashIndex !== -1 && slashIndex >= textContent.length - 15) {
+      const query = textContent.substring(slashIndex + 1);
+      if (!query.includes(' ') && !query.includes('\n')) {
+        setSlashQuery(query);
+        setSlashMenuOpen(true);
+        // Position relative to current text caret
+        const sel = window.getSelection();
+        if (sel && sel.rangeCount > 0) {
+          const range = sel.getRangeAt(0);
+          const rect = range.getBoundingClientRect();
+          if (rect.top !== 0 && rect.left !== 0) {
+            setSlashMenuPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+          }
+        }
+      } else {
+        setSlashMenuOpen(false);
+        setSlashQuery('');
+      }
+    } else {
+      if (slashMenuOpen && !textContent.includes('/')) {
+        setSlashMenuOpen(false);
+        setSlashQuery('');
+      }
+    }
   };
 
   const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>, index: number, id: string) => {
@@ -554,6 +631,38 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     setBlocks(blocks.map(b => b.id === id ? { ...b, ...updates } : b));
   };
 
+  const convertFocusedBlock = (newType: 'ai-summary' | 'ai-draft' | 'ai-rewrite') => {
+    if (!focusedId) return;
+    
+    // Determine context and prompt based on types
+    let aiContext = '';
+    let aiPrompt = '';
+    
+    if (newType === 'ai-summary') {
+      aiContext = selectedText || blocks.find(b => b.id === focusedId)?.content || '';
+      aiPrompt = 'Provide a tidy, structured summary of the content below.';
+    } else if (newType === 'ai-draft') {
+      aiPrompt = selectedText || blocks.find(b => b.id === focusedId)?.content || '';
+      aiContext = '';
+    } else if (newType === 'ai-rewrite') {
+      aiContext = selectedText || blocks.find(b => b.id === focusedId)?.content || '';
+      aiPrompt = 'Make this content professional and clearer.';
+    }
+    
+    // strip HTML tags for plain text usage in textareas
+    aiContext = aiContext.replace(/<[^>]*>/g, '');
+    aiPrompt = aiPrompt.replace(/<[^>]*>/g, '');
+    
+    updateBlock(focusedId, {
+      type: newType,
+      aiContext,
+      aiPrompt,
+      content: '' // Reset direct rich content
+    });
+    
+    setAiMenuOpen(false);
+  };
+
   const applyInlineStyle = (command: string, value: string = '') => {
     document.execCommand(command, false, value);
     if (focusedId) {
@@ -641,17 +750,36 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     return () => window.removeEventListener('ai-command', handleAiCommandEvent);
   }, [blocks.length, selectedText]); // Add dependencies since we call runAiCommand which uses them
 
+  useEffect(() => {
+    const handlePdfExportEvent = () => {
+      exportPageAsPdf();
+    };
+    window.addEventListener('export-pdf', handlePdfExportEvent);
+    return () => window.removeEventListener('export-pdf', handlePdfExportEvent);
+  }, [blocks, title]);
+
   const runAiCommand = async (command: string, customPrompt = '') => {
     if (!selectedText && command !== 'continue' && command !== 'custom' && command !== 'brainstorm') return;
     
     setAiLoading(true);
     try {
+      let semanticContext = '';
+      try {
+        const { semanticSearch } = await import('../lib/vectorStore');
+        const results = await semanticSearch(customPrompt || aiPrompt || selectedText || 'general content', 3);
+        if (results && results.length > 0) {
+          semanticContext = '\n\n[RELEVANT LOCAL CHUNKS]\n' + results.map((r: any) => `- "${r.text}"`).join('\n');
+        }
+      } catch (e) {
+        console.warn('Semantic search failed or not ready:', e);
+      }
+
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command,
-          context: selectedText || blocks.map(b => b.content).join('\n'),
+          context: (selectedText || blocks.map(b => b.content).join('\n')) + semanticContext,
           prompt: customPrompt || aiPrompt
         })
       });
@@ -704,7 +832,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
       if (block.type === 'ai-summary') {
         command = 'summarize';
         context = block.aiContext || '';
-        prompt = 'Provide a tidy, structured summary of the content below.';
+        prompt = block.aiPrompt || 'Provide a tidy, structured summary of the content below.';
       } else if (block.type === 'ai-draft') {
         command = 'custom';
         context = block.aiContext || '';
@@ -715,12 +843,23 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
         prompt = `Please rewrite the following content to fit these criteria: ${block.aiPrompt}. Keep it structurally sound and clean. Target Content:\n${context}`;
       }
 
+      let semanticContext = '';
+      try {
+        const { semanticSearch } = await import('../lib/vectorStore');
+        const results = await semanticSearch(prompt || context || 'general content', 3);
+        if (results && results.length > 0) {
+          semanticContext = '\n\n[RELEVANT LOCAL CHUNKS]\n' + results.map((r: any) => `- "${r.text}"`).join('\n');
+        }
+      } catch (e) {
+        console.warn('Semantic search failed or not ready:', e);
+      }
+
       const res = await fetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command,
-          context,
+          context: context + semanticContext,
           prompt
         })
       });
@@ -761,7 +900,18 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     }
     
     if (action === 'replace' && focusedId) {
-        updatedBlocks.splice(index, 1, ...newBlocks);
+        const targetBlock = updatedBlocks.find(b => b.id === focusedId);
+        if (targetBlock && selectedText) {
+          const cleanTextResult = aiResult.trim();
+          if (targetBlock.content.includes(selectedText)) {
+            targetBlock.content = targetBlock.content.replace(selectedText, cleanTextResult);
+          } else {
+            // Strip any tags if necessary, or just fallback to block replacement
+            targetBlock.content = cleanTextResult;
+          }
+        } else {
+          updatedBlocks.splice(index, 1, ...newBlocks);
+        }
     } else {
         updatedBlocks.splice(index + 1, 0, ...newBlocks);
     }
@@ -880,7 +1030,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const exportPageAsPdf = async () => {
     setExportingPdf(true);
     try {
-      const element = document.getElementById('notion-page-content');
+      const element = document.getElementById('workspace-page-content');
       if (!element) return;
       
       const currentScrollY = window.scrollY;
@@ -1011,17 +1161,58 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     return spellingIssues.some(issue => issue.blockId === blockId);
   };
 
-  const commands = [
-    { label: 'Text', icon: Type, type: 'p' },
-    { label: 'Heading 1', icon: Hash, type: 'h1' },
-    { label: 'Heading 2', icon: Hash, type: 'h2' },
-    { label: 'Heading 3', icon: Hash, type: 'h3' },
-    { label: 'To-do list', icon: CheckSquare, type: 'todo' },
-    { label: 'Bulleted list', icon: List, type: 'bullet' },
-    { label: 'Divider', icon: Minus, type: 'divider' },
-    { label: 'Quote', icon: Quote, type: 'quote' },
-    { label: 'Callout', icon: Lightbulb, type: 'callout' },
+  const slashMenuActions = [
+    { label: 'Text', icon: Type, type: 'p', description: 'Plain text formatting', category: 'Basic Blocks' },
+    { label: 'Heading 1', icon: Hash, type: 'h1', description: 'Large section heading', category: 'Basic Blocks' },
+    { label: 'Heading 2', icon: Hash, type: 'h2', description: 'Medium section heading', category: 'Basic Blocks' },
+    { label: 'Heading 3', icon: Hash, type: 'h3', description: 'Small section heading', category: 'Basic Blocks' },
+    { label: 'To-do list', icon: CheckSquare, type: 'todo', description: 'Task checkbox tracker', category: 'Basic Blocks' },
+    { label: 'Bulleted list', icon: List, type: 'bullet', description: 'Simple bulleted list', category: 'Basic Blocks' },
+    { label: 'Divider', icon: Minus, type: 'divider', description: 'Visual divider line', category: 'Basic Blocks' },
+    { label: 'Quote', icon: Quote, type: 'quote', description: 'Blockquote callout text', category: 'Basic Blocks' },
+    { label: 'Callout', icon: Lightbulb, type: 'callout', description: 'Lightbulb highlighted box', category: 'Basic Blocks' },
+    { label: 'Draft with AI...', icon: Wand2, type: 'ai-custom', description: 'Ask AI to write or edit', category: 'AI Magic' },
+    { label: 'AI Summary Block', icon: Sparkles, type: 'ai-summary', description: 'Prompt AI to summarize text', category: 'AI Magic' },
+    { label: 'AI Draft Block', icon: Wand2, type: 'ai-draft', description: 'Draft text from prompts', category: 'AI Magic' },
+    { label: 'AI Rewrite Block', icon: Edit, type: 'ai-rewrite', description: 'Prompt AI to edit or rewrite text', category: 'AI Magic' }
   ];
+
+  const filteredSlashActions = slashMenuActions.filter(action => 
+    action.label.toLowerCase().includes(slashQuery.toLowerCase()) || 
+    action.description.toLowerCase().includes(slashQuery.toLowerCase())
+  );
+
+  const handleSlashAction = (action: typeof slashMenuActions[0]) => {
+    if (!focusedId) return;
+
+    // Remove the "/" and search characters typed in the DOM element
+    const el = blockRefs.current[focusedId];
+    if (el) {
+      let text = el.innerText || '';
+      const idx = text.lastIndexOf('/');
+      if (idx !== -1) {
+        text = text.substring(0, idx);
+      }
+      el.innerText = text;
+    }
+
+    if (action.type === 'ai-custom') {
+      setSlashMenuOpen(false);
+      setAiMenuPos({ top: window.innerHeight / 3, left: window.innerWidth / 2 - 250 });
+      setAiMenuOpen(true);
+    } else if (action.type === 'ai-summary' || action.type === 'ai-draft' || action.type === 'ai-rewrite') {
+      updateBlock(focusedId, { 
+        type: action.type as BlockType, 
+        content: '', 
+        aiPrompt: action.type === 'ai-summary' ? 'Summarize this page or previous blocks.' : action.type === 'ai-rewrite' ? 'Rewrite the input into a professional, concise pitch.' : '',
+        aiContext: '' 
+      });
+      setSlashMenuOpen(false);
+    } else {
+      updateBlock(focusedId, { type: action.type as BlockType, content: '' });
+      setSlashMenuOpen(false);
+    }
+  };
 
   return (
     <div className={cn(
@@ -1031,7 +1222,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
       {/* Top PDF and Page Panel Actions */}
       <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#EBEBE9] dark:border-[#2F2F2F] pdf-exclude">
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-400 font-medium tracking-wide uppercase hidden sm:inline">Notion Architect workspace</span>
+          <span className="text-xs text-gray-400 font-medium tracking-wide uppercase hidden sm:inline">MotionAI workspace</span>
           
           {/* Elegant Auto-save Badge */}
           <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#F4F4F3] dark:bg-[#1E1E1E] border border-[#EBEBE9] dark:border-[#2F2F2F] text-[10px] font-mono leading-none select-none">
@@ -1105,7 +1296,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
           "w-full",
           showSpellcheck && spellingIssues.length > 0 ? "lg:col-span-3" : ""
         )}>
-          <div id="notion-page-content" className="p-4 sm:p-6 rounded-xl">
+          <div id="workspace-page-content" className="p-4 sm:p-6 rounded-xl">
             <input 
               type="text" 
               value={title || ''} 
@@ -1248,35 +1439,58 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                     ) : (
                       <div className="space-y-4 pdf-exclude">
                         {block.type === 'ai-summary' && (
-                          <div className="space-y-2">
-                            <div className="flex items-center justify-between">
-                              <label className="block text-[11px] font-bold text-purple-650 dark:text-purple-400 uppercase tracking-wider">Text context to Summarize</label>
-                              <button
-                                onClick={() => setComposerBlockId(block.id)}
-                                className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline transition-all flex items-center gap-1 cursor-pointer"
-                              >
-                                <Maximize2 size={10} /> Full-Screen Workspace
-                              </button>
+                          <div className="space-y-3">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[11px] font-bold text-purple-650 dark:text-purple-400 uppercase tracking-wider">Text context to Summarize</label>
+                                <button
+                                  onClick={() => setComposerBlockId(block.id)}
+                                  className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Maximize2 size={10} /> Full-Screen Workspace
+                                </button>
+                              </div>
+                              <textarea
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[75px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 transition-all font-sans leading-relaxed"
+                                placeholder="Paste text context here, or compose in full-screen AI Workspace..."
+                                value={block.aiContext || ''}
+                                onChange={e => updateBlock(block.id, { aiContext: e.target.value })}
+                              />
+                              <div className="flex gap-2">
+                                <button
+                                  onClick={() => {
+                                    const allText = blocks
+                                      .filter(b => b.id !== block.id && b.content && b.content.trim() && b.type !== 'divider')
+                                      .map(b => b.content.replace(/<[^>]*>/g, '').trim())
+                                      .join('\n\n');
+                                    updateBlock(block.id, { aiContext: allText });
+                                  }}
+                                  className="text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 bg-purple-50 dark:bg-purple-950/20 hover:bg-purple-100/30 font-bold px-2 py-1 rounded transition-colors cursor-pointer"
+                                >
+                                  📥 Use all page content
+                                </button>
+                              </div>
                             </div>
-                            <textarea
-                              className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[75px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 transition-all font-sans leading-relaxed"
-                              placeholder="Paste text context here, or compose in full-screen AI Workspace..."
-                              value={block.aiContext || ''}
-                              onChange={e => updateBlock(block.id, { aiContext: e.target.value })}
-                            />
-                            <div className="flex gap-2">
-                              <button
-                                onClick={() => {
-                                  const allText = blocks
-                                    .filter(b => b.id !== block.id && b.content && b.content.trim() && b.type !== 'divider')
-                                    .map(b => b.content.replace(/<[^>]*>/g, '').trim())
-                                    .join('\n\n');
-                                  updateBlock(block.id, { aiContext: allText });
-                                }}
-                                className="text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 bg-purple-50 dark:bg-purple-950/20 hover:bg-purple-100/30 font-bold px-2 py-1 rounded transition-colors cursor-pointer"
-                              >
-                                📥 Use all page content
-                              </button>
+
+                            <div className="space-y-1.5 pt-1.5 border-t border-[#EBEBE9]/40 dark:border-[#2F2F2F]/40">
+                              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-550 uppercase tracking-wider">Summary style rules (optional)</label>
+                              <textarea
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[50px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 transition-all font-sans font-semibold placeholder:font-normal"
+                                placeholder="e.g. Keep under 100 words, use bulleted lists, highlight names..."
+                                value={block.aiPrompt || ''}
+                                onChange={e => updateBlock(block.id, { aiPrompt: e.target.value })}
+                              />
+                              <div className="flex flex-wrap gap-1.5 pt-1">
+                                {INLINE_AI_PRESETS['ai-summary'].map((p) => (
+                                  <button
+                                    key={p.label}
+                                    onClick={() => updateBlock(block.id, { aiPrompt: p.prompt })}
+                                    className="text-[10px] bg-[#F4F4F3] dark:bg-[#252525] text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 font-bold px-2 py-0.5 rounded border border-dashed border-[#EBEBE9] dark:border-[#2F2F2F] transition-all cursor-pointer"
+                                  >
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1293,16 +1507,26 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                                   <Maximize2 size={10} /> Full-Screen Workspace
                                 </button>
                               </div>
-                              <input
-                                type="text"
-                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 font-medium"
+                              <textarea
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[55px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 font-semibold placeholder:font-normal leading-relaxed"
                                 placeholder="e.g. A meeting agenda for project launch, a blog post outline on Docker..."
                                 value={block.aiPrompt || ''}
                                 onChange={e => updateBlock(block.id, { aiPrompt: e.target.value })}
                               />
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {INLINE_AI_PRESETS['ai-draft'].map((p) => (
+                                  <button
+                                    key={p.label}
+                                    onClick={() => updateBlock(block.id, { aiPrompt: p.prompt })}
+                                    className="text-[10px] bg-[#F4F4F3] dark:bg-[#252525] text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 font-bold px-2 py-0.5 rounded border border-dashed border-[#EBEBE9] dark:border-[#2F2F2F] transition-all cursor-pointer"
+                                  >
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
-                            <div className="space-y-1.55">
-                              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Context or details (optional)</label>
+                            <div className="space-y-1.5">
+                              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-550 uppercase tracking-wider">Context or details (optional)</label>
                               <textarea
                                 className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[50px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 transition-all font-sans"
                                 placeholder="Provide context, keywords, outlines, tone guidelines..."
@@ -1334,13 +1558,23 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                             </div>
                             <div className="space-y-1.5">
                               <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-550 uppercase tracking-wider">How should it be rewritten?</label>
-                              <input
-                                type="text"
-                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250"
+                              <textarea
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[55px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 font-semibold placeholder:font-normal leading-relaxed"
                                 placeholder="e.g. More professional, clear & concise, explain to a beginner..."
                                 value={block.aiPrompt || ''}
                                 onChange={e => updateBlock(block.id, { aiPrompt: e.target.value })}
                               />
+                              <div className="flex flex-wrap gap-1.5 pt-0.5">
+                                {INLINE_AI_PRESETS['ai-rewrite'].map((p) => (
+                                  <button
+                                    key={p.label}
+                                    onClick={() => updateBlock(block.id, { aiPrompt: p.prompt })}
+                                    className="text-[10px] bg-[#F4F4F3] dark:bg-[#252525] text-gray-700 dark:text-gray-300 hover:text-purple-600 dark:hover:text-purple-400 font-bold px-2 py-0.5 rounded border border-dashed border-[#EBEBE9] dark:border-[#2F2F2F] transition-all cursor-pointer"
+                                  >
+                                    {p.label}
+                                  </button>
+                                ))}
+                              </div>
                             </div>
                           </div>
                         )}
@@ -1513,6 +1747,55 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                               {block.style?.backgroundColor === bg.value && <Check size={11} className="text-black" />}
                             </button>
                           ))}
+                        </div>
+                      </div>
+
+                      {/* Transform to AI Block */}
+                      <div className="pt-2.5 border-t border-[#EBEBE9] dark:border-[#2F2F2F] mt-1.5">
+                        <span className="text-[10px] uppercase font-bold text-purple-600 dark:text-purple-400 block mb-1">⚡ AI Conversion Tools</span>
+                        <div className="flex flex-col gap-0.5">
+                          <button
+                            onClick={() => {
+                              updateBlock(block.id, { 
+                                type: 'ai-summary', 
+                                aiContext: block.content ? block.content.replace(/<[^>]*>/g, '') : '',
+                                aiPrompt: 'Provide a tidy, structured summary of the content below.' 
+                              });
+                              setActiveStyleBlockId(null);
+                            }}
+                            className="flex items-center gap-1.5 w-full text-left p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-950/20 text-purple-750 dark:text-purple-400 font-semibold transition-colors cursor-pointer"
+                          >
+                            <Sparkles size={11} />
+                            <span>Convert to AI Summary Block</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateBlock(block.id, { 
+                                type: 'ai-draft', 
+                                aiPrompt: block.content ? block.content.replace(/<[^>]*>/g, '') : '',
+                                aiContext: '' 
+                              });
+                              setActiveStyleBlockId(null);
+                            }}
+                            className="flex items-center gap-1.5 w-full text-left p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-950/20 text-purple-750 dark:text-purple-400 font-semibold transition-colors cursor-pointer"
+                          >
+                            <Wand2 size={11} />
+                            <span>Convert to AI Draft Block</span>
+                          </button>
+                          <button
+                            onClick={() => {
+                              updateBlock(block.id, { 
+                                type: 'ai-rewrite', 
+                                aiContext: block.content ? block.content.replace(/<[^>]*>/g, '') : '',
+                                aiPrompt: 'Make this content professional and clearer.' 
+                              });
+                              setActiveStyleBlockId(null);
+                            }}
+                            className="flex items-center gap-1.5 w-full text-left p-1 rounded hover:bg-purple-50 dark:hover:bg-purple-950/20 text-purple-750 dark:text-purple-400 font-semibold transition-colors cursor-pointer"
+                          >
+                            <Edit size={11} />
+                            <span>Convert to AI Rewrite Block</span>
+                          </button>
                         </div>
                       </div>
                     </div>
@@ -1699,103 +1982,70 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
       {/* Slash Command Menu */}
       {slashMenuOpen && (
         <div 
-          className="fixed z-50 w-[90%] max-w-[320px] bg-white rounded-lg shadow-[0_4px_16px_rgba(15,15,15,0.1),0_0_0_1px_rgba(15,15,15,0.05)] overflow-hidden text-sm"
+          className="fixed z-50 w-[90%] max-w-[320px] bg-white dark:bg-[#1E1E1E] rounded-lg shadow-[0_4px_16px_rgba(15,15,15,0.25),0_0_0_1px_rgba(15,15,15,0.1)] border border-[#EBEBE9] dark:border-[#333333] overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
           style={{ 
             top: Math.max(10, slashMenuPos.top + 24), 
             left: window.innerWidth < 640 ? '5%' : Math.max(10, Math.min(slashMenuPos.left, window.innerWidth - 330)) 
           }}
         >
-          <div className="px-3 py-1.5 text-[11px] font-bold text-[#37352f7a] uppercase tracking-wider bg-white">
-            Basic Blocks
-          </div>
-          <div className="p-1 max-h-[300px] overflow-y-auto">
-            {commands.map((cmd) => (
-              <button
-                key={cmd.label}
-                className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left"
-                onClick={() => {
-                  if (focusedId) updateBlock(focusedId, { type: cmd.type as BlockType, content: '' });
-                  setSlashMenuOpen(false);
-                }}
-              >
-                <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-white flex items-center justify-center mr-3 flex-shrink-0 text-[#37352F]">
-                  <cmd.icon size={18} strokeWidth={1.5} />
-                </div>
-                <div>
-                  <div className="font-medium text-[#37352F]">{cmd.label}</div>
-                  <div className="text-xs text-[#37352f7a]">Shortcut formatting</div>
-                </div>
-              </button>
-            ))}
-            
-            <div className="px-2 py-1.5 mt-2 text-[11px] font-bold text-[#37352f7a] uppercase tracking-wider bg-white border-t border-[#EBEBE9]">
-              AI Magic
+          {slashQuery && (
+            <div className="px-3 py-1.5 text-[10px] bg-purple-50 dark:bg-purple-950/20 text-purple-700 dark:text-purple-400 font-mono font-bold flex items-center justify-between border-b border-[#EBEBE9] dark:border-[#2F2F2F]">
+              <span>FILTER: "{slashQuery.toUpperCase()}"</span>
+              <span>{filteredSlashActions.length} matches</span>
             </div>
-            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
-              onClick={() => {
-                setSlashMenuOpen(false);
-                setAiMenuOpen(true);
-                setAiMenuPos({top: window.innerHeight/3, left: window.innerWidth/2 - 250});
-              }}
-            >
-              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
-                <Wand2 size={18} strokeWidth={1.5} />
-              </div>
-              <div>
-                <div className="font-medium text-[#37352F]">Draft with AI...</div>
-              </div>
-            </button>
-
-            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
-              onClick={() => {
-                if (focusedId) {
-                  updateBlock(focusedId, { type: 'ai-summary', content: '', aiPrompt: '', aiContext: '' });
-                }
-                setSlashMenuOpen(false);
-              }}
-            >
-              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
-                <Sparkles size={18} strokeWidth={1.5} />
-              </div>
-              <div>
-                <div className="font-medium text-[#37352F]">AI Summary Block</div>
-                <div className="text-xs text-[#37352f7a]">Prompt AI to summarize text</div>
-              </div>
-            </button>
-
-            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
-              onClick={() => {
-                if (focusedId) {
-                  updateBlock(focusedId, { type: 'ai-draft', content: '', aiPrompt: '', aiContext: '' });
-                }
-                setSlashMenuOpen(false);
-              }}
-            >
-              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
-                <Wand2 size={18} strokeWidth={1.5} />
-              </div>
-              <div>
-                <div className="font-medium text-[#37352F]">AI Draft Block</div>
-                <div className="text-xs text-[#37352f7a]">Draft text from prompts</div>
-              </div>
-            </button>
-
-            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
-              onClick={() => {
-                if (focusedId) {
-                  updateBlock(focusedId, { type: 'ai-rewrite', content: '', aiPrompt: '', aiContext: '' });
-                }
-                setSlashMenuOpen(false);
-              }}
-            >
-              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
-                <Edit size={18} strokeWidth={1.5} />
-              </div>
-              <div>
-                <div className="font-medium text-[#37352F]">AI Rewrite Block</div>
-                <div className="text-xs text-[#37352f7a]">Prompt AI to edit or rewrite text</div>
-              </div>
-            </button>
+          )}
+          <div className="p-1 max-h-[300px] overflow-y-auto">
+            {filteredSlashActions.length === 0 ? (
+              <div className="p-3 text-center text-xs text-[#37352f7a] dark:text-stone-500 font-medium">No commands found...</div>
+            ) : (
+              (() => {
+                let lastCategory = '';
+                return filteredSlashActions.map((action, actionIdx) => {
+                  const showCategoryHeader = action.category !== lastCategory;
+                  lastCategory = action.category;
+                  const isSelected = actionIdx === slashSelectedIndex;
+                  const IconComponent = action.icon;
+                  
+                  return (
+                    <React.Fragment key={action.label}>
+                      {showCategoryHeader && (
+                        <div className="px-2.5 py-1 text-[10px] font-bold text-gray-400 dark:text-stone-500 uppercase tracking-widest mt-1.5 first:mt-0 pb-1">
+                          {action.category}
+                        </div>
+                      )}
+                      <button
+                        className={cn(
+                          "w-full flex items-center p-2 rounded text-left transition-all cursor-pointer",
+                          isSelected 
+                            ? "bg-[#F1F1F0] dark:bg-[#2F2F2F] ring-1 ring-purple-300 dark:ring-purple-900 border-l-4 border-purple-500" 
+                            : "hover:bg-[#F1F1F0]/50 dark:hover:bg-[#252525]/30 text-stone-700 dark:text-stone-300"
+                        )}
+                        onClick={() => handleSlashAction(action)}
+                        onMouseEnter={() => setSlashSelectedIndex(actionIdx)}
+                      >
+                        <div className={cn(
+                          "w-10 h-10 rounded border flex items-center justify-center mr-3 flex-shrink-0 transition-colors",
+                          action.category === 'AI Magic' 
+                            ? "border-purple-300 dark:border-purple-900 bg-purple-50 dark:bg-purple-950/20 text-purple-600 dark:text-purple-400" 
+                            : "border-[#EBEBE9] dark:border-[#2F2F2F] bg-white dark:bg-[#252525] text-[#37352F] dark:text-stone-250"
+                        )}>
+                          <IconComponent size={18} strokeWidth={1.5} />
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <div className="font-semibold text-xs text-[#37352F] dark:text-[#E3E3E3] flex items-center gap-1">
+                            <span>{action.label}</span>
+                            {isSelected && <span className="text-[9px] bg-purple-100 dark:bg-purple-950/50 text-purple-600 dark:text-purple-400 px-1 rounded font-mono">↵</span>}
+                          </div>
+                          {action.description && (
+                            <div className="text-[10px] text-[#37352f7a] dark:text-stone-400 truncate leading-tight mt-0.5">{action.description}</div>
+                          )}
+                        </div>
+                      </button>
+                    </React.Fragment>
+                  );
+                });
+              })()
+            )}
           </div>
         </div>
       )}
@@ -1853,6 +2103,100 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                  </div>
               ) : (
                 <div className="p-1">
+                     {selectedText && (
+                       <div className="mb-2 bg-gradient-to-r from-purple-50/70 to-purple-50/40 dark:from-purple-950/20 dark:to-purple-950/10 p-2 rounded-lg border border-purple-100 dark:border-purple-900/40">
+                         <div className="px-2 py-1 text-[10px] font-bold text-purple-700 dark:text-purple-300 uppercase tracking-widest flex items-center justify-between">
+                           <span>✨ Selection Quick Tools</span>
+                           <span className="text-[9px] bg-purple-100 dark:bg-purple-900/40 text-purple-850 dark:text-purple-255 px-1.5 py-0.5 rounded font-mono font-bold">
+                             {selectedText.length} chars
+                           </span>
+                         </div>
+                         <div className="space-y-1 mt-1.5">
+                           <button 
+                             className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                             onClick={() => runAiCommand('summarize')}
+                           >
+                             <div className="flex items-center gap-2">
+                               <MessageSquare size={13} className="text-purple-600 group-hover:scale-110 transition-transform"/> 
+                               <span>📝 Summarize Selection</span>
+                             </div>
+                             <span className="text-[9px] text-[#37352f55] dark:text-gray-400">Run AI</span>
+                           </button>
+                           <button 
+                             className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                             onClick={() => runAiCommand('custom', 'Rewrite this specific selected text to be clearer, more elegant, and grammatically perfect:')}
+                           >
+                             <div className="flex items-center gap-2">
+                               <Edit size={13} className="text-purple-650 group-hover:scale-110 transition-transform"/> 
+                               <span>✍️ Rewrite Selection</span>
+                             </div>
+                             <span className="text-[9px] text-[#37352f55] dark:text-gray-400">Run AI</span>
+                           </button>
+                           <button 
+                             className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                             onClick={() => runAiCommand('improve')}
+                           >
+                             <div className="flex items-center gap-2">
+                               <Sparkles size={13} className="text-amber-500 group-hover:scale-110 transition-transform"/> 
+                               <span>🪄 Improve & Polish Selection</span>
+                             </div>
+                             <span className="text-[9px] text-[#37352f55] dark:text-gray-400">Run AI</span>
+                           </button>
+                           <button 
+                             className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                             onClick={() => runAiCommand('custom', 'Explain this highlighted word, concept or phrase in simple, clear terms, highlighting key concepts:')}
+                           >
+                             <div className="flex items-center gap-2">
+                               <Lightbulb size={13} className="text-yellow-500 group-hover:scale-110 transition-transform"/> 
+                               <span>💡 Explain Selection Context</span>
+                              </div>
+                              <span className="text-[9px] text-[#37352f55] dark:text-gray-400">Run AI</span>
+                            </button>
+
+                            {focusedId && (
+                              <div className="pt-1.5 border-t border-purple-200/50 dark:border-purple-900/30 mt-1 space-y-1 pdf-exclude">
+                                <span className="px-2 py-0.5 text-[9px] font-bold text-purple-700/60 dark:text-purple-400 block uppercase tracking-wider">Convert Block Type</span>
+                                <button 
+                                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                                  onClick={() => convertFocusedBlock('ai-summary')}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Sparkles size={11} className="text-purple-600 group-hover:rotate-12 transition-transform"/> 
+                                    <span>✨ Convert Block to AI Summary</span>
+                                  </div>
+                                  <span className="text-[9px] bg-purple-100 dark:bg-purple-900/40 text-purple-650 dark:text-purple-400 px-1 rounded font-mono font-bold">Block</span>
+                                </button>
+                                <button 
+                                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                                  onClick={() => convertFocusedBlock('ai-draft')}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Wand2 size={11} className="text-purple-600 group-hover:rotate-12 transition-transform"/> 
+                                    <span>🪄 Convert Block to AI Draft</span>
+                                  </div>
+                                  <span className="text-[9px] bg-purple-100 dark:bg-purple-900/40 text-purple-650 dark:text-purple-400 px-1 rounded font-mono font-bold">Block</span>
+                                </button>
+                                <button 
+                                  className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 
+                                  onClick={() => convertFocusedBlock('ai-rewrite')}
+                                >
+                                  <div className="flex items-center gap-2">
+                                    <Edit size={11} className="text-purple-600 group-hover:rotate-12 transition-transform"/> 
+                                    <span>✍️ Convert Block to AI Rewrite</span>
+                                  </div>
+                                  <span className="text-[9px] bg-purple-100 dark:bg-purple-900/40 text-purple-650 dark:text-purple-400 px-1 rounded font-mono font-bold">Block</span>
+                                </button>
+                              </div>
+                            )}
+                            <button className="hidden">
+                              <div>
+                                <span>💡 Explain Selection Context</span>
+                             </div>
+                             <span className="text-[9px] text-[#37352f55] dark:text-gray-400">Run AI</span>
+                           </button>
+                         </div>
+                       </div>
+                     )}
                     <div className="px-2 py-1.5 text-[11px] font-bold text-[#37352f7a] uppercase tracking-wider">AI Actions</div>
                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('improve')}><Sparkles size={16} className="opacity-60"/> <span>Improve writing</span></button>
                      <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('custom', 'Translate this text into Spanish (or specified language):')}><Languages size={15} className="opacity-60 text-orange-500" /> <span>Translate text</span></button>

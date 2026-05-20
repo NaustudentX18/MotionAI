@@ -11,14 +11,16 @@ import { BlockEditor } from './components/BlockEditor';
 import { CommandPalette } from './components/CommandPalette';
 import { DriveModal } from './components/DriveModal';
 import { PageAddons } from './components/PageAddons';
+import { MobileWorkspaceApp } from './components/MobileWorkspaceApp';
+import { MotionAIHub } from './components/MotionAIHub';
 import { initAuth, googleSignIn, logout, getUser } from './lib/firebase';
 import { User } from 'firebase/auth';
-import { Menu, History } from 'lucide-react';
+import { Menu, History, Download, Smartphone, Laptop, Sparkles } from 'lucide-react';
 import { cn } from './lib/utils';
 
 export default function App() {
   const [pages, setPages] = useState<Page[]>(() => {
-    const saved = localStorage.getItem('notion_clone_pages');
+    const saved = localStorage.getItem('motion_ai_pages') || localStorage.getItem('notion_clone_pages');
     if (saved) {
       try {
         const parsed = JSON.parse(saved);
@@ -32,27 +34,46 @@ export default function App() {
     return [];
   });
   const [currentPageId, setCurrentPageId] = useState<string | null>(() => {
-    return localStorage.getItem('notion_clone_current_page_id') || null;
+    return localStorage.getItem('motion_ai_current_page_id') || localStorage.getItem('notion_clone_current_page_id') || null;
   });
 
   // Save pages to localStorage when they change
   useEffect(() => {
     if (pages.length > 0) {
-      localStorage.setItem('notion_clone_pages', JSON.stringify(pages));
+      localStorage.setItem('motion_ai_pages', JSON.stringify(pages));
     }
   }, [pages]);
 
   // Save current page ID to localStorage when it changes
   useEffect(() => {
     if (currentPageId) {
-      localStorage.setItem('notion_clone_current_page_id', currentPageId);
+      localStorage.setItem('motion_ai_current_page_id', currentPageId);
     }
   }, [currentPageId]);
   const [user, setUser] = useState<User | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [driveModalOpen, setDriveModalOpen] = useState(false);
+  const [viewMode, setViewMode] = useState<'desktop' | 'mobile' | 'hub'>('hub');
   
+  // Persisted Dark Mode State & Effect
+  const [darkMode, setDarkMode] = useState<boolean>(() => {
+    const saved = localStorage.getItem('motion_ai_dark_mode');
+    if (saved !== null) {
+      return saved === 'true';
+    }
+    return window.matchMedia('(prefers-color-scheme: dark)').matches;
+  });
+
+  useEffect(() => {
+    if (darkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
+    }
+    localStorage.setItem('motion_ai_dark_mode', String(darkMode));
+  }, [darkMode]);
+
   // New States: Versions, Sidebar Addons and Collaborators
   const [addonsOpen, setAddonsOpen] = useState(false);
   const [collaborationActive, setCollaborationActive] = useState(true);
@@ -71,6 +92,22 @@ export default function App() {
   }, []);
 
   // Initialize a default page if none exist
+  const [vectorSearchReady, setVectorSearchReady] = useState(false);
+
+  // Initialize Vector Search in background
+  useEffect(() => {
+    if (pages.length > 0 && !vectorSearchReady) {
+      import('./lib/vectorStore').then(({ initVectorDB }) => {
+        initVectorDB(pages)
+          .then(() => {
+            console.log("WASM Vector Search initialized");
+            setVectorSearchReady(true);
+          })
+          .catch(err => console.error("Vector DB init err:", err));
+      });
+    }
+  }, [pages, vectorSearchReady]);
+
   useEffect(() => {
     if (pages.length === 0) {
       const newPage: Page = {
@@ -81,7 +118,7 @@ export default function App() {
         createdAt: Date.now(),
         updatedAt: Date.now(),
         blocks: [
-          { id: uuidv4(), type: 'h1', content: 'Welcome to your Notion Clone ✨' },
+          { id: uuidv4(), type: 'h1', content: 'Welcome to your Workspace ✨' },
           { id: uuidv4(), type: 'p', content: 'This is an exact replica of the core features you love.' },
           { id: uuidv4(), type: 'p', content: 'Type / for commands, or select text to invoke the AI assistant.' },
           { id: uuidv4(), type: 'todo', content: 'Explore slash commands', checked: false },
@@ -129,6 +166,23 @@ export default function App() {
 
   const updateCurrentPage = (updates: Partial<Page>) => {
     setPages(pages.map(p => p.id === currentPageId ? { ...p, ...updates, updatedAt: Date.now() } : p));
+  };
+
+  const updatePageById = (id: string, updates: Partial<Page>) => {
+    setPages(pages.map(p => p.id === id ? { ...p, ...updates, updatedAt: Date.now() } : p));
+  };
+
+  const deletePageById = (id: string) => {
+    const updated = pages.filter(p => p.id !== id);
+    setPages(updated);
+    if (currentPageId === id) {
+      setCurrentPageId(updated.length > 0 ? updated[0].id : null);
+    }
+  };
+
+  const handleAddNewPageObj = (newPage: Page) => {
+    setPages([...pages, newPage]);
+    setCurrentPageId(newPage.id);
   };
 
   const handleImportDrivePage = (title: string, blocks: Block[]) => {
@@ -239,9 +293,23 @@ export default function App() {
          onClose={() => setPaletteOpen(false)}
          pages={pages}
          onSelectPage={setCurrentPageId}
+         currentPage={currentPage}
          onAiAction={(action) => {
            // Basic handle AI action by emitting a custom event the editor can listen to
            window.dispatchEvent(new CustomEvent('ai-command', { detail: { action } }));
+         }}
+         onInsertBlocks={(newBlocks) => {
+           if (!currentPageId) return;
+           setPages(prevPages => prevPages.map(p => {
+             if (p.id === currentPageId) {
+               return {
+                 ...p,
+                 blocks: [...p.blocks, ...newBlocks],
+                 updatedAt: Date.now()
+               };
+             }
+             return p;
+           }));
          }}
       />
     
@@ -270,17 +338,57 @@ export default function App() {
       </div>
       
       <div className="flex-1 flex overflow-hidden w-full relative">
-        <main className="flex-1 overflow-y-auto relative flex flex-col min-w-0 w-full">
-        <header className="sticky top-0 z-10 flex items-center px-4 bg-white/80 backdrop-blur-sm h-11 text-sm justify-between shrink-0">
-           <div className="flex items-center space-x-2 text-[#37352f8c]">
-             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] rounded mr-2">
+        <main className={cn("flex-1 relative flex flex-col min-w-0 w-full", viewMode === 'desktop' ? "overflow-y-auto" : "overflow-hidden")}>
+        <header className="sticky top-0 z-10 flex items-center px-4 bg-white/80 backdrop-blur-sm dark:bg-[#1C1C1C]/80 h-11 text-sm justify-between shrink-0 border-b border-gray-150 dark:border-stone-850">
+           <div className="flex items-center space-x-2 text-[#37352f8c] dark:text-[#E3E3E3]/60">
+             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded mr-2">
                  <Menu size={16} />
              </button>
-             <span className="hidden sm:inline truncate max-w-[120px]">{user?.email || 'Local Workspace'}</span>
+             <span className="hidden sm:inline truncate max-w-[100px]">{user?.email || 'Local Workspace'}</span>
              <span className="hidden sm:inline">/</span>
-             <span className="text-[#37352F] dark:text-[#E3E3E3] font-medium truncate max-w-[150px]">{currentPage?.title || 'Untitled'}</span>
+             <span className="text-[#37352F] dark:text-[#E3E3E3] font-medium truncate max-w-[125px] mr-2">{currentPage?.title || 'Untitled'}</span>
+             
+             {/* Segment platform selector controller */}
+             <div className="flex items-center bg-gray-100 dark:bg-stone-800 p-0.5 rounded-lg border border-gray-150 dark:border-stone-700 select-none">
+               <button 
+                 onClick={() => setViewMode('hub')}
+                 className={cn(
+                   "flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold cursor-pointer transition-all",
+                   viewMode === 'hub'
+                     ? "bg-purple-650 text-white shadow-xs font-bold" 
+                     : "text-stone-500 hover:text-stone-850 dark:hover:text-stone-200"
+                 )}
+                 title="MotionAI Repository Handbook & Workspace Gaps roadmap dashboard"
+               >
+                 <Sparkles size={11} className={viewMode === 'hub' ? "text-yellow-300" : ""} />
+                 <span className="hidden md:inline font-sans text-[11px]">MotionAI Portal</span>
+               </button>
+               <button 
+                 onClick={() => setViewMode('desktop')}
+                 className={cn(
+                   "flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold cursor-pointer transition-all",
+                   viewMode === 'desktop'
+                     ? "bg-white dark:bg-stone-900 text-stone-850 dark:text-stone-100 shadow-xs font-bold" 
+                     : "text-stone-500 hover:text-stone-850 dark:hover:text-stone-200"
+                 )}
+               >
+                 <Laptop size={11} />
+                 <span className="hidden md:inline font-sans text-[11px]">Desktop</span>
+               </button>
+               <button 
+                 onClick={() => setViewMode('mobile')}
+                 className={cn(
+                   "flex items-center gap-1 px-2 py-0.5 rounded-md text-xs font-semibold cursor-pointer transition-all",
+                   viewMode === 'mobile'
+                     ? "bg-white dark:bg-stone-900 text-stone-850 dark:text-stone-100 shadow-xs font-bold" 
+                     : "text-stone-500 hover:text-stone-850 dark:hover:text-stone-200"
+                 )}
+               >
+                 <Smartphone size={11} />
+                 <span className="hidden md:inline font-sans text-[11px]">Mobile View</span>
+               </button>
+             </div>
            </div>
-           
            <div className="flex items-center space-x-4">
              {user && (
                <button 
@@ -294,12 +402,24 @@ export default function App() {
              <button aria-label="Search" onClick={() => setPaletteOpen(true)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-[#37352f8c]">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
              </button>
-             <button aria-label="Dark Mode" onClick={() => document.documentElement.classList.toggle('dark')} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-[#37352f8c]">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+             <button aria-label="Dark Mode" onClick={() => setDarkMode(!darkMode)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-[#37352f8c]" title={darkMode ? "Switch to Light Mode" : "Switch to Dark Mode"}>
+                {darkMode ? (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-amber-400"><circle cx="12" cy="12" r="4"/><path d="M12 2v2"/><path d="M12 20v2"/><path d="m4.93 4.93 1.41 1.41"/><path d="m17.66 17.66 1.41 1.41"/><path d="M2 12h2"/><path d="M20 12h2"/><path d="m6.34 17.66-1.41 1.41"/><path d="m19.07 4.93-1.41 1.41"/></svg>
+                ) : (
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="text-slate-700"><path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"/></svg>
+                )}
              </button>
              {currentPage && (
                 <div className="flex items-center gap-1.5 flex-row">
-                  <span className="text-[#37352f8c] hidden sm:inline text-xs mr-1">Edited recently</span>
+                  <button 
+                     onClick={() => window.dispatchEvent(new CustomEvent('export-pdf'))}
+                     className="flex items-center gap-1.5 px-2 py-1 text-xs font-semibold bg-white hover:bg-[#F1F1F0] dark:bg-[#1E1E1E] dark:hover:bg-[#2F2F2F] border border-[#EBEBE9] dark:border-[#2F2F2F] text-gray-600 dark:text-gray-300 rounded transition-colors cursor-pointer mr-2"
+                     title="Export Current Page to PDF"
+                   >
+                     <Download size={13} className="text-purple-600 dark:text-purple-400" />
+                     <span>Export PDF</span>
+                   </button>
+                   <span className="text-[#37352f8c] hidden sm:inline text-xs mr-1">Edited recently</span>
                   <button 
                     title="Open Document History & Collaboration"
                     onClick={() => setAddonsOpen(!addonsOpen)}
@@ -322,15 +442,29 @@ export default function App() {
            </div>
         </header>
 
-        <div className="flex-1 w-full relative">
-          {currentPage && (
-             <BlockEditor 
-               key={currentPage.id}
-               title={currentPage.title}
-               onTitleChange={t => updateCurrentPage({ title: t })}
-               initialBlocks={currentPage.blocks}
-               onChange={b => updateCurrentPage({ blocks: b })}
-             />
+        <div className="flex-1 w-full relative bg-gray-50 dark:bg-stone-900">
+          {viewMode === 'hub' ? (
+            <MotionAIHub />
+          ) : viewMode === 'mobile' ? (
+            <MobileWorkspaceApp 
+              pages={pages}
+              currentPageId={currentPageId}
+              onSelectPage={setCurrentPageId}
+              onAddPage={handleAddNewPageObj}
+              onUpdatePage={updatePageById}
+              onDeletePage={deletePageById}
+              userEmail={user?.email || null}
+            />
+          ) : (
+            currentPage && (
+               <BlockEditor 
+                 key={currentPage.id}
+                 title={currentPage.title}
+                 onTitleChange={t => updateCurrentPage({ title: t })}
+                 initialBlocks={currentPage.blocks}
+                 onChange={b => updateCurrentPage({ blocks: b })}
+               />
+            )
           )}
         </div>
         </main>

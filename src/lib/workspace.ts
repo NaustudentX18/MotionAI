@@ -127,9 +127,9 @@ export async function setupWorkspaceStructure(): Promise<{
   rootId: string;
   subfolders: Record<string, string>;
 }> {
-  let rootId = await findDriveFolder("Notion Architect Workspace");
+  let rootId = await findDriveFolder("MotionAI Workspace");
   if (!rootId) {
-    rootId = await createDriveFolder("Notion Architect Workspace");
+    rootId = await createDriveFolder("MotionAI Workspace");
   }
 
   const subfolderNames = [

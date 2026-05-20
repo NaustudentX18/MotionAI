@@ -1,6 +1,6 @@
 {
-  "name": "Notion AI Clone",
-  "description": "An open-source Notion AI alternative with built-in Gemini AI blocks and Workspace integration.",
+  "name": "MotionAI Document Space",
+  "description": "An open-source Markdown-focused rich text alternative with built-in Gemini AI blocks and Workspace integration.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

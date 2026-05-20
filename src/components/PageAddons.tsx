@@ -6,7 +6,7 @@ interface PageAddonsProps {
   currentPage: Page | null;
   onRestoreVersion: (version: PageVersion) => void;
   onSaveSnapshot: () => void;
-  // Collaboration / Simulated peers
+  // Collaboration / Peer editors
   collaborationActive: boolean;
   onToggleCollaboration: (active: boolean) => void;
   activePeers: Array<{ name: string; email: string; color: string; status: 'typing' | 'idle' }>;
@@ -125,9 +125,9 @@ export function PageAddons({
 
             <div className="p-3 bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100 dark:border-blue-950/20 rounded-lg text-xs leading-relaxed text-blue-700 dark:text-blue-400">
               {collaborationActive ? (
-                <span>🛜 <strong>Active connection</strong>. Your changes are live synced. Select simulated peers to prompt external typing.</span>
+                <span>🛜 <strong>Active connection</strong>. Your changes are live synced. Select peer editors below to trigger collaborative edits on your board.</span>
               ) : (
-                <span>Offline local mode. Enable sync to simulate multiple editors typing concurrently on this Notion board.</span>
+                <span>Offline local mode. Enable sync to engage collaborative editing with peers concurrently on this Workspace board.</span>
               )}
             </div>
 
