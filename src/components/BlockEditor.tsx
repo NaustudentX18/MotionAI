@@ -7,8 +7,10 @@ import {
   List, Minus, Quote, Sparkles, MessageSquare, ArrowRight, Wand2,
   Mic, MicOff, Lightbulb, Languages, Edit, Compass, Calendar,
   Download, Palette, MessageCircle, Bold, Italic, Underline, Check, X,
-  Save, RefreshCw, Maximize2
+  Save, RefreshCw, Maximize2, Code, Copy
 } from 'lucide-react';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
 import { addGoogleTask, addGoogleCalendarEvent } from '../lib/workspace';
 import { SelectionActionModal } from './SelectionActionModal';
 import { AiComposerModal } from './AiComposerModal';
@@ -124,6 +126,205 @@ export function parseMarkdownToHtml(text: string): string {
   }
 
   return parsed;
+}
+
+interface CodeBlockProps {
+  block: Block;
+  index: number;
+  focusedId: string | null;
+  setFocusedId: (id: string | null) => void;
+  updateBlock: (id: string, updates: Partial<Block>) => void;
+  blocks: Block[];
+  setBlocks: React.Dispatch<React.SetStateAction<Block[]>>;
+  focusBlock: (id: string, start?: boolean) => void;
+}
+
+const SUPPORTED_LANGUAGES = [
+  { value: 'javascript', label: 'JavaScript' },
+  { value: 'typescript', label: 'TypeScript' },
+  { value: 'html', label: 'HTML/XML' },
+  { value: 'css', label: 'CSS' },
+  { value: 'python', label: 'Python' },
+  { value: 'rust', label: 'Rust' },
+  { value: 'go', label: 'Go' },
+  { value: 'sql', label: 'SQL' },
+  { value: 'bash', label: 'Bash/Shell' },
+  { value: 'json', label: 'JSON' },
+  { value: 'cpp', label: 'C++' },
+  { value: 'java', label: 'Java' },
+  { value: 'plaintext', label: 'Plain Text' }
+];
+
+function CodeBlock({ 
+  block, 
+  index, 
+  focusedId, 
+  setFocusedId, 
+  updateBlock, 
+  blocks, 
+  setBlocks, 
+  focusBlock 
+}: CodeBlockProps) {
+  const [copied, setCopied] = useState(false);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const isFocused = focusedId === block.id;
+
+  useEffect(() => {
+    if (isFocused && textareaRef.current) {
+      textareaRef.current.focus();
+      // Adjust height
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [isFocused]);
+
+  useEffect(() => {
+    if (textareaRef.current) {
+      textareaRef.current.style.height = 'auto';
+      textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+    }
+  }, [block.content]);
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    navigator.clipboard.writeText(block.content || '');
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    const el = textareaRef.current;
+    if (!el) return;
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const start = el.selectionStart;
+      const end = el.selectionEnd;
+      const val = el.value;
+      const newVal = val.substring(0, start) + '    ' + val.substring(end);
+      updateBlock(block.id, { content: newVal });
+      
+      // Reset select position after render
+      setTimeout(() => {
+        el.selectionStart = el.selectionEnd = start + 4;
+      }, 0);
+      return;
+    }
+
+    if (e.key === 'ArrowUp' && el.selectionStart === 0 && index > 0) {
+      e.preventDefault();
+      focusBlock(blocks[index - 1].id, true);
+      return;
+    }
+
+    if (e.key === 'ArrowDown' && el.selectionEnd === el.value.length && index < blocks.length - 1) {
+      e.preventDefault();
+      focusBlock(blocks[index + 1].id, true);
+      return;
+    }
+
+    if (e.key === 'Backspace' && block.content === '') {
+      e.preventDefault();
+      updateBlock(block.id, { type: 'p' });
+      // Keep focused
+      setTimeout(() => focusBlock(block.id, true), 0);
+      return;
+    }
+
+    // Handle Enter to NOT split the block but just add a newline in the code
+    if (e.key === 'Enter') {
+      // It is a standard textarea, so Enter naturally adds a newline. 
+      // We don't want it to bubble up to any parent list selectors.
+      e.stopPropagation();
+    }
+  };
+
+  const highlightCode = (code: string, lang: string) => {
+    if (!code) return '<span class="text-gray-500 italic pb-1">// Click to type your code here...</span>';
+    try {
+      const selectedLang = lang || 'javascript';
+      if (hljs.getLanguage(selectedLang)) {
+        return hljs.highlight(code, { language: selectedLang, ignoreIllegals: true }).value;
+      }
+      return hljs.highlightAuto(code).value;
+    } catch (err) {
+      return code.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    }
+  };
+
+  return (
+    <div 
+      className={cn(
+        "w-full rounded-xl bg-[#0D0D0E]/95 dark:bg-[#070709]/95 border border-[#1A1A1E] text-stone-200 shadow-lg p-0.5 overflow-hidden font-mono mt-3 mb-3 relative group/code focus-within:ring-1 focus-within:ring-purple-400 focus-within:border-purple-500/50",
+        isFocused && "shadow-2xl border-[#2F2F38]"
+      )}
+      onClick={() => setFocusedId(block.id)}
+    >
+      {/* Code block Toolbar */}
+      <div className="flex items-center justify-between px-4 py-2 border-b border-[#1C1C22] select-none text-[11px] text-gray-400 bg-[#121217] rounded-t-xl shrink-0">
+        <div className="flex items-center gap-2">
+          <Code size={13} className="text-purple-400" />
+          <select
+            value={block.language || 'javascript'}
+            onChange={(e) => {
+              e.stopPropagation();
+              updateBlock(block.id, { language: e.target.value });
+            }}
+            onClick={(e) => e.stopPropagation()}
+            className="bg-transparent hover:bg-[#1E1E26] text-gray-300 font-sans font-bold uppercase tracking-wider text-[10px] rounded px-1.5 py-1 border border-transparent hover:border-[#2C2C37] outline-none cursor-pointer transition-all"
+          >
+            {SUPPORTED_LANGUAGES.map((lang) => (
+              <option key={lang.value} value={lang.value} className="bg-[#121217] text-gray-205 uppercase">
+                {lang.label}
+              </option>
+            ))}
+          </select>
+        </div>
+
+        <button
+          onClick={handleCopy}
+          className="flex items-center gap-1 bg-[#1E1E26]/45 hover:bg-[#23232C] hover:text-white border border-[#23232E] px-2.5 py-1 rounded text-[10px] font-sans font-bold uppercase tracking-wider transition-all cursor-pointer text-gray-400"
+          title="Copy block to clipboard"
+        >
+          {copied ? (
+            <>
+              <Check size={11} className="text-emerald-400 stroke-[3]" />
+              <span className="text-emerald-400">Copied!</span>
+            </>
+          ) : (
+            <>
+              <Copy size={11} />
+              <span>Copy</span>
+            </>
+          )}
+        </button>
+      </div>
+
+      {/* Code block Input or Output */}
+      <div className="relative w-full p-4 overflow-x-auto select-text">
+        {isFocused ? (
+          <textarea
+            ref={textareaRef}
+            value={block.content || ''}
+            onChange={(e) => {
+              updateBlock(block.id, { content: e.target.value });
+            }}
+            onKeyDown={handleKeyDown}
+            placeholder="// Paste or write code here..."
+            className="w-full bg-transparent border-none text-sm font-mono text-gray-100 leading-relaxed outline-none focus:ring-0 resize-none overflow-hidden p-0 m-0"
+            style={{ minHeight: '80px' }}
+          />
+        ) : (
+          <pre className="text-sm font-mono leading-relaxed overflow-x-auto whitespace-pre p-0 m-0">
+            <code 
+              className={cn("hljs", block.language)} 
+              dangerouslySetInnerHTML={{ __html: highlightCode(block.content || '', block.language || '') }} 
+            />
+          </pre>
+        )}
+      </div>
+    </div>
+  );
 }
 
 interface BlockEditorProps {
@@ -367,12 +568,22 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     if (e.metaKey || e.ctrlKey) {
       if (e.key === 'b') {
         e.preventDefault();
-        document.execCommand('bold', false);
+        const textSel = window.getSelection()?.toString();
+        if (!textSel) {
+          toggleBlockStyleFlag(block.id, 'bold');
+        } else {
+          document.execCommand('bold', false);
+        }
         return;
       }
       if (e.key === 'i') {
         e.preventDefault();
-        document.execCommand('italic', false);
+        const textSel = window.getSelection()?.toString();
+        if (!textSel) {
+          toggleBlockStyleFlag(block.id, 'italic');
+        } else {
+          document.execCommand('italic', false);
+        }
         return;
       }
     }
@@ -505,6 +716,13 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     } else if (textContent === '---') {
       updateBlock(id, { type: 'divider', content: '' });
       e.currentTarget.innerHTML = '';
+      focusBlock(id, true);
+    } else if (textContent.startsWith('```')) {
+      const langMatch = textContent.match(/^```(\w+)?/);
+      const language = langMatch && langMatch[1] ? langMatch[1].toLowerCase() : 'javascript';
+      const clean = textContent.replace(/^```(\w+)?\s*/, '');
+      updateBlock(id, { type: 'code', content: clean, language });
+      e.currentTarget.innerHTML = clean;
       focusBlock(id, true);
     }
 
@@ -1171,6 +1389,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     { label: 'Divider', icon: Minus, type: 'divider', description: 'Visual divider line', category: 'Basic Blocks' },
     { label: 'Quote', icon: Quote, type: 'quote', description: 'Blockquote callout text', category: 'Basic Blocks' },
     { label: 'Callout', icon: Lightbulb, type: 'callout', description: 'Lightbulb highlighted box', category: 'Basic Blocks' },
+    { label: 'Code Block', icon: Code, type: 'code', description: 'Code with syntax highlighting', category: 'Basic Blocks' },
     { label: 'Draft with AI...', icon: Wand2, type: 'ai-custom', description: 'Ask AI to write or edit', category: 'AI Magic' },
     { label: 'AI Summary Block', icon: Sparkles, type: 'ai-summary', description: 'Prompt AI to summarize text', category: 'AI Magic' },
     { label: 'AI Draft Block', icon: Wand2, type: 'ai-draft', description: 'Draft text from prompts', category: 'AI Magic' },
@@ -1351,6 +1570,17 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                 )}
                 {block.type === 'divider' ? (
                   <div className="h-px w-full bg-[#EBEBE9] dark:bg-[#2F2F2F] my-4" />
+                ) : block.type === 'code' ? (
+                  <CodeBlock
+                    block={block}
+                    index={index}
+                    focusedId={focusedId}
+                    setFocusedId={setFocusedId}
+                    updateBlock={updateBlock}
+                    blocks={blocks}
+                    setBlocks={setBlocks}
+                    focusBlock={focusBlock}
+                  />
                 ) : block.type === 'ai-summary' || block.type === 'ai-draft' || block.type === 'ai-rewrite' ? (
                   <div className="w-full border border-purple-200 dark:border-purple-900/40 bg-purple-50/10 dark:bg-purple-950/5 p-4 rounded-lg my-3 space-y-3 shadow-xs">
                     {/* Header of the block */}
@@ -1652,6 +1882,18 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
 
                 {/* Floating Gutter Icons for Block Formatting (Style & Comments) */}
                 <div className="absolute right-0 top-1 flex items-center gap-1.5 opacity-60 md:opacity-0 group-hover:opacity-100 transition-opacity pdf-exclude z-10">
+                  {/* Bold Toggle Button */}
+                  <button
+                    onClick={() => toggleBlockStyleFlag(block.id, 'bold')}
+                    className={cn(
+                      "p-1.5 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer border border-transparent transition-all",
+                      block.style?.bold && "text-purple-600 dark:text-purple-400 bg-purple-100 dark:bg-purple-950/20 font-bold border-purple-300 dark:border-purple-800"
+                    )}
+                    title="Toggle Bold Style for Block"
+                  >
+                    <Bold size={13} />
+                  </button>
+
                   {/* Comments Toggle */}
                   <button
                     onClick={() => {
@@ -2155,6 +2397,45 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
 
                             {focusedId && (
                               <div className="pt-1.5 border-t border-purple-200/50 dark:border-purple-900/30 mt-1 space-y-1 pdf-exclude">
+                                <span className="px-2 py-0.5 text-[9px] font-bold text-slate-400 dark:text-gray-400 block uppercase tracking-wider">Style Focused Block</span>
+                                <div className="flex gap-1 px-2 pb-1.55">
+                                  <button 
+                                    onClick={() => toggleBlockStyleFlag(focusedId, 'bold')}
+                                    className={cn(
+                                      "flex-1 py-1 px-1.5 rounded border text-[10px] font-bold flex items-center justify-center gap-0.5 transition-all cursor-pointer",
+                                      blocks.find(b => b.id === focusedId)?.style?.bold 
+                                        ? "bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-700 dark:text-purple-300 font-bold" 
+                                        : "border-[#EBEBE9] dark:border-[#2F2F2F] text-[#37352F] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    )}
+                                  >
+                                    <Bold size={11} className="stroke-[2.5]" />
+                                    <span>Bold Block</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => toggleBlockStyleFlag(focusedId, 'italic')}
+                                    className={cn(
+                                      "flex-1 py-1 px-1.5 rounded border text-[10px] font-bold flex items-center justify-center gap-0.5 transition-all cursor-pointer",
+                                      blocks.find(b => b.id === focusedId)?.style?.italic 
+                                        ? "bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-700 dark:text-purple-355 font-bold" 
+                                        : "border-[#EBEBE9] dark:border-[#2F2F2F] text-[#37352F] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    )}
+                                  >
+                                    <Italic size={11} className="stroke-[2.5]" />
+                                    <span>Italic</span>
+                                  </button>
+                                  <button 
+                                    onClick={() => toggleBlockStyleFlag(focusedId, 'underline')}
+                                    className={cn(
+                                      "flex-1 py-1 px-1.5 rounded border text-[10px] font-bold flex items-center justify-center gap-0.5 transition-all cursor-pointer",
+                                      blocks.find(b => b.id === focusedId)?.style?.underline 
+                                        ? "bg-purple-100 dark:bg-purple-950/40 border-purple-300 text-purple-700 dark:text-purple-300 font-bold" 
+                                        : "border-[#EBEBE9] dark:border-[#2F2F2F] text-[#37352F] dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800"
+                                    )}
+                                  >
+                                    <Underline size={11} className="stroke-[2.5]" />
+                                    <span>Underline</span>
+                                  </button>
+                                </div>
                                 <span className="px-2 py-0.5 text-[9px] font-bold text-purple-700/60 dark:text-purple-400 block uppercase tracking-wider">Convert Block Type</span>
                                 <button 
                                   className="w-full text-left px-2 py-1.5 text-xs hover:bg-white dark:hover:bg-[#151515] hover:shadow-xs text-[#37352F] dark:text-gray-200 cursor-pointer rounded flex items-center justify-between font-semibold border border-transparent hover:border-purple-200/50 dark:hover:border-purple-900/30 group transition-all" 

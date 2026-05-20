@@ -30,8 +30,12 @@ import {
   RefreshCw,
   Lightbulb,
   CheckSquare,
-  Square
+  Square,
+  Code,
+  Copy
 } from 'lucide-react';
+import hljs from 'highlight.js';
+import 'highlight.js/styles/github-dark.css';
 import { Page, Block } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addGoogleTask } from '../lib/workspace';
@@ -1236,6 +1240,65 @@ export function MobileWorkspaceApp({
                         </div>
                       )}
 
+                      {/* Code Block rendering on mobile */}
+                      {block.type === 'code' && (
+                        <div className="w-full bg-[#0D0D0E] border border-stone-800/80 rounded-xl p-3 my-2 font-mono text-xs text-stone-200">
+                          {/* Toolbar for language and copying */}
+                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-800/40 select-none">
+                            <select
+                              value={block.language || 'javascript'}
+                              onChange={e => {
+                                if (activeMobilePage) {
+                                  onUpdatePage(activeMobilePage.id, {
+                                    blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, language: e.target.value } : b)
+                                  });
+                                }
+                              }}
+                              className="bg-stone-900 border border-stone-850 text-[10px] text-stone-300 rounded px-1.5 py-1 outline-none font-sans font-bold cursor-pointer"
+                            >
+                              <option value="javascript">JavaScript</option>
+                              <option value="typescript">TypeScript</option>
+                              <option value="html">HTML/XML</option>
+                              <option value="css">CSS</option>
+                              <option value="python">Python</option>
+                              <option value="rust">Rust</option>
+                              <option value="go">Go</option>
+                              <option value="sql">SQL</option>
+                              <option value="bash">Bash/Shell</option>
+                              <option value="json">JSON</option>
+                              <option value="cpp">C++</option>
+                              <option value="java">Java</option>
+                              <option value="plaintext">Plain Text</option>
+                            </select>
+
+                            <button
+                              onClick={() => {
+                                navigator.clipboard.writeText(block.content || '');
+                              }}
+                              className="text-[10px] bg-stone-850 hover:bg-stone-850 border border-stone-800 px-2.5 py-1 rounded text-stone-400 active:bg-stone-900 transition-colors cursor-pointer font-sans font-bold uppercase tracking-wider flex items-center gap-1"
+                            >
+                              <Copy size={10} />
+                              <span>Copy Code</span>
+                            </button>
+                          </div>
+
+                          {/* Textarea Editor */}
+                          <textarea
+                            value={block.content || ''}
+                            placeholder="// Type code here..."
+                            onChange={e => {
+                              if (activeMobilePage) {
+                                    onUpdatePage(activeMobilePage.id, {
+                                      blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
+                                    });
+                              }
+                            }}
+                            rows={Math.max(3, (block.content || '').split('\n').length)}
+                            className="w-full bg-transparent border-none text-xs text-stone-200 leading-relaxed font-mono focus:ring-0 outline-none placeholder-stone-700 resize-none p-0 select-text"
+                          />
+                        </div>
+                      )}
+
                     </div>
                   ))}
                 </div>
@@ -1304,6 +1367,18 @@ export function MobileWorkspaceApp({
                         className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
                       >
                         + Divider
+                      </button>
+                      <button 
+                        onClick={() => {
+                          if (activeMobilePage) {
+                            onUpdatePage(activeMobilePage.id, {
+                              blocks: [...activeMobilePage.blocks, { id: uuidv4(), type: 'code', content: '', language: 'javascript' }]
+                            });
+                          }
+                        }}
+                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                      >
+                        + Code
                       </button>
                       <button 
                         onClick={() => setAddingBlockType('ai-summary')}

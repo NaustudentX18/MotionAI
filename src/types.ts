@@ -1,4 +1,4 @@
-export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite';
+export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite' | 'code';
 
 export interface BlockComment {
   id: string;
@@ -25,6 +25,7 @@ export interface Block {
   comments?: BlockComment[];
   aiPrompt?: string;
   aiContext?: string;
+  language?: string; // support syntax highlighted code blocks
 }
 
 export interface PageVersion {

@@ -110,6 +110,7 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
           if (b.type === 'bullet') return `- ${b.content}`;
           if (b.type === 'quote') return `> ${b.content}`;
           if (b.type === 'callout') return `[Callout] ${b.content}`;
+          if (b.type === 'code') return `\`\`\`${b.language || 'javascript'}\n${b.content}\n\`\`\``;
           if (b.type === 'divider') return `---`;
           return b.content.replace(/<[^>]*>/g, ''); // strip inline HTML formatting tags for raw backup
         })
