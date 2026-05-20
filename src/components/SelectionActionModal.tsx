@@ -49,6 +49,57 @@ export function SelectionActionModal({ isOpen, onClose, selectedText }: Selectio
 
   if (!isOpen) return null;
 
+  const handleAiParse = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'custom',
+          context: selectedText,
+          prompt: `Extract event scheduling or task information from this text. Today's date is ${today}. Return ONLY a raw JSON object matching this schema without any markdown tags or description block: { "title": "string", "description": "string", "date": "YYYY-MM-DD", "startTime": "HH:MM", "endTime": "HH:MM" }`
+        })
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+      
+      let cleanText = data.text.trim();
+      if (cleanText.startsWith('```json')) {
+        cleanText = cleanText.substring(7);
+      }
+      if (cleanText.endsWith('```')) {
+        cleanText = cleanText.substring(0, cleanText.length - 3);
+      }
+      cleanText = cleanText.trim();
+
+      const parsed = JSON.parse(cleanText);
+      if (parsed.title) {
+        setEventSummary(parsed.title);
+        setTaskTitle(parsed.title);
+      }
+      if (parsed.description) {
+        setEventDescription(parsed.description);
+        setTaskNotes(parsed.description);
+      }
+      if (parsed.date) {
+        setEventDate(parsed.date);
+        setTaskDueDate(parsed.date);
+      }
+      if (parsed.startTime) setEventStartTime(parsed.startTime);
+      if (parsed.endTime) setEventEndTime(parsed.endTime);
+
+      setSuccess("✨ Smart date/time parse successful!");
+      setTimeout(() => setSuccess(null), 2000);
+    } catch (err: any) {
+      setError("AI Parsing failed. Please enter details manually.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleCreateTask = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -121,6 +172,15 @@ export function SelectionActionModal({ isOpen, onClose, selectedText }: Selectio
           <div className="p-3 bg-gray-50 dark:bg-gray-900/20 border border-gray-100 dark:border-gray-800 rounded-lg text-xs leading-relaxed max-h-24 overflow-y-auto italic text-gray-600 dark:text-gray-400">
             "{selectedText}"
           </div>
+
+          <button
+            type="button"
+            onClick={handleAiParse}
+            disabled={loading}
+            className="w-full py-2 bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/20 dark:hover:bg-purple-900/20 text-purple-700 dark:text-purple-400 border border-purple-200 dark:border-purple-800/50 rounded-lg text-xs font-semibold flex items-center justify-center gap-1.5 transition-colors disabled:opacity-50"
+          >
+            {loading ? <Loader2 size={12} className="animate-spin" /> : <span>✨ Auto-Parse & Prefill calendar with AI</span>}
+          </button>
 
           {mode === 'menu' && (
             <div className="space-y-2 pt-2">

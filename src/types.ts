@@ -1,10 +1,37 @@
-export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote';
+export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite';
+
+export interface BlockComment {
+  id: string;
+  author: string;
+  text: string;
+  createdAt: number;
+}
+
+export interface BlockStyle {
+  bold?: boolean;
+  italic?: boolean;
+  underline?: boolean;
+  color?: string; // e.g. '#37352F', '#E03E3E', etc
+  backgroundColor?: string; // e.g. 'transparent', '#F1F1F0', etc
+}
 
 export interface Block {
   id: string;
   type: BlockType;
   content: string;
   checked?: boolean; // for todo
+  indentLevel?: number; // hierarchical indentation (0 to 4)
+  style?: BlockStyle;
+  comments?: BlockComment[];
+  aiPrompt?: string;
+  aiContext?: string;
+}
+
+export interface PageVersion {
+  id: string;
+  timestamp: number;
+  title: string;
+  blocks: Block[];
 }
 
 export interface Page {
@@ -15,4 +42,5 @@ export interface Page {
   blocks: Block[];
   createdAt: number;
   updatedAt: number;
+  versions?: PageVersion[];
 }

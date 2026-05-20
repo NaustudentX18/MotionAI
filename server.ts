@@ -1,6 +1,6 @@
 import express from 'express';
 import cors from 'cors';
-import { GoogleGenAI } from '@google/genai';
+import { GoogleGenAI, Type } from '@google/genai';
 import path from 'path';
 
 async function startServer() {
@@ -92,6 +92,75 @@ NO PREAMBLE. NO APOLOGIES. NO CHAT.`;
       res.json({ text: response.text });
     } catch (err: any) {
       console.error(err);
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  app.post('/api/ai/spellcheck', async (req, res) => {
+    if (!ai) {
+      return res.status(500).json({ error: 'Gemini API not configured. Please add GEMINI_API_KEY.' });
+    }
+
+    const { blocks } = req.body;
+    if (!blocks || !Array.isArray(blocks)) {
+      return res.status(400).json({ error: 'Missing or invalid blocks array' });
+    }
+
+    const textBlocks = blocks.filter(b => b.content && b.content.trim() && b.type !== 'divider');
+
+    if (textBlocks.length === 0) {
+      return res.json({ issues: [] });
+    }
+
+    let dataPrompt = "Analyze the text contents of the following document blocks for spelling and typographical errors. Ignore valid code names, URLs, file paths, specialized jargon, or technical abbreviations unless they are obviously misspellings.\n\nInput Blocks:\n";
+    textBlocks.forEach(b => {
+      dataPrompt += `[BlockId: ${b.id}]\nText: ${b.content}\n\n`;
+    });
+
+    try {
+      const response = await ai.models.generateContent({
+        model: 'gemini-3.5-flash',
+        contents: dataPrompt,
+        config: {
+          systemInstruction: 'You are a precise doc proofreader. Analyze spelling and typos, associate them with the accurate original BlockId, extract the offending word, surrounding context (under 40 characters), and provide 2-3 accurate corrections. Respond ONLY with a valid JSON document matching the specified schema.',
+          responseMimeType: 'application/json',
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              issues: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    id: { type: Type.STRING, description: "A unique random string or number index for this issue" },
+                    word: { type: Type.STRING, description: "The exact misspelled word" },
+                    suggestions: {
+                      type: Type.ARRAY,
+                      items: { type: Type.STRING },
+                      description: "List of 2-3 correct candidate suggestions"
+                    },
+                    context: { type: Type.STRING, description: "The immediate snippet of context containing the word" },
+                    blockId: { type: Type.STRING, description: "The exact BlockId associated with this spelling issue" }
+                  },
+                  required: ["id", "word", "suggestions", "context", "blockId"]
+                }
+              }
+            },
+            required: ["issues"]
+          }
+        }
+      });
+
+      const resultText = response.text || '{ "issues": [] }';
+      try {
+        const parsed = JSON.parse(resultText);
+        res.json(parsed);
+      } catch (parseErr) {
+        console.error('Failed to parse Gemini response as JSON:', resultText);
+        res.json({ issues: [] });
+      }
+    } catch (err: any) {
+      console.error('Spellcheck API error:', err);
       res.status(500).json({ error: err.message });
     }
   });

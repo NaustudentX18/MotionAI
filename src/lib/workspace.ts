@@ -73,6 +73,84 @@ export async function listGoogleDriveFiles(): Promise<DriveFile[]> {
   return data.files || [];
 }
 
+export async function createDriveFolder(name: string, parentId?: string): Promise<string> {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Not authenticated with Google Workspace');
+
+  const body: any = {
+    name,
+    mimeType: 'application/vnd.google-apps.folder',
+  };
+  if (parentId) {
+    body.parents = [parentId];
+  }
+
+  const res = await fetch('https://www.googleapis.com/drive/v3/files', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify(body),
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to create Google Drive folder: ${errText}`);
+  }
+  const data = await res.json();
+  return data.id;
+}
+
+export async function findDriveFolder(name: string, parentId?: string): Promise<string | null> {
+  const token = await getAccessToken();
+  if (!token) throw new Error('Not authenticated with Google Workspace');
+
+  let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and trashed = false`;
+  if (parentId) {
+    query += ` and '${parentId}' in parents`;
+  }
+
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Failed to check folder existence: ${errText}`);
+  }
+  const data = await res.json();
+  return data.files && data.files.length > 0 ? data.files[0].id : null;
+}
+
+export async function setupWorkspaceStructure(): Promise<{
+  rootId: string;
+  subfolders: Record<string, string>;
+}> {
+  let rootId = await findDriveFolder("Notion Architect Workspace");
+  if (!rootId) {
+    rootId = await createDriveFolder("Notion Architect Workspace");
+  }
+
+  const subfolderNames = [
+    "📂 Projects & Work",
+    "📂 Personal & Life",
+    "📂 Meetings & Agendas",
+    "📂 AI Content & Drafts"
+  ];
+
+  const subfolders: Record<string, string> = {};
+  for (const name of subfolderNames) {
+    let subId = await findDriveFolder(name, rootId);
+    if (!subId) {
+      subId = await createDriveFolder(name, rootId);
+    }
+    subfolders[name] = subId;
+  }
+
+  return { rootId, subfolders };
+}
+
 export async function getGoogleDriveFileContent(fileId: string, mimeType: string): Promise<string> {
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated with Google Workspace');
@@ -90,9 +168,17 @@ export async function getGoogleDriveFileContent(fileId: string, mimeType: string
   return res.text();
 }
 
-export async function createGoogleDriveFile(title: string, content: string): Promise<DriveFile> {
+export async function createGoogleDriveFile(title: string, content: string, parentFolderId?: string): Promise<DriveFile> {
   const token = await getAccessToken();
   if (!token) throw new Error('Not authenticated with Google Workspace');
+
+  const metadata: any = {
+    name: `${title}.txt`,
+    mimeType: 'text/plain',
+  };
+  if (parentFolderId) {
+    metadata.parents = [parentFolderId];
+  }
 
   // Step 1: Create file metadata
   const metaRes = await fetch('https://www.googleapis.com/drive/v3/files', {
@@ -101,10 +187,7 @@ export async function createGoogleDriveFile(title: string, content: string): Pro
       Authorization: `Bearer ${token}`,
       'Content-Type': 'application/json',
     },
-    body: JSON.stringify({
-      name: `${title}.txt`,
-      mimeType: 'text/plain',
-    }),
+    body: JSON.stringify(metadata),
   });
 
   if (!metaRes.ok) throw new Error('Failed to create Google Drive file metadata');

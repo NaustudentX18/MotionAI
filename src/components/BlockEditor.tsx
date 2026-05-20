@@ -1,14 +1,112 @@
 import React, { useState, useRef, useEffect, KeyboardEvent } from 'react';
-import { Block, BlockType } from '../types';
+import { Block, BlockType, BlockStyle, BlockComment } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { cn } from '../lib/utils';
 import { 
   GripVertical, Plus, ChevronRight, Hash, Type, CheckSquare, 
   List, Minus, Quote, Sparkles, MessageSquare, ArrowRight, Wand2,
-  Mic, MicOff, Lightbulb, Languages, Edit, Compass, Calendar
+  Mic, MicOff, Lightbulb, Languages, Edit, Compass, Calendar,
+  Download, Palette, MessageCircle, Bold, Italic, Underline, Check, X,
+  Save, RefreshCw, Maximize2
 } from 'lucide-react';
 import { addGoogleTask, addGoogleCalendarEvent } from '../lib/workspace';
 import { SelectionActionModal } from './SelectionActionModal';
+import { AiComposerModal } from './AiComposerModal';
+import jsPDF from 'jspdf';
+import html2canvas from 'html2canvas';
+
+const TEXT_COLORS = [
+  { name: 'Default', value: 'inherit' },
+  { name: 'Gray', value: '#787774' },
+  { name: 'Brown', value: '#976D57' },
+  { name: 'Orange', value: '#CC4E00' },
+  { name: 'Yellow', value: '#C29000' },
+  { name: 'Green', value: '#218358' },
+  { name: 'Blue', value: '#137CA6' },
+  { name: 'Purple', value: '#8F55A3' },
+  { name: 'Red', value: '#C23131' },
+];
+
+const BG_COLORS = [
+  { name: 'Transparent', value: 'transparent' },
+  { name: 'Light Gray', value: '#F1F1F0' },
+  { name: 'Brown', value: '#F3ECE9' },
+  { name: 'Orange', value: '#FAEBDD' },
+  { name: 'Yellow', value: '#FBF3DB' },
+  { name: 'Green', value: '#EDF6EC' },
+  { name: 'Blue', value: '#E8F4FC' },
+  { name: 'Purple', value: '#F3EDF5' },
+  { name: 'Red', value: '#FDEBEC' },
+];
+
+export function parseMarkdownToHtml(text: string): string {
+  if (!text) return text;
+  
+  let parsed = text;
+
+  // Bold: **text** or __text__
+  parsed = parsed.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+  parsed = parsed.replace(/__(.*?)__/g, '<strong>$1</strong>');
+
+  // Italic: *text* or _text_
+  parsed = parsed.replace(/\*([^\*<>]+)\*/g, '<em>$1</em>');
+  parsed = parsed.replace(/_([^_<>]+)_/g, '<em>$1</em>');
+
+  // Strikethrough: ~~text~~ or ~text~
+  parsed = parsed.replace(/~~([^~<>]+)~~/g, '<del>$1</del>');
+  parsed = parsed.replace(/~([^~<>]+)~/g, '<del>$1</del>');
+
+  // Code: `text`
+  parsed = parsed.replace(/`([^`<>]+)`/g, (match, p1) => {
+    return `<code class="bg-[#F1F1F0] dark:bg-[#2F2F2F] text-[#EB5757] dark:text-[#E06C75] px-1.5 py-0.5 rounded font-mono text-sm border border-[#EBEBE9] dark:border-[#3F3F3F] font-semibold">${p1}</code>`;
+  });
+
+  // Multiline lists
+  if (parsed.includes('\n')) {
+    const lines = parsed.split('\n');
+    let insideUl = false;
+    let insideOl = false;
+    const formattedLines = lines.map(line => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+        let prefix = insideUl ? '' : '<ul class="list-disc pl-5 my-1 space-y-0.5">';
+        insideUl = true;
+        if (insideOl) {
+          prefix = '</ol>' + prefix;
+          insideOl = false;
+        }
+        return prefix + `<li class="my-0.5">${trimmed.substring(2)}</li>`;
+      } else if (/^\d+\.\s/.test(trimmed)) {
+        let prefix = insideOl ? '' : '<ol class="list-decimal pl-5 my-1 space-y-0.5">';
+        insideOl = true;
+        if (insideUl) {
+          prefix = '</ul>' + prefix;
+          insideUl = false;
+        }
+        const match = trimmed.match(/^\d+\.\s(.*)/);
+        const liContent = match ? match[1] : trimmed;
+        return prefix + `<li class="my-0.5">${liContent}</li>`;
+      } else {
+        let suffix = '';
+        if (insideUl) {
+          suffix = '</ul>';
+          insideUl = false;
+        }
+        if (insideOl) {
+          suffix = '</ol>';
+          insideOl = false;
+        }
+        return suffix + line;
+      }
+    });
+    
+    if (insideUl) formattedLines.push('</ul>');
+    if (insideOl) formattedLines.push('</ol>');
+    parsed = formattedLines.join('\n');
+  }
+
+  return parsed;
+}
 
 interface BlockEditorProps {
   key?: string;
@@ -19,7 +117,12 @@ interface BlockEditorProps {
 }
 
 export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: BlockEditorProps) {
-  const [blocks, setBlocks] = useState<Block[]>(initialBlocks);
+  const [blocks, setBlocks] = useState<Block[]>(() => 
+    initialBlocks.map(b => ({
+      ...b,
+      content: parseMarkdownToHtml(b.content)
+    }))
+  );
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [slashMenuOpen, setSlashMenuOpen] = useState(false);
   const [slashMenuPos, setSlashMenuPos] = useState({ top: 0, left: 0 });
@@ -33,6 +136,94 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const [selectedText, setSelectedText] = useState('');
   const [isListening, setIsListening] = useState(false);
   const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
+
+  // Styling & Comment states
+  const [activeStyleBlockId, setActiveStyleBlockId] = useState<string | null>(null);
+  const [activeCommentBlockId, setActiveCommentBlockId] = useState<string | null>(null);
+  const [newCommentText, setNewCommentText] = useState('');
+  const [exportingPdf, setExportingPdf] = useState(false);
+  const [showTextColorPicker, setShowTextColorPicker] = useState(false);
+  const [showBgColorPicker, setShowBgColorPicker] = useState(false);
+  
+  // Spellchecker states
+  const [showSpellcheck, setShowSpellcheck] = useState(false);
+  const [spellCheckLoading, setSpellCheckLoading] = useState(false);
+  const [spellingIssues, setSpellingIssues] = useState<{
+    id: string;
+    word: string;
+    suggestions: string[];
+    context: string;
+    blockId: string;
+  }[]>([]);
+
+  const [blockLoadingMap, setBlockLoadingMap] = useState<Record<string, boolean>>({});
+  const [composerBlockId, setComposerBlockId] = useState<string | null>(null);
+  
+  // Auto-save State Management
+  const [saveStatus, setSaveStatus] = useState<'saved' | 'saving' | 'dirty' | 'error'>('saved');
+  const [lastSavedTime, setLastSavedTime] = useState<string>(() => new Date().toLocaleTimeString());
+  const isFirstRender = useRef(true);
+
+  // Mark status as dirty on user adjustments (skip first render mount)
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false;
+      return;
+    }
+    setSaveStatus('dirty');
+  }, [blocks, title]);
+
+  // Handle auto-save at a regular interval (30 seconds)
+  useEffect(() => {
+    const timer = setInterval(() => {
+      // Rotate state to saving
+      setSaveStatus('saving');
+      try {
+        const payload = {
+          title,
+          blocks,
+          timestamp: Date.now()
+        };
+        // Back up current content to local storage to avoid any data loss
+        localStorage.setItem(`notion_clone_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
+        
+        // Propagate state to the parent component
+        onChangeRef.current(blocks);
+        
+        setTimeout(() => {
+          setSaveStatus('saved');
+          setLastSavedTime(new Date().toLocaleTimeString());
+        }, 800);
+      } catch (err) {
+        console.error("Auto-save error:", err);
+        setSaveStatus('error');
+      }
+    }, 30000); // 30 seconds interval
+
+    return () => clearInterval(timer);
+  }, [blocks, title]);
+
+  // Manual save handler for active action support
+  const triggerManualSave = () => {
+    setSaveStatus('saving');
+    try {
+      const payload = {
+        title,
+        blocks,
+        timestamp: Date.now()
+      };
+      localStorage.setItem(`notion_clone_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
+      onChangeRef.current(blocks);
+      
+      setTimeout(() => {
+        setSaveStatus('saved');
+        setLastSavedTime(new Date().toLocaleTimeString());
+      }, 600);
+    } catch (err) {
+      console.error("Manual save error:", err);
+      setSaveStatus('error');
+    }
+  };
   
   const blockRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
@@ -66,6 +257,14 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const handleKeyDown = (e: KeyboardEvent<HTMLDivElement>, index: number) => {
     const block = blocks[index];
     const el = e.currentTarget;
+
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      const currentLevel = block.indentLevel || 0;
+      const newLevel = e.shiftKey ? Math.max(0, currentLevel - 1) : Math.min(4, currentLevel + 1);
+      updateBlock(block.id, { indentLevel: newLevel });
+      return;
+    }
     
     if (e.key === 'Enter' && !e.shiftKey) {
       e.preventDefault();
@@ -149,59 +348,205 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>, id: string) => {
     let content = e.currentTarget.innerHTML || '';
+    let converted = false;
     
     // Auto-markdown inline conversions
     if (content.includes('**')) {
-      const newContent = content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+      const newContent = content.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
       if (newContent !== content) {
         content = newContent;
-        e.currentTarget.innerHTML = content;
-        // Move caret to end
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(e.currentTarget);
-        range.collapse(false);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+        converted = true;
       }
     }
-    if (content.match(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/)) {
-      const newContent = content.replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<i>$1</i>');
+    if (content.includes('__')) {
+      const newContent = content.replace(/__(.*?)__/g, '<strong>$1</strong>');
       if (newContent !== content) {
         content = newContent;
-        e.currentTarget.innerHTML = content;
-        // Move caret to end
-        const range = document.createRange();
-        const sel = window.getSelection();
-        range.selectNodeContents(e.currentTarget);
-        range.collapse(false);
-        sel?.removeAllRanges();
-        sel?.addRange(range);
+        converted = true;
       }
+    }
+    if (content.match(/\*([^\*<>]+)\*/)) {
+      const newContent = content.replace(/\*([^\*<>]+)\*/g, '<em>$1</em>');
+      if (newContent !== content) {
+        content = newContent;
+        converted = true;
+      }
+    }
+    if (content.match(/_([^_<>]+)_/)) {
+      const newContent = content.replace(/_([^_<>]+)_/g, '<em>$1</em>');
+      if (newContent !== content) {
+        content = newContent;
+        converted = true;
+      }
+    }
+    if (content.includes('`')) {
+      const newContent = content.replace(/`([^`<>]+)`/g, (match, p1) => {
+        return `<code class="bg-[#F1F1F0] dark:bg-[#2F2F2F] text-[#EB5757] dark:text-[#E06C75] px-1.5 py-0.5 rounded font-mono text-sm border border-[#EBEBE9] dark:border-[#3F3F3F] font-semibold">${p1}</code>`;
+      });
+      if (newContent !== content) {
+        content = newContent;
+        converted = true;
+      }
+    }
+    if (content.includes('~~')) {
+      const newContent = content.replace(/~~([^~<>]+)~~/g, '<del>$1</del>');
+      if (newContent !== content) {
+        content = newContent;
+        converted = true;
+      }
+    }
+
+    if (converted) {
+      e.currentTarget.innerHTML = content;
+      // Move caret to end
+      const range = document.createRange();
+      const sel = window.getSelection();
+      range.selectNodeContents(e.currentTarget);
+      range.collapse(false);
+      sel?.removeAllRanges();
+      sel?.addRange(range);
     }
 
     updateBlock(id, { content });
     
     const textContent = e.currentTarget.textContent || '';
-    // Auto-markdown conversions
-    if (textContent === '# ') {
-      updateBlock(id, { type: 'h1', content: '' });
-      e.currentTarget.innerHTML = '';
-    } else if (textContent === '## ') {
-      updateBlock(id, { type: 'h2', content: '' });
-      e.currentTarget.innerHTML = '';
-    } else if (textContent === '### ') {
-      updateBlock(id, { type: 'h3', content: '' });
-      e.currentTarget.innerHTML = '';
-    } else if (textContent === '- ' || textContent === '* ') {
-      updateBlock(id, { type: 'bullet', content: '' });
-      e.currentTarget.innerHTML = '';
-    } else if (textContent === '[] ') {
-      updateBlock(id, { type: 'todo', content: '' });
-      e.currentTarget.innerHTML = '';
+    // Auto-markdown conversions for prefixes
+    if (textContent.startsWith('# ')) {
+      const clean = textContent.substring(2);
+      updateBlock(id, { type: 'h1', content: clean });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('## ')) {
+      const clean = textContent.substring(3);
+      updateBlock(id, { type: 'h2', content: clean });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('### ')) {
+      const clean = textContent.substring(4);
+      updateBlock(id, { type: 'h3', content: clean });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('- ') || textContent.startsWith('* ')) {
+      const clean = textContent.substring(2);
+      updateBlock(id, { type: 'bullet', content: clean });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('1. ')) {
+      const clean = textContent.substring(3);
+      updateBlock(id, { type: 'bullet', content: clean });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('[] ') || textContent.startsWith('[ ] ')) {
+      const offset = textContent.startsWith('[ ] ') ? 4 : 3;
+      const clean = textContent.substring(offset);
+      updateBlock(id, { type: 'todo', content: clean, checked: false });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('[x] ') || textContent.startsWith('[X] ')) {
+      const clean = textContent.substring(4);
+      updateBlock(id, { type: 'todo', content: clean, checked: true });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
+    } else if (textContent.startsWith('> ')) {
+      const clean = textContent.substring(2);
+      updateBlock(id, { type: 'quote', content: clean });
+      e.currentTarget.innerHTML = clean;
+      focusBlock(id, true);
     } else if (textContent === '---') {
       updateBlock(id, { type: 'divider', content: '' });
       e.currentTarget.innerHTML = '';
+      focusBlock(id, true);
+    }
+  };
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLDivElement>, index: number, id: string) => {
+    e.preventDefault();
+    const text = e.clipboardData.getData('text/plain');
+    if (!text) return;
+
+    // Check if it's multiline markdown or standard markdown
+    if (text.includes('\n')) {
+      const lines = text.split('\n');
+      const newBlocks: Block[] = [];
+      
+      lines.forEach(line => {
+        const trimmed = line.trim();
+        if (!trimmed) {
+          newBlocks.push({ id: uuidv4(), type: 'p', content: '' });
+          return;
+        }
+
+        let type: BlockType = 'p';
+        let content = line;
+        let checked = false;
+
+        if (trimmed.startsWith('# ')) {
+          type = 'h1';
+          content = line.replace(/^\s*#\s+/, '');
+        } else if (trimmed.startsWith('## ')) {
+          type = 'h2';
+          content = line.replace(/^\s*##\s+/, '');
+        } else if (trimmed.startsWith('### ')) {
+          type = 'h3';
+          content = line.replace(/^\s*###\s+/, '');
+        } else if (trimmed.startsWith('- ') || trimmed.startsWith('* ')) {
+          type = 'bullet';
+          content = line.replace(/^\s*[-*]\s+/, '');
+        } else if (trimmed.startsWith('1. ')) {
+          type = 'bullet';
+          content = line.replace(/^\s*1\.\s+/, '');
+        } else if (trimmed.startsWith('> ')) {
+          type = 'quote';
+          content = line.replace(/^\s*>\s+/, '');
+        } else if (trimmed.startsWith('[] ') || trimmed.startsWith('[ ] ')) {
+          type = 'todo';
+          content = line.replace(/^\s*\[\s*\]\s+/, '');
+        } else if (trimmed.startsWith('[x] ') || trimmed.startsWith('[X] ')) {
+          type = 'todo';
+          checked = true;
+          content = line.replace(/^\s*\[[xX]\]\s+/, '');
+        } else if (trimmed === '---') {
+          type = 'divider';
+          content = '';
+        }
+
+        // Run inline markdown parsing on pasted content
+        content = parseMarkdownToHtml(content);
+
+        newBlocks.push({
+          id: uuidv4(),
+          type,
+          content,
+          checked
+        });
+      });
+
+      if (newBlocks.length > 0) {
+        const updatedBlocks = [...blocks];
+        const currentBlock = blocks[index];
+        const currentTrimmed = e.currentTarget.textContent?.trim() || '';
+
+        if (currentTrimmed === '') {
+          updatedBlocks[index] = {
+            ...currentBlock,
+            type: newBlocks[0].type,
+            content: newBlocks[0].content,
+            checked: newBlocks[0].checked
+          };
+          updatedBlocks.splice(index + 1, 0, ...newBlocks.slice(1));
+        } else {
+          updatedBlocks.splice(index + 1, 0, ...newBlocks);
+        }
+
+        setBlocks(updatedBlocks);
+        // Focus last block
+        const lastPastedId = newBlocks[newBlocks.length - 1].id;
+        focusBlock(lastPastedId, true);
+      }
+    } else {
+      // Single line paste - parse inline formatting to html
+      const parsedText = parseMarkdownToHtml(text);
+      document.execCommand('insertHTML', false, parsedText);
     }
   };
 
@@ -209,22 +554,52 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     setBlocks(blocks.map(b => b.id === id ? { ...b, ...updates } : b));
   };
 
+  const applyInlineStyle = (command: string, value: string = '') => {
+    document.execCommand(command, false, value);
+    if (focusedId) {
+      const el = blockRefs.current[focusedId];
+      if (el) {
+        const fakeEvent = {
+          currentTarget: el,
+        } as unknown as React.FormEvent<HTMLDivElement>;
+        handleInput(fakeEvent, focusedId);
+      }
+    }
+  };
+
   const openAiMenuForSelection = () => {
     const sel = window.getSelection();
-    if (sel && sel.toString().length > 0) {
+    if (sel && sel.toString().trim().length > 0) {
       const range = sel.getRangeAt(0);
       const rect = range.getBoundingClientRect();
       setSelectedText(sel.toString());
-      setAiMenuPos({ top: rect.bottom + window.scrollY, left: rect.left + window.scrollX });
+      setAiMenuPos({ top: rect.bottom + window.scrollY + 8, left: rect.left + window.scrollX });
       setAiMenuOpen(true);
     }
   };
 
   useEffect(() => {
-    const handleMouseUp = () => setTimeout(openAiMenuForSelection, 50);
+    const handleMouseUp = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('.selection-toolbar-container')) {
+        return;
+      }
+      
+      setTimeout(() => {
+        const sel = window.getSelection();
+        if (sel && sel.toString().trim().length > 0) {
+          openAiMenuForSelection();
+        } else {
+          setAiMenuOpen(false);
+          setSelectedText('');
+          setShowTextColorPicker(false);
+          setShowBgColorPicker(false);
+        }
+      }, 50);
+    };
     document.addEventListener('mouseup', handleMouseUp);
     return () => document.removeEventListener('mouseup', handleMouseUp);
-  }, []);
+  }, [focusedId]);
 
   useEffect(() => {
     const handleAiCommandEvent = (e: Event) => {
@@ -316,6 +691,52 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     }
   };
 
+  const generateContentForBlock = async (id: string) => {
+    const block = blocks.find(b => b.id === id);
+    if (!block) return;
+
+    setBlockLoadingMap(prev => ({ ...prev, [id]: true }));
+    try {
+      let command = 'custom';
+      let prompt = '';
+      let context = '';
+
+      if (block.type === 'ai-summary') {
+        command = 'summarize';
+        context = block.aiContext || '';
+        prompt = 'Provide a tidy, structured summary of the content below.';
+      } else if (block.type === 'ai-draft') {
+        command = 'custom';
+        context = block.aiContext || '';
+        prompt = `Draft a modern document block about: ${block.aiPrompt}.${context ? ` Extra context: ${context}` : ''}`;
+      } else if (block.type === 'ai-rewrite') {
+        command = 'custom';
+        context = block.aiContext || '';
+        prompt = `Please rewrite the following content to fit these criteria: ${block.aiPrompt}. Keep it structurally sound and clean. Target Content:\n${context}`;
+      }
+
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command,
+          context,
+          prompt
+        })
+      });
+
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      const htmlContent = parseMarkdownToHtml(data.text || '');
+      updateBlock(id, { content: htmlContent });
+    } catch (err: any) {
+      alert("Block generation error: " + err.message);
+    } finally {
+      setBlockLoadingMap(prev => ({ ...prev, [id]: false }));
+    }
+  };
+
   const handleAiAction = (action: 'insert' | 'replace' | 'discard') => {
     if (action === 'discard') {
       setAiResult(null);
@@ -392,6 +813,204 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     recognition.start();
   };
 
+  const toggleBlockStyleFlag = (blockId: string, flag: 'bold' | 'italic' | 'underline') => {
+    setBlocks(blocks.map(b => {
+      if (b.id === blockId) {
+        const style = b.style || {};
+        return {
+          ...b,
+          style: {
+            ...style,
+            [flag]: !style[flag]
+          }
+        };
+      }
+      return b;
+    }));
+  };
+
+  const updateBlockStyleColor = (blockId: string, type: 'color' | 'backgroundColor', value: string) => {
+    setBlocks(blocks.map(b => {
+      if (b.id === blockId) {
+        const style = b.style || {};
+        return {
+          ...b,
+          style: {
+            ...style,
+            [type]: value === 'inherit' || value === 'transparent' ? undefined : value
+          }
+        };
+      }
+      return b;
+    }));
+  };
+
+  const addBlockComment = (blockId: string) => {
+    if (!newCommentText.trim()) return;
+    const comment: BlockComment = {
+      id: uuidv4(),
+      author: 'Jake (You)',
+      text: newCommentText.trim(),
+      createdAt: Date.now()
+    };
+    setBlocks(blocks.map(b => {
+      if (b.id === blockId) {
+        return {
+          ...b,
+          comments: [...(b.comments || []), comment]
+        };
+      }
+      return b;
+    }));
+    setNewCommentText('');
+  };
+
+  const removeBlockComment = (blockId: string, commentId: string) => {
+    setBlocks(blocks.map(b => {
+      if (b.id === blockId) {
+        return {
+          ...b,
+          comments: (b.comments || []).filter(c => c.id !== commentId)
+        };
+      }
+      return b;
+    }));
+  };
+
+  const exportPageAsPdf = async () => {
+    setExportingPdf(true);
+    try {
+      const element = document.getElementById('notion-page-content');
+      if (!element) return;
+      
+      const currentScrollY = window.scrollY;
+      window.scrollTo(0, 0);
+
+      // Hide handle controls, styled bars, edit tags and side dialogs for cleaner export
+      const interactiveElements = document.querySelectorAll('.pdf-exclude');
+      interactiveElements.forEach((el: any) => {
+        el.style.opacity = '0';
+        el.style.visibility = 'hidden';
+      });
+
+      const canvas = await html2canvas(element, {
+        scale: 2,
+        useCORS: true,
+        backgroundColor: document.documentElement.classList.contains('dark') ? '#1C1C1C' : '#FFFFFF',
+        scrollY: 0
+      });
+
+      // Restore elements
+      interactiveElements.forEach((el: any) => {
+        el.style.opacity = '';
+        el.style.visibility = '';
+      });
+      window.scrollTo(0, currentScrollY);
+
+      const imgData = canvas.toDataURL('image/png');
+      const pdf = new jsPDF('p', 'mm', 'a4');
+      const imgWidth = 190; // margin 10mm on both sides
+      const pageHeight = 295;
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 10; // Start with 10mm top margin
+
+      pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      while (heightLeft >= 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, 'PNG', 10, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+      
+      pdf.save(`${title.replace(/\s+/g, '_') || 'Untitled_Page'}.pdf`);
+    } catch (e) {
+      console.error(e);
+      alert('Failed to generate PDF');
+    } finally {
+      setExportingPdf(false);
+    }
+  };
+
+  const runSpellCheck = async () => {
+    if (showSpellcheck) {
+      setShowSpellcheck(false);
+      return;
+    }
+
+    setSpellCheckLoading(true);
+    try {
+      const cleanedBlocks = blocks.map(b => {
+        const dummyText = b.content.replace(/<[^>]*>/g, ' ');
+        return {
+          id: b.id,
+          content: dummyText,
+          type: b.type
+        };
+      });
+
+      const resp = await fetch('/api/ai/spellcheck', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ blocks: cleanedBlocks })
+      });
+
+      if (!resp.ok) {
+        throw new Error('Spellcheck failed');
+      }
+
+      const data = await resp.json();
+      setSpellingIssues(data.issues || []);
+      setShowSpellcheck(true);
+    } catch (err) {
+      console.error(err);
+      alert('Unable to run spellcheck right now. Please make sure Gemini API key is configured.');
+    } finally {
+      setSpellCheckLoading(false);
+    }
+  };
+
+  const applySpellingCorrection = (blockId: string, originalWord: string, correction: string, issueId: string) => {
+    setBlocks(currentBlocks => currentBlocks.map(b => {
+      if (b.id === blockId) {
+        let newContent = b.content;
+        const cleanOriginal = originalWord.trim();
+        const cleanCorrection = correction.trim();
+        
+        const regex = new RegExp(`\\b${cleanOriginal}\\b`, 'gi');
+        if (regex.test(newContent)) {
+          newContent = newContent.replace(regex, cleanCorrection);
+        } else {
+          newContent = newContent.replace(cleanOriginal, cleanCorrection);
+        }
+        
+        setTimeout(() => {
+          const el = blockRefs.current[blockId];
+          if (el) {
+            el.innerHTML = newContent;
+            const fakeEvent = { currentTarget: el } as unknown as React.FormEvent<HTMLDivElement>;
+            handleInput(fakeEvent, blockId);
+          }
+        }, 50);
+
+        return { ...b, content: newContent };
+      }
+      return b;
+    }));
+    
+    setSpellingIssues(prev => prev.filter(issue => issue.id !== issueId));
+  };
+
+  const ignoreSpellingIssue = (issueId: string) => {
+    setSpellingIssues(prev => prev.filter(issue => issue.id !== issueId));
+  };
+
+  const hasSpellingError = (blockId: string) => {
+    return spellingIssues.some(issue => issue.blockId === blockId);
+  };
+
   const commands = [
     { label: 'Text', icon: Type, type: 'p' },
     { label: 'Heading 1', icon: Hash, type: 'h1' },
@@ -405,64 +1024,676 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   ];
 
   return (
-    <div className="w-full max-w-2xl mx-auto px-12 py-12 pb-48 font-sans text-lg text-[#37352F]">
-      <input 
-        type="text" 
-        value={title} 
-        onChange={e => onTitleChange(e.target.value)}
-        placeholder="Untitled"
-        className="w-full text-4xl font-bold bg-transparent border-none outline-none mb-8 placeholder-[#37352f4d] resize-none"
-      />
-
-      <div className="space-y-1">
-        {blocks.map((block, index) => (
-          <div key={block.id} className="relative group flex items-start -ml-6">
-            <div 
-              className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-[#37352f4d] mt-1"
-              contentEditable={false}
-            >
-              <GripVertical size={16} />
-            </div>
-            
-            <div className="flex-1 w-full min-w-0" style={{position: 'relative'}}>
-              {block.type === 'todo' && (
-                <div className="absolute left-0 top-1.5 cursor-pointer mr-2" onClick={() => updateBlock(block.id, {checked: !block.checked})}>
-                  <div className={cn("w-5 h-5 border rounded-sm flex items-center justify-center transition-colors", block.checked ? "bg-[#2EAADC] border-[#2EAADC] text-white" : "border-[#EBEBE9] hover:bg-[#F1F1F0]")}>
-                    {block.checked && <CheckSquare size={14} className="opacity-100" />}
-                  </div>
-                </div>
-              )}
-              {block.type === 'bullet' && (
-                <div className="absolute left-0 top-3 w-1.5 h-1.5 bg-current rounded-full" />
-              )}
-              {block.type === 'divider' ? (
-                <div className="h-px w-full bg-[#EBEBE9] my-4" />
-              ) : (
-                <div
-                  ref={el => blockRefs.current[block.id] = el}
-                  contentEditable
-                  suppressContentEditableWarning
-                  onKeyDown={e => handleKeyDown(e, index)}
-                  onInput={e => handleInput(e, block.id)}
-                  onFocus={() => setFocusedId(block.id)}
-                  className={cn(
-                    "outline-none min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-[#37352f33] empty:before:pointer-events-none break-words leading-relaxed max-w-full",
-                    block.type === 'h1' && "text-3xl font-bold mt-6 mb-3",
-                    block.type === 'h2' && "text-2xl font-semibold mt-5 mb-2",
-                    block.type === 'h3' && "text-xl font-semibold mt-4 mb-1",
-                    block.type === 'quote' && "border-l-[3px] border-[#37352F] pl-4 py-1 text-lg my-4",
-                    block.type === 'callout' && "bg-[#F1F1F0] dark:bg-[#2F2F2F] p-4 pr-4 pl-12 rounded flex items-start text-lg my-2 relative before:content-['💡'] before:absolute before:left-4",
-                    (block.type === 'todo' || block.type === 'bullet') && "pl-8",
-                    block.type === 'todo' && block.checked && "line-through text-[#37352f7a]"
-                  )}
-                  style={{ whiteSpace: 'pre-wrap' }}
-                  data-placeholder={focusedId === block.id && block.type === 'p' ? "Press '/' for commands..." : ""}
-                  dangerouslySetInnerHTML={{ __html: block.content }}
-                />
-              )}
-            </div>
+    <div className={cn(
+      "w-full px-6 sm:px-12 py-12 pb-48 font-sans text-lg text-[#37352F] dark:text-[#E3E3E3] transition-all duration-300",
+      showSpellcheck && spellingIssues.length > 0 ? "max-w-6xl mx-auto" : "max-w-3xl mx-auto"
+    )}>
+      {/* Top PDF and Page Panel Actions */}
+      <div className="flex items-center justify-between mb-8 pb-4 border-b border-[#EBEBE9] dark:border-[#2F2F2F] pdf-exclude">
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-400 font-medium tracking-wide uppercase hidden sm:inline">Notion Architect workspace</span>
+          
+          {/* Elegant Auto-save Badge */}
+          <div className="flex items-center gap-1.5 px-2 py-1 rounded-md bg-[#F4F4F3] dark:bg-[#1E1E1E] border border-[#EBEBE9] dark:border-[#2F2F2F] text-[10px] font-mono leading-none select-none">
+            {saveStatus === 'saving' && (
+              <span className="flex items-center gap-1 text-purple-650 dark:text-purple-400">
+                <RefreshCw size={10} className="animate-spin" />
+                <span>Saving draft...</span>
+              </span>
+            )}
+            {saveStatus === 'saved' && (
+              <span className="flex items-center gap-1 text-emerald-600 dark:text-emerald-400">
+                <span className="w-1 h-1 rounded-full bg-emerald-500 animate-pulse" />
+                <span>Auto-saved {lastSavedTime}</span>
+              </span>
+            )}
+            {saveStatus === 'dirty' && (
+              <button 
+                onClick={triggerManualSave}
+                className="flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:text-amber-700 transition-colors cursor-pointer font-bold"
+                title="Unsaved modifications. Click to save now!"
+              >
+                <Save size={10} />
+                <span>Unsaved (Save Now)</span>
+              </button>
+            )}
+            {saveStatus === 'error' && (
+              <span className="text-rose-500 font-bold flex items-center gap-1">
+                <X size={10} />
+                <span>Error Saving</span>
+              </span>
+            )}
           </div>
-        ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={runSpellCheck}
+            disabled={spellCheckLoading}
+            className={cn(
+              "flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md shadow-sm transition-all cursor-pointer border",
+              showSpellcheck
+                ? "bg-amber-50 dark:bg-amber-950/20 border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-400 font-bold"
+                : "bg-white hover:bg-[#F1F1F0] dark:bg-[#1E1E1E] dark:hover:bg-[#2F2F2F] border-[#EBEBE9] dark:border-[#2F2F2F] text-gray-600 dark:text-gray-300 font-medium"
+            )}
+            title="Check document spelling with AI helper"
+          >
+            {spellCheckLoading ? (
+              <div className="w-3.5 h-3.5 border-2 border-amber-600 border-t-transparent rounded-full animate-spin mr-1" />
+            ) : (
+              <Sparkles size={13} className={cn("transition-colors", showSpellcheck ? "text-amber-500 animate-pulse" : "text-gray-400")} />
+            )}
+            <span>{spellCheckLoading ? 'Analyzing...' : showSpellcheck ? 'Close Spellcheck' : 'Spellcheck'}</span>
+          </button>
+
+          <button
+            onClick={exportPageAsPdf}
+            disabled={exportingPdf}
+            className="flex items-center gap-1.5 text-xs font-semibold px-3 py-1.5 rounded-md bg-purple-600 hover:bg-purple-700 text-white shadow-sm transition-colors cursor-pointer"
+          >
+            <Download size={13} />
+            {exportingPdf ? 'Exporting PDF...' : 'Export to PDF'}
+          </button>
+        </div>
+      </div>
+
+      <div className={cn(
+        "w-full",
+        showSpellcheck && spellingIssues.length > 0 ? "grid grid-cols-1 lg:grid-cols-4 gap-8 items-start" : ""
+      )}>
+        {/* Main Document Col */}
+        <div className={cn(
+          "w-full",
+          showSpellcheck && spellingIssues.length > 0 ? "lg:col-span-3" : ""
+        )}>
+          <div id="notion-page-content" className="p-4 sm:p-6 rounded-xl">
+            <input 
+              type="text" 
+              value={title || ''} 
+              onChange={e => onTitleChange(e.target.value)}
+              placeholder="Untitled"
+              className="w-full text-4xl font-bold bg-transparent border-none outline-none mb-8 placeholder-[#37352f4d] dark:placeholder-[#ffffff4d] resize-none text-[#37352F] dark:text-[#E3E3E3]"
+            />
+
+            <div className="space-y-2">
+          {blocks.map((block, index) => (
+            <div 
+              key={block.id} 
+              className="relative group flex items-start -ml-6 rounded-md hover:bg-gray-50/50 dark:hover:bg-gray-800/10 transition-colors py-1 px-1"
+              style={{ paddingLeft: `${((block.indentLevel || 0) * 24) + 24}px` }}
+              draggable
+              onDragStart={(e) => {
+                e.dataTransfer.setData('text/plain', index.toString());
+                e.dataTransfer.effectAllowed = 'move';
+              }}
+              onDragOver={(e) => {
+                e.preventDefault();
+              }}
+              onDrop={(e) => {
+                e.preventDefault();
+                const dragIndex = parseInt(e.dataTransfer.getData('text/plain'), 10);
+                if (!isNaN(dragIndex) && dragIndex !== index && dragIndex >= 0 && dragIndex < blocks.length) {
+                  const reordered = [...blocks];
+                  const [moved] = reordered.splice(dragIndex, 1);
+                  reordered.splice(index, 0, moved);
+                  setBlocks(reordered);
+                }
+              }}
+            >
+              <div 
+                className="w-6 h-6 flex items-center justify-center opacity-0 group-hover:opacity-100 cursor-grab active:cursor-grabbing text-[#37352f4d] mt-1 shrink-0 pdf-exclude"
+                contentEditable={false}
+                title="Drag to reorder block"
+              >
+                <GripVertical size={16} />
+              </div>
+              
+              <div className="flex-1 w-full min-w-0 pr-16 relative" style={{ position: 'relative' }}>
+                {block.type === 'todo' && (
+                  <div className="absolute left-0 top-1.5 cursor-pointer mr-2 pdf-exclude" onClick={() => updateBlock(block.id, {checked: !block.checked})}>
+                    <div className={cn("w-5 h-5 border rounded-sm flex items-center justify-center transition-colors", block.checked ? "bg-[#2EAADC] border-[#2EAADC] text-white" : "border-[#EBEBE9] hover:bg-[#F1F1F0]")}>
+                      {block.checked && <CheckSquare size={14} className="opacity-100" />}
+                    </div>
+                  </div>
+                )}
+                {block.type === 'bullet' && (
+                  <div className="absolute left-0 top-3 w-1.5 h-1.5 bg-current rounded-full" />
+                )}
+                {block.type === 'divider' ? (
+                  <div className="h-px w-full bg-[#EBEBE9] dark:bg-[#2F2F2F] my-4" />
+                ) : block.type === 'ai-summary' || block.type === 'ai-draft' || block.type === 'ai-rewrite' ? (
+                  <div className="w-full border border-purple-200 dark:border-purple-900/40 bg-purple-50/10 dark:bg-purple-950/5 p-4 rounded-lg my-3 space-y-3 shadow-xs">
+                    {/* Header of the block */}
+                    <div className="flex items-center justify-between text-xs pb-2 border-b border-purple-100 dark:border-purple-900/20 pdf-exclude select-none">
+                      <div className="flex items-center gap-1.5 text-purple-600 dark:text-purple-400 font-bold">
+                        <Sparkles size={14} className={blockLoadingMap[block.id] ? "animate-spin" : "animate-pulse"} />
+                        <span className="uppercase tracking-wider">
+                          {block.type === 'ai-summary' && 'AI Summary Block'}
+                          {block.type === 'ai-draft' && 'AI Draft Block'}
+                          {block.type === 'ai-rewrite' && 'AI Rewrite Block'}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-1.5 text-[#37352f8c] dark:text-gray-400 font-bold">
+                        <button 
+                          onClick={() => setComposerBlockId(block.id)}
+                          className="hover:text-purple-650 dark:hover:text-purple-400 text-purple-600 dark:text-purple-500 transition-colors px-1.5 py-0.5 rounded hover:bg-purple-100/30 text-[10px] flex items-center gap-0.5 font-bold cursor-pointer"
+                          title="Open dedicated modal workspace context composer"
+                        >
+                          <Maximize2 size={10} />
+                          <span>AI Workspace</span>
+                        </button>
+                        <button 
+                          onClick={() => updateBlock(block.id, { type: 'p' })}
+                          className="hover:text-purple-600 dark:hover:text-purple-400 transition-colors px-1.5 py-0.5 rounded hover:bg-purple-100/30 text-[10px] cursor-pointer"
+                          title="Convert to normal text block"
+                        >
+                          Convert to Text
+                        </button>
+                        <button 
+                          onClick={() => setBlocks(prev => prev.filter(b => b.id !== block.id))}
+                          className="hover:text-red-500 transition-colors px-1.5 py-0.5 rounded hover:bg-red-50 text-[10px] cursor-pointer"
+                          title="Delete block"
+                        >
+                          Delete
+                        </button>
+                      </div>
+                    </div>
+
+                    {blockLoadingMap[block.id] ? (
+                      <div className="space-y-3 py-2 pdf-exclude">
+                        <div className="h-4 bg-purple-100 dark:bg-purple-900/30 rounded w-3/4 animate-pulse" />
+                        <div className="h-4 bg-purple-50 dark:bg-purple-900/20 rounded w-full animate-pulse" />
+                        <div className="h-4 bg-purple-50 dark:bg-purple-900/20 rounded w-5/6 animate-pulse" />
+                        <div className="h-4 bg-purple-50 dark:bg-purple-900/20 rounded w-2/3 animate-pulse" />
+                        <div className="flex items-center gap-2 mt-2">
+                           <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                           <span className="text-xs text-purple-600 dark:text-purple-455 font-medium">AI is generating structured content...</span>
+                        </div>
+                      </div>
+                    ) : block.content ? (
+                      <div className="space-y-3">
+                        <div
+                          ref={el => blockRefs.current[block.id] = el}
+                          contentEditable
+                          suppressContentEditableWarning
+                          onKeyDown={e => handleKeyDown(e, index)}
+                          onInput={e => handleInput(e, block.id)}
+                          onFocus={() => setFocusedId(block.id)}
+                          className="outline-none min-h-[1.5em] break-words leading-relaxed max-w-full font-sans text-sm p-1 rounded transition-all dark:text-gray-200"
+                          style={{
+                            color: block.style?.color || undefined,
+                            backgroundColor: block.style?.backgroundColor || undefined,
+                            fontWeight: block.style?.bold ? 'bold' : undefined,
+                            fontStyle: block.style?.italic ? 'italic' : undefined,
+                            textDecoration: block.style?.underline ? 'underline' : undefined,
+                          }}
+                          dangerouslySetInnerHTML={{ __html: block.content }}
+                        />
+                        
+                        <div className="flex items-center gap-2 pt-1 border-t border-[#EBEBE9]/50 dark:border-[#2F2F2F] text-[11px] pdf-exclude select-none">
+                          <button 
+                            onClick={() => updateBlock(block.id, { content: '' })}
+                            className="flex items-center gap-1 text-purple-600 dark:text-purple-400 hover:bg-purple-100/30 px-2 py-1 rounded cursor-pointer font-bold"
+                          >
+                            <Wand2 size={12} />
+                            Regenerate...
+                          </button>
+                          <button 
+                            onClick={() => updateBlock(block.id, { type: 'p' })}
+                            className="text-gray-500 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800 px-2 py-1 rounded cursor-pointer font-semibold"
+                          >
+                            Accept & Merge
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-4 pdf-exclude">
+                        {block.type === 'ai-summary' && (
+                          <div className="space-y-2">
+                            <div className="flex items-center justify-between">
+                              <label className="block text-[11px] font-bold text-purple-650 dark:text-purple-400 uppercase tracking-wider">Text context to Summarize</label>
+                              <button
+                                onClick={() => setComposerBlockId(block.id)}
+                                className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline transition-all flex items-center gap-1 cursor-pointer"
+                              >
+                                <Maximize2 size={10} /> Full-Screen Workspace
+                              </button>
+                            </div>
+                            <textarea
+                              className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[75px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 transition-all font-sans leading-relaxed"
+                              placeholder="Paste text context here, or compose in full-screen AI Workspace..."
+                              value={block.aiContext || ''}
+                              onChange={e => updateBlock(block.id, { aiContext: e.target.value })}
+                            />
+                            <div className="flex gap-2">
+                              <button
+                                onClick={() => {
+                                  const allText = blocks
+                                    .filter(b => b.id !== block.id && b.content && b.content.trim() && b.type !== 'divider')
+                                    .map(b => b.content.replace(/<[^>]*>/g, '').trim())
+                                    .join('\n\n');
+                                  updateBlock(block.id, { aiContext: allText });
+                                }}
+                                className="text-[10px] text-purple-600 dark:text-purple-400 hover:text-purple-700 bg-purple-50 dark:bg-purple-950/20 hover:bg-purple-100/30 font-bold px-2 py-1 rounded transition-colors cursor-pointer"
+                              >
+                                📥 Use all page content
+                              </button>
+                            </div>
+                          </div>
+                        )}
+
+                        {block.type === 'ai-draft' && (
+                          <div className="space-y-3">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[11px] font-bold text-purple-650 dark:text-purple-400 uppercase tracking-wider">What should the AI draft?</label>
+                                <button
+                                  onClick={() => setComposerBlockId(block.id)}
+                                  className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Maximize2 size={10} /> Full-Screen Workspace
+                                </button>
+                              </div>
+                              <input
+                                type="text"
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 font-medium"
+                                placeholder="e.g. A meeting agenda for project launch, a blog post outline on Docker..."
+                                value={block.aiPrompt || ''}
+                                onChange={e => updateBlock(block.id, { aiPrompt: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1.55">
+                              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-500 uppercase tracking-wider">Context or details (optional)</label>
+                              <textarea
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[50px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 transition-all font-sans"
+                                placeholder="Provide context, keywords, outlines, tone guidelines..."
+                                value={block.aiContext || ''}
+                                onChange={e => updateBlock(block.id, { aiContext: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {block.type === 'ai-rewrite' && (
+                          <div className="space-y-3">
+                            <div className="space-y-1.5">
+                              <div className="flex items-center justify-between">
+                                <label className="block text-[11px] font-bold text-purple-650 dark:text-purple-400 uppercase tracking-wider">Text to Rewrite</label>
+                                <button
+                                  onClick={() => setComposerBlockId(block.id)}
+                                  className="text-[10px] text-purple-600 dark:text-purple-400 font-bold hover:underline transition-all flex items-center gap-1 cursor-pointer"
+                                >
+                                  <Maximize2 size={10} /> Full-Screen Workspace
+                                </button>
+                              </div>
+                              <textarea
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg resize-y min-h-[60px] text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250 font-sans leading-relaxed"
+                                placeholder="Paste the target sentence or paragraph to rewrite..."
+                                value={block.aiContext || ''}
+                                onChange={e => updateBlock(block.id, { aiContext: e.target.value })}
+                              />
+                            </div>
+                            <div className="space-y-1.5">
+                              <label className="block text-[11px] font-bold text-gray-400 dark:text-gray-550 uppercase tracking-wider">How should it be rewritten?</label>
+                              <input
+                                type="text"
+                                className="w-full text-xs p-2.5 bg-white dark:bg-[#1E1E1E] border border-gray-200 dark:border-[#2F2F2F] outline-none rounded-lg text-[#37352F] dark:text-gray-200 focus:ring-1 focus:ring-purple-250"
+                                placeholder="e.g. More professional, clear & concise, explain to a beginner..."
+                                value={block.aiPrompt || ''}
+                                onChange={e => updateBlock(block.id, { aiPrompt: e.target.value })}
+                              />
+                            </div>
+                          </div>
+                        )}
+
+                        {/* Action Trigger Row */}
+                        <div className="flex items-center justify-between gap-2 pt-2 border-t border-[#EBEBE9] dark:border-[#2F2F2F]">
+                          <button
+                            onClick={() => setComposerBlockId(block.id)}
+                            className="flex items-center gap-1.5 text-xs text-purple-600 dark:text-purple-400 hover:bg-purple-100/10 px-2.5 py-1.5 rounded-lg font-bold transition-all cursor-pointer border border-[#EBEBE9]/50 dark:border-[#2F2F2F]"
+                            title="Open extensive fullscreen layout"
+                          >
+                            <Maximize2 size={11} />
+                            <span>Full-Screen Workspace</span>
+                          </button>
+                          
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => updateBlock(block.id, { type: 'p' })}
+                              className="px-3 py-1.5 text-xs text-[#37352f8c] dark:text-gray-400 hover:bg-gray-150 dark:hover:bg-gray-800 rounded-lg transition-all font-semibold cursor-pointer"
+                            >
+                              Cancel
+                            </button>
+                            <button
+                              onClick={async () => {
+                                await generateContentForBlock(block.id);
+                              }}
+                              disabled={
+                                block.type === 'ai-summary' ? !(block.aiContext?.trim()) :
+                                block.type === 'ai-draft' ? !(block.aiPrompt?.trim()) :
+                                !(block.aiContext?.trim() && block.aiPrompt?.trim())
+                              }
+                              className="flex items-center gap-1 px-3.5 py-1.5 text-xs bg-purple-650 hover:bg-purple-700 disabled:opacity-50 text-white rounded-lg font-bold transition-all shadow-xs cursor-pointer"
+                            >
+                              <Sparkles size={11} />
+                              Generate Content
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ) : (
+                  <div
+                    ref={el => blockRefs.current[block.id] = el}
+                    contentEditable
+                    spellCheck={true}
+                    suppressContentEditableWarning
+                    onKeyDown={e => handleKeyDown(e, index)}
+                    onInput={e => handleInput(e, block.id)}
+                    onPaste={e => handlePaste(e, index, block.id)}
+                    onFocus={() => setFocusedId(block.id)}
+                    className={cn(
+                      "outline-none min-h-[1.5em] empty:before:content-[attr(data-placeholder)] empty:before:text-[#37352f33] dark:empty:before:text-[#ffffff33] empty:before:pointer-events-none break-words leading-relaxed max-w-full p-1 rounded transition-all",
+                      showSpellcheck && hasSpellingError(block.id) && "ring-1 ring-amber-300 dark:ring-amber-800/40 bg-amber-50/10 dark:bg-amber-950/10 border-l-2 border-l-amber-500 dark:border-l-amber-400 pl-2",
+                      block.type === 'h1' && "text-3xl font-bold mt-6 mb-3",
+                      block.type === 'h2' && "text-2xl font-semibold mt-5 mb-2",
+                      block.type === 'h3' && "text-xl font-semibold mt-4 mb-1",
+                      block.type === 'quote' && "border-l-[3px] border-[#37352F] dark:border-gray-300 pl-4 py-1 text-lg my-4",
+                      block.type === 'callout' && "bg-[#F1F1F0] dark:bg-[#2F2F2F] p-4 pr-4 pl-12 rounded flex items-start text-lg my-2 relative before:content-['💡'] before:absolute before:left-4",
+                      (block.type === 'todo' || block.type === 'bullet') && "pl-8",
+                      block.type === 'todo' && block.checked && "line-through text-[#37352f7a] dark:text-gray-500"
+                    )}
+                    style={{ 
+                      whiteSpace: 'pre-wrap',
+                      color: block.style?.color || undefined,
+                      backgroundColor: block.style?.backgroundColor || undefined,
+                      fontWeight: block.style?.bold ? 'bold' : undefined,
+                      fontStyle: block.style?.italic ? 'italic' : undefined,
+                      textDecoration: block.style?.underline ? 'underline' : undefined,
+                    }}
+                    data-placeholder={focusedId === block.id && block.type === 'p' ? "Press '/' for commands..." : ""}
+                    dangerouslySetInnerHTML={{ __html: block.content }}
+                  />
+                )}
+
+                {/* Floating Gutter Icons for Block Formatting (Style & Comments) */}
+                <div className="absolute right-0 top-1 flex items-center gap-1.5 opacity-60 md:opacity-0 group-hover:opacity-100 transition-opacity pdf-exclude z-10">
+                  {/* Comments Toggle */}
+                  <button
+                    onClick={() => {
+                      setActiveCommentBlockId(activeCommentBlockId === block.id ? null : block.id);
+                      setActiveStyleBlockId(null);
+                    }}
+                    className={cn(
+                      "p-1.5 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-gray-400 hover:text-purple-600 dark:hover:text-purple-400 cursor-pointer flex items-center gap-1 text-[10px]",
+                      (block.comments?.length || 0) > 0 && "text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/20 font-bold px-2 rounded-full border border-purple-200"
+                    )}
+                    title="Comments"
+                  >
+                    <MessageCircle size={13} />
+                    {(block.comments?.length || 0) > 0 && <span>{block.comments?.length}</span>}
+                  </button>
+
+                  {/* Aesthetic Formatter Toggle */}
+                  <button
+                    onClick={() => {
+                      setActiveStyleBlockId(activeStyleBlockId === block.id ? null : block.id);
+                      setActiveCommentBlockId(null);
+                    }}
+                    className={cn(
+                      "p-1.5 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-gray-400 hover:text-indigo-600 dark:hover:text-indigo-400 cursor-pointer border border-transparent",
+                      activeStyleBlockId === block.id && "border-[#EBEBE9] dark:border-[#2F2F2F] bg-white dark:bg-[#1C1C1C] text-indigo-500"
+                    )}
+                    title="Block color & typography"
+                  >
+                    <Palette size={13} />
+                  </button>
+                </div>
+
+                {/* POPUP: Format options */}
+                {activeStyleBlockId === block.id && (
+                  <div className="absolute right-0 top-8 bg-white dark:bg-[#252525] border border-[#EBEBE9] dark:border-[#2F2F2F] rounded-lg shadow-lg p-3 z-30 w-72 text-xs text-[#37352F] dark:text-gray-200 pdf-exclude">
+                    <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#EBEBE9] dark:border-[#2F2F2F]">
+                      <span className="font-bold uppercase tracking-wider text-[10px] text-gray-400">Block Styling</span>
+                      <button onClick={() => setActiveStyleBlockId(null)} className="text-gray-400 hover:text-gray-600"><X size={12} /></button>
+                    </div>
+
+                    {/* Font format triggers */}
+                    <div className="flex gap-1 mb-3">
+                      <button
+                        onClick={() => toggleBlockStyleFlag(block.id, 'bold')}
+                        className={cn("p-1.5 rounded border transition-colors flex-1 flex justify-center", block.style?.bold ? "bg-purple-100 border-purple-300 text-purple-700 font-bold" : "border-[#EBEBE9] dark:border-[#373737] hover:bg-gray-50 dark:hover:bg-gray-800")}
+                      >
+                        <Bold size={13} />
+                      </button>
+                      <button
+                        onClick={() => toggleBlockStyleFlag(block.id, 'italic')}
+                        className={cn("p-1.5 rounded border transition-colors flex-1 flex justify-center", block.style?.italic ? "bg-purple-100 border-purple-300 text-purple-700 font-bold" : "border-[#EBEBE9] dark:border-[#373737] hover:bg-gray-50 dark:hover:bg-gray-800")}
+                      >
+                        <Italic size={13} />
+                      </button>
+                      <button
+                        onClick={() => toggleBlockStyleFlag(block.id, 'underline')}
+                        className={cn("p-1.5 rounded border transition-colors flex-1 flex justify-center", block.style?.underline ? "bg-purple-100 border-purple-300 text-purple-700 font-bold" : "border-[#EBEBE9] dark:border-[#373737] hover:bg-gray-50 dark:hover:bg-gray-800")}
+                      >
+                        <Underline size={13} />
+                      </button>
+                    </div>
+
+                    {/* Color selection layout grid */}
+                    <div className="space-y-3">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Text Color</span>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {TEXT_COLORS.map(c => (
+                            <button
+                              key={c.name}
+                              onClick={() => updateBlockStyleColor(block.id, 'color', c.value)}
+                              className="w-6 h-6 rounded-full border border-gray-200 dark:border-gray-700 cursor-pointer flex items-center justify-center text-[9px] relative hover:scale-105 transition-transform"
+                              style={{ backgroundColor: c.value === 'inherit' ? '#37352F' : c.value }}
+                              title={c.name}
+                            >
+                              {block.style?.color === c.value && <Check size={11} className="text-white mix-blend-difference" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-gray-400 block mb-1">Background Color</span>
+                        <div className="grid grid-cols-5 gap-1.5">
+                          {BG_COLORS.map(bg => (
+                            <button
+                              key={bg.name}
+                              onClick={() => updateBlockStyleColor(block.id, 'backgroundColor', bg.value)}
+                              className="w-6 h-6 rounded border border-gray-200 dark:border-gray-700 cursor-pointer flex items-center justify-center text-[9px] hover:scale-105 transition-transform"
+                              style={{ backgroundColor: bg.value }}
+                              title={bg.name}
+                            >
+                              {block.style?.backgroundColor === bg.value && <Check size={11} className="text-black" />}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* POPUP: Comments dialog */}
+                {activeCommentBlockId === block.id && (
+                  <div className="absolute right-0 top-8 bg-white dark:bg-[#252525] border border-[#EBEBE9] dark:border-[#2F2F2F] rounded-lg shadow-lg p-3.5 z-30 w-72 text-xs text-[#37352F] dark:text-gray-200 pdf-exclude">
+                    <div className="flex items-center justify-between mb-2 pb-1 border-b border-[#EBEBE9] dark:border-[#2F2F2F]">
+                      <span className="font-bold uppercase tracking-wider text-[10px] text-purple-600">Block Comments</span>
+                      <button onClick={() => setActiveCommentBlockId(null)} className="text-gray-400 hover:text-gray-650"><X size={12} /></button>
+                    </div>
+
+                    <div className="max-h-40 overflow-y-auto space-y-2 mb-3 pr-1 leading-normal">
+                      {(!block.comments || block.comments.length === 0) ? (
+                        <div className="text-gray-400 italic text-[11px] py-4 text-center">No comments yet. Add a quick note below!</div>
+                      ) : (
+                        block.comments.map(comment => (
+                          <div key={comment.id} className="p-2 bg-gray-50 dark:bg-gray-800/40 rounded border border-gray-100 dark:border-gray-800/60 relative group/comment">
+                            <div className="flex items-center justify-between pointer-events-none">
+                              <span className="font-semibold text-[10px] text-indigo-600">{comment.author}</span>
+                              <span className="text-[8px] text-gray-400">{new Date(comment.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                            </div>
+                            <p className="text-[11px] mt-0.5 text-gray-600 dark:text-gray-200">{comment.text}</p>
+                            <button
+                              onClick={() => removeBlockComment(block.id, comment.id)}
+                              className="absolute right-1 top-1 text-red-400 hover:text-red-500 cursor-pointer opacity-0 group-hover/comment:opacity-100 transition-opacity"
+                              title="Delete comment"
+                            >
+                              <X size={10} />
+                            </button>
+                          </div>
+                        ))
+                      )}
+                    </div>
+
+                    <div className="flex gap-1.5 items-center">
+                      <input
+                        type="text"
+                        value={newCommentText}
+                        onChange={e => setNewCommentText(e.target.value)}
+                        placeholder="Add comment..."
+                        onKeyDown={e => {
+                          if (e.key === 'Enter') {
+                            addBlockComment(block.id);
+                          }
+                        }}
+                        className="flex-1 bg-[#F1F1F0] dark:bg-[#1E1E1E] rounded text-[11px] px-2.5 py-1.5 outline-none border border-transparent focus:border-purple-300 text-[#37352F] dark:text-gray-200"
+                      />
+                      <button
+                        onClick={() => addBlockComment(block.id)}
+                        className="p-1 px-3 bg-purple-600 hover:bg-purple-750 text-white rounded text-[11px] font-semibold cursor-pointer"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      </div>
+
+      {/* AI Spellchecker Assistant Col */}
+      {showSpellcheck && spellingIssues.length > 0 && (
+        <div className="lg:col-span-1 bg-[#F9F9F8] dark:bg-[#1C1C1C] p-4 rounded-xl border border-[#EBEBE9] dark:border-[#2F2F2F] sticky top-4 max-h-[calc(100vh-120px)] overflow-y-auto w-full shadow-sm animate-in slide-in-from-right duration-250 pdf-exclude z-10">
+          <div className="flex items-center justify-between mb-4 pb-2 border-b border-[#EBEBE9] dark:border-[#2F2F2F]">
+            <div className="flex items-center gap-1.5">
+              <span className="flex h-2 w-2 relative">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-amber-400 opacity-75"></span>
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-amber-500"></span>
+              </span>
+              <h3 className="text-xs font-bold uppercase tracking-wider text-[#37352F] dark:text-[#E3E3E3]">Spelling Check</h3>
+            </div>
+            <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-400 font-mono">
+              {spellingIssues.length}
+            </span>
+          </div>
+
+          <p className="text-[11px] text-[#37352f8c] dark:text-gray-400 mb-3 leading-relaxed">
+            Misspelled words found by AI. Click any suggestion card to apply it instantly.
+          </p>
+
+          <div className="space-y-3">
+            {spellingIssues.map(issue => {
+              const regexEscapedWord = issue.word.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
+              const parts = issue.context.split(new RegExp(`(${regexEscapedWord})`, 'gi'));
+              return (
+                <div 
+                  key={issue.id} 
+                  className="p-3 bg-white dark:bg-[#252525] rounded-l-md rounded-r-lg border border-[#EBEBE9] dark:border-[#2F2F2F] hover:border-amber-300 dark:hover:border-amber-800 transition-all shadow-xs flex flex-col gap-2"
+                >
+                  <div className="flex items-start justify-between gap-1">
+                    <span className="text-xs font-bold text-red-500 line-through truncate max-w-[140px]" title="Misspelled word">
+                      {issue.word}
+                    </span>
+                    <button 
+                      onClick={() => ignoreSpellingIssue(issue.id)}
+                      className="text-gray-400 hover:text-gray-650 dark:hover:text-gray-200 p-0.5 rounded cursor-pointer shrink-0"
+                      title="Ignore this spelling warning"
+                    >
+                      <X size={12} />
+                    </button>
+                  </div>
+
+                  {issue.context && (
+                    <div className="text-[11px] text-[#37352fbb] dark:text-gray-300 bg-[#F1F1F0]/50 dark:bg-[#1E1E1E]/50 px-2 py-1.5 rounded font-mono leading-normal break-words">
+                      ...
+                      {parts.map((part, i) => (
+                        part.toLowerCase() === issue.word.toLowerCase() ? (
+                          <span key={i} className="text-red-500 font-bold underline decoration-wavy bg-red-500/10 px-0.5 rounded">
+                            {part}
+                          </span>
+                        ) : (
+                          <span key={i}>{part}</span>
+                        )
+                      ))}
+                      ...
+                    </div>
+                  )}
+
+                  <div className="flex flex-wrap gap-1.5 mt-1 pt-1 border-t border-gray-100 dark:border-[#2F2F2F]">
+                    {issue.suggestions.map((suggestion, sIdx) => (
+                      <button
+                        key={sIdx}
+                        onClick={() => applySpellingCorrection(issue.blockId, issue.word, suggestion, issue.id)}
+                        className="text-[10px] font-medium px-2 py-1 rounded bg-amber-50 hover:bg-amber-100 active:bg-amber-100 text-amber-800 dark:bg-amber-950/20 dark:hover:bg-amber-900/40 dark:text-amber-300 border border-amber-200/50 dark:border-amber-900/50 transition-colors cursor-pointer"
+                      >
+                        {suggestion}
+                      </button>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => {
+                      const el = blockRefs.current[issue.blockId];
+                      if (el) {
+                        el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                        el.focus();
+                      }
+                    }}
+                    className="text-[10px] text-gray-400 hover:text-gray-650 dark:hover:text-gray-300 mt-1 self-start font-medium cursor-pointer"
+                  >
+                    🔍 Focus block
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+
+          <button
+            onClick={() => runSpellCheck()}
+            className="mt-4 w-full text-center py-1.5 rounded-md border border-[#EBEBE9] dark:border-[#2F2F2F] text-[11px] text-[#37352f8c] dark:text-gray-300 hover:bg-[#F1F1F0] dark:hover:bg-[#252525] transition-colors cursor-pointer font-semibold"
+          >
+            Recheck Document
+          </button>
+        </div>
+      )}
+
+      {/* Show Spellcheck All Clear state if active and 0 issues */}
+      {showSpellcheck && spellingIssues.length === 0 && (
+        <div className="lg:col-span-1 bg-green-50/50 dark:bg-green-950/10 p-4 rounded-xl border border-green-200 dark:border-green-900/50 sticky top-4 w-full shadow-sm animate-in fade-in duration-200 pdf-exclude z-10 flex flex-col items-center text-center">
+          <div className="w-10 h-10 rounded-full bg-green-100 dark:bg-green-950/40 flex items-center justify-center text-green-600 dark:text-green-400 mb-3">
+            <Check size={20} className="stroke-[3]" />
+          </div>
+          <h3 className="text-xs font-bold uppercase tracking-wider text-green-800 dark:text-green-400 mb-1 font-sans">Clear!</h3>
+          <p className="text-[11px] text-green-700/80 dark:text-green-500 mb-4 leading-relaxed font-sans">
+            AI proofreader found zero spelling or typo issues in this document.
+          </p>
+          <button
+            onClick={() => setShowSpellcheck(false)}
+            className="w-full text-center py-1.5 rounded-md border border-green-200 dark:border-green-900/40 text-[11px] text-green-800 dark:text-green-400 hover:bg-green-100/50 dark:hover:bg-green-950/30 transition-colors cursor-pointer font-semibold"
+          >
+            Close Spellchecker
+          </button>
+        </div>
+      )}
+
       </div>
 
       {/* Slash Command Menu */}
@@ -512,6 +1743,57 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
               </div>
               <div>
                 <div className="font-medium text-[#37352F]">Draft with AI...</div>
+              </div>
+            </button>
+
+            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
+              onClick={() => {
+                if (focusedId) {
+                  updateBlock(focusedId, { type: 'ai-summary', content: '', aiPrompt: '', aiContext: '' });
+                }
+                setSlashMenuOpen(false);
+              }}
+            >
+              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
+                <Sparkles size={18} strokeWidth={1.5} />
+              </div>
+              <div>
+                <div className="font-medium text-[#37352F]">AI Summary Block</div>
+                <div className="text-xs text-[#37352f7a]">Prompt AI to summarize text</div>
+              </div>
+            </button>
+
+            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
+              onClick={() => {
+                if (focusedId) {
+                  updateBlock(focusedId, { type: 'ai-draft', content: '', aiPrompt: '', aiContext: '' });
+                }
+                setSlashMenuOpen(false);
+              }}
+            >
+              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
+                <Wand2 size={18} strokeWidth={1.5} />
+              </div>
+              <div>
+                <div className="font-medium text-[#37352F]">AI Draft Block</div>
+                <div className="text-xs text-[#37352f7a]">Draft text from prompts</div>
+              </div>
+            </button>
+
+            <button className="w-full flex items-center p-2 hover:bg-[#F1F1F0] rounded text-left mt-1"
+              onClick={() => {
+                if (focusedId) {
+                  updateBlock(focusedId, { type: 'ai-rewrite', content: '', aiPrompt: '', aiContext: '' });
+                }
+                setSlashMenuOpen(false);
+              }}
+            >
+              <div className="w-10 h-10 rounded border border-[#EBEBE9] bg-purple-50 flex items-center justify-center mr-3 flex-shrink-0 text-purple-600">
+                <Edit size={18} strokeWidth={1.5} />
+              </div>
+              <div>
+                <div className="font-medium text-[#37352F]">AI Rewrite Block</div>
+                <div className="text-xs text-[#37352f7a]">Prompt AI to edit or rewrite text</div>
               </div>
             </button>
           </div>
@@ -626,6 +1908,20 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
         onClose={() => setWorkspaceModalOpen(false)} 
         selectedText={selectedText || "Page Title: " + title}
       />
+
+      {composerBlockId && (() => {
+        const selectedBlock = blocks.find(b => b.id === composerBlockId);
+        if (!selectedBlock) return null;
+        return (
+          <AiComposerModal
+            isOpen={true}
+            onClose={() => setComposerBlockId(null)}
+            block={selectedBlock}
+            blocks={blocks}
+            onSave={updateBlock}
+          />
+        );
+      })()}
     </div>
   );
 }
