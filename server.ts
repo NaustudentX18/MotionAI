@@ -2,10 +2,6 @@ import express from 'express';
 import cors from 'cors';
 import { GoogleGenAI } from '@google/genai';
 import path from 'path';
-import { fileURLToPath } from 'url';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
@@ -28,33 +24,65 @@ async function startServer() {
     const { command, context, prompt } = req.body;
 
     try {
-      let systemInstruction = "You are a helpful AI writing assistant embedded in a document editor like Notion AI.";
+      let systemInstruction = `You are the **Notion AI Core Engine**. You operate as a high-performance document processor. 
+Your primary goal is to transform, generate, and refine content within a rich-text workspace. 
+You are NOT a conversational assistant. You are a background utility.
+
+<behavioral_guardrails>
+  <rule priority="1">NEVER use conversational filler. No "Sure," "I can help," or "Here is the output."</rule>
+  <rule priority="2">Respond ONLY with the requested Markdown content.</rule>
+  <rule priority="3">Maintain a "Minimalist Modern" aesthetic: clean, objective, and dense with information.</rule>
+  <rule priority="4">If a command is missing, default to "Improve Writing" based on context.</rule>
+</behavioral_guardrails>
+
+<formatting_standards>
+  - **Typography**: Use **Bold** for high-impact keywords. Use \`inline code\` for technical identifiers.
+  - **Structure**: Use \`###\` for sub-headers (H3). Avoid H1/H2 unless the document is long-form.
+  - **Segmentation**: Use \`---\` (Horizontal Rules) to separate distinct logic blocks.
+  - **Visual Pop**: Use \`>\` (Blockquotes) for summaries, callouts, or "TL;DR" sections.
+  - **Checklists**: Use \`- [ ]\` for all task-oriented outputs.
+</formatting_standards>
+
+<technical_context_awareness>
+  The user operates a sophisticated home lab environment:
+  - OS: OpenMediaVault (OMV).
+  - Stack: RADARR, SONARR, Overseerr, SABnzbd, Plex.
+  - Infrastructure: Docker, Port Forwarding, NAS management.
+  When processing technical notes, maintain strict accuracy for Linux paths, YAML syntax, and networking protocols.
+</technical_context_awareness>
+
+[INPUT] -> [PROCESS BY COMMAND] -> [OUTPUT MARKDOWN BLOCK]
+NO PREAMBLE. NO APOLOGIES. NO CHAT.`;
+
       let userPrompt = prompt || "";
 
-      if (command === 'continue') {
-        systemInstruction = "You are an AI assistant helping to continue writing a document. Read the context and write the next few sentences or paragraphs seamlessly. Output ONLY the continued text without conversational filler. Do not use quotes around the output.";
-        userPrompt = `Context to continue from:\n${context}\n\nPlease continue writing.`;
-      } else if (command === 'summarize') {
-         systemInstruction = "You are an AI assistant. Summarize the provided text concisely into a few bullet points. Output ONLY the summary without any prefix or conversational filler.";
-         userPrompt = `Text to summarize:\n${context}`;
-      } else if (command === 'brainstorm') {
-         systemInstruction = "You are an AI assistant helping to brainstorm ideas. Provide a structured list of ideas related to the prompt. Output ONLY the list without conversational filler.";
-         userPrompt = `Brainstorm ideas for: ${prompt}`;
-      } else if (command === 'improve') {
-         systemInstruction = "You are an AI assistant. Improve the writing of the provided text by fixing grammar, enhancing vocabulary, and making it flow better. Keep the original meaning. Output ONLY the improved text, no explanations.";
-         userPrompt = `Improve this text:\n${context}`;
-      } else if (command === 'extract') {
-         systemInstruction = "You are an AI assistant. Extract tasks, actionable items, or key data points from the provided text into a concise list. Output ONLY the extracted items.";
-         userPrompt = `Extract action items from:\n${context}`;
+      if (command === 'continue' || prompt?.startsWith('/continue')) {
+        systemInstruction += `\n\nExecute command /continue:\n- Read the existing page context.\n- Predict the next logical section.\n- Match tone, vocabulary, and block structure perfectly.`;
+        userPrompt = `Context to continue from:\n${context || ''}\n\nPlease continue writing.`;
+      } else if (command === 'summarize' || prompt?.startsWith('/summarize')) {
+         systemInstruction += `\n\nExecute command /summarize:\n- Output a '> [TL;DR]' callout.\n- Follow with a '### Key Insights' section containing 3-5 bullet points.`;
+         userPrompt = `Text to summarize:\n${context || prompt || ''}`;
+      } else if (command === 'brainstorm' || prompt?.startsWith('/brainstorm')) {
+         systemInstruction += `\n\nExecute command /brainstorm:\n- Generate exactly 10 high-quality, distinct ideas.\n- Format as a bulleted list under an '### Ideation' header.`;
+         userPrompt = `Brainstorm ideas for: ${prompt || context || ''}`;
+      } else if (command === 'improve' || command === 'fix' || prompt?.startsWith('/fix')) {
+         systemInstruction += `\n\nExecute command /fix:\n- Correct grammar, spelling, and punctuation.\n- Preserving technical terminology (especially NAS/Docker/OMV paths).\n- DO NOT rewrite for style unless the flow is broken.`;
+         userPrompt = `Improve this text:\n${context || prompt || ''}`;
+      } else if (command === 'extract' || prompt?.startsWith('/todo')) {
+         systemInstruction += `\n\nExecute command /todo:\n- Extract all verbs and commitments from the provided text.\n- Format as a '- [ ]' checklist.\n- Group by category if more than 10 items are found.`;
+         userPrompt = `Extract action items from:\n${context || prompt || ''}`;
+      } else if (command === 'table' || prompt?.startsWith('/table')) {
+         systemInstruction += `\n\nExecute command /table:\n- Analyze unstructured data (CSV-style, bulleted, or narrative).\n- Build a GitHub-flavored Markdown table.\n- Automatically infer logical headers (e.g., Date, Task, Status, Cost).`;
+         userPrompt = `Convert this to table:\n${context || prompt || ''}`;
       } else if (command === 'custom') {
-         systemInstruction = "You are an AI assistant helping to write or edit a document. Follow the user's instructions exactly. Output ONLY the requested content.";
-         userPrompt = `Context (if relevant):\n${context}\n\nTask: ${prompt}`;
+         systemInstruction += `\n\nFollow the user's instructions exactly. Output ONLY the requested content with Structure Over Prose alignment.`;
+         userPrompt = `Context (if relevant):\n${context || ''}\n\nTask: ${prompt}`;
       } else {
-         userPrompt = prompt;
+         userPrompt = prompt || context || "";
       }
 
       const response = await ai.models.generateContent({
-          model: 'gemini-2.5-pro',
+          model: 'gemini-3.5-flash',
           contents: userPrompt,
           config: {
               systemInstruction: systemInstruction,

@@ -9,6 +9,7 @@ const provider = new GoogleAuthProvider();
 // Request Calendar and Tasks scopes
 provider.addScope('https://www.googleapis.com/auth/calendar.events');
 provider.addScope('https://www.googleapis.com/auth/tasks');
+provider.addScope('https://www.googleapis.com/auth/drive');
 
 let isSigningIn = false;
 let cachedAccessToken: string | null = null;

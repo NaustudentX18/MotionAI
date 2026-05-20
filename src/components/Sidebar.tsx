@@ -1,6 +1,6 @@
 import React from 'react';
 import { Page } from '../types';
-import { FileText, Plus, LogOut, Calendar, CheckSquare, Search } from 'lucide-react';
+import { FileText, Plus, LogOut, Calendar, CheckSquare, Search, HardDrive } from 'lucide-react';
 
 interface SidebarProps {
   pages: Page[];
@@ -10,9 +10,10 @@ interface SidebarProps {
   userEmail: string | null;
   onLogout: () => void;
   onLogin: () => void;
+  onOpenDrive?: () => void;
 }
 
-export function Sidebar({ pages, currentPageId, onSelectPage, onAddPage, userEmail, onLogout, onLogin }: SidebarProps) {
+export function Sidebar({ pages, currentPageId, onSelectPage, onAddPage, userEmail, onLogout, onLogin, onOpenDrive }: SidebarProps) {
   return (
     <div className="w-[240px] h-screen bg-[#F7F6F3] border-r border-[#EBEBE9] flex flex-col shrink-0 text-[#37352F]">
       <div className="p-4 flex items-center space-x-2 mb-2 hover:bg-[#EBEBE9] cursor-pointer rounded mx-2 mt-2 transition-colors">
@@ -59,6 +60,10 @@ export function Sidebar({ pages, currentPageId, onSelectPage, onAddPage, userEma
                 <CheckSquare size={14} className="opacity-50"/>
                 <span>Google Tasks linked</span>
              </div>
+             <button onClick={onOpenDrive} className="flex items-center gap-2 hover:text-purple-600 dark:hover:text-purple-400 transition-colors w-full text-left font-medium">
+                <HardDrive size={14} className="opacity-50 text-purple-600 dark:text-purple-400" />
+                <span>Google Drive Sync</span>
+             </button>
              <button onClick={onLogout} className="flex items-center gap-2 hover:text-[#37352F] w-full">
                <LogOut size={14} className="opacity-50" />
                <span>Log out</span>

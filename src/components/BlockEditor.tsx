@@ -4,11 +4,14 @@ import { v4 as uuidv4 } from 'uuid';
 import { cn } from '../lib/utils';
 import { 
   GripVertical, Plus, ChevronRight, Hash, Type, CheckSquare, 
-  List, Minus, Quote, Sparkles, MessageSquare, ArrowRight, Wand2
+  List, Minus, Quote, Sparkles, MessageSquare, ArrowRight, Wand2,
+  Mic, MicOff, Lightbulb, Languages, Edit, Compass, Calendar
 } from 'lucide-react';
 import { addGoogleTask, addGoogleCalendarEvent } from '../lib/workspace';
+import { SelectionActionModal } from './SelectionActionModal';
 
 interface BlockEditorProps {
+  key?: string;
   initialBlocks: Block[];
   onChange: (blocks: Block[]) => void;
   title: string;
@@ -26,13 +29,21 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   const [aiMenuPos, setAiMenuPos] = useState({ top: 0, left: 0 });
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
+  const [aiResult, setAiResult] = useState<string | null>(null);
   const [selectedText, setSelectedText] = useState('');
+  const [isListening, setIsListening] = useState(false);
+  const [workspaceModalOpen, setWorkspaceModalOpen] = useState(false);
   
   const blockRefs = useRef<{ [key: string]: HTMLDivElement | null }>({});
 
+  const onChangeRef = useRef(onChange);
   useEffect(() => {
-    onChange(blocks);
-  }, [blocks, onChange]);
+    onChangeRef.current = onChange;
+  }, [onChange]);
+
+  useEffect(() => {
+    onChangeRef.current(blocks);
+  }, [blocks]);
 
   const focusBlock = (id: string, atEnd: boolean = true) => {
     setFocusedId(id);
@@ -92,6 +103,31 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
       }
     }
     
+    if (e.ctrlKey && e.altKey) {
+      switch (e.key) {
+        case 't': updateBlock(block.id, { type: 'todo' }); e.preventDefault(); return;
+        case '1': updateBlock(block.id, { type: 'h1' }); e.preventDefault(); return;
+        case '2': updateBlock(block.id, { type: 'h2' }); e.preventDefault(); return;
+        case '3': updateBlock(block.id, { type: 'h3' }); e.preventDefault(); return;
+        case 'b': updateBlock(block.id, { type: 'bullet' }); e.preventDefault(); return;
+        case 'c': updateBlock(block.id, { type: 'callout' }); e.preventDefault(); return;
+        case 'q': updateBlock(block.id, { type: 'quote' }); e.preventDefault(); return;
+      }
+    }
+
+    if (e.metaKey || e.ctrlKey) {
+      if (e.key === 'b') {
+        e.preventDefault();
+        document.execCommand('bold', false);
+        return;
+      }
+      if (e.key === 'i') {
+        e.preventDefault();
+        document.execCommand('italic', false);
+        return;
+      }
+    }
+
     if (e.key === '/') {
       const rect = el.getBoundingClientRect();
       setSlashMenuPos({ top: rect.bottom, left: rect.left });
@@ -112,28 +148,60 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
   };
 
   const handleInput = (e: React.FormEvent<HTMLDivElement>, id: string) => {
-    const content = e.currentTarget.textContent || '';
+    let content = e.currentTarget.innerHTML || '';
+    
+    // Auto-markdown inline conversions
+    if (content.includes('**')) {
+      const newContent = content.replace(/\*\*(.*?)\*\*/g, '<b>$1</b>');
+      if (newContent !== content) {
+        content = newContent;
+        e.currentTarget.innerHTML = content;
+        // Move caret to end
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(e.currentTarget);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }
+    if (content.match(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/)) {
+      const newContent = content.replace(/(?<!\*)\*(?!\*)(.*?)(?<!\*)\*(?!\*)/g, '<i>$1</i>');
+      if (newContent !== content) {
+        content = newContent;
+        e.currentTarget.innerHTML = content;
+        // Move caret to end
+        const range = document.createRange();
+        const sel = window.getSelection();
+        range.selectNodeContents(e.currentTarget);
+        range.collapse(false);
+        sel?.removeAllRanges();
+        sel?.addRange(range);
+      }
+    }
+
     updateBlock(id, { content });
     
+    const textContent = e.currentTarget.textContent || '';
     // Auto-markdown conversions
-    if (content === '# ') {
+    if (textContent === '# ') {
       updateBlock(id, { type: 'h1', content: '' });
-      e.currentTarget.textContent = '';
-    } else if (content === '## ') {
+      e.currentTarget.innerHTML = '';
+    } else if (textContent === '## ') {
       updateBlock(id, { type: 'h2', content: '' });
-      e.currentTarget.textContent = '';
-    } else if (content === '### ') {
+      e.currentTarget.innerHTML = '';
+    } else if (textContent === '### ') {
       updateBlock(id, { type: 'h3', content: '' });
-      e.currentTarget.textContent = '';
-    } else if (content === '- ' || content === '* ') {
+      e.currentTarget.innerHTML = '';
+    } else if (textContent === '- ' || textContent === '* ') {
       updateBlock(id, { type: 'bullet', content: '' });
-      e.currentTarget.textContent = '';
-    } else if (content === '[] ') {
+      e.currentTarget.innerHTML = '';
+    } else if (textContent === '[] ') {
       updateBlock(id, { type: 'todo', content: '' });
-      e.currentTarget.textContent = '';
-    } else if (content === '---') {
+      e.currentTarget.innerHTML = '';
+    } else if (textContent === '---') {
       updateBlock(id, { type: 'divider', content: '' });
-      e.currentTarget.textContent = '';
+      e.currentTarget.innerHTML = '';
     }
   };
 
@@ -158,8 +226,48 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     return () => document.removeEventListener('mouseup', handleMouseUp);
   }, []);
 
+  useEffect(() => {
+    const handleAiCommandEvent = (e: Event) => {
+      const customEvent = e as CustomEvent<{ action: string }>;
+      const { action } = customEvent.detail;
+      setAiMenuPos({ top: window.innerHeight / 3, left: Math.max(20, window.innerWidth / 2 - 250) });
+      setAiMenuOpen(true);
+      if (action === 'brainstorm') {
+         setAiPrompt('Brainstorm ideas for... ');
+      } else if (action === 'summarize') {
+         if (selectedText) {
+             runAiCommand('summarize');
+         } else {
+             setAiPrompt('Summarize... ');
+         }
+      } else if (action === 'draft') {
+         setAiPrompt('Draft a blog post about... ');
+      } else if (action === 'translate') {
+         if (selectedText) {
+             runAiCommand('custom', 'Translate this text into Spanish (or specified language):');
+         } else {
+             setAiPrompt('Translate this to Chinese: ');
+         }
+      } else if (action === 'rewrite') {
+         if (selectedText) {
+             runAiCommand('custom', 'Rewrite this paragraph to be more professional and clear:');
+         } else {
+             setAiPrompt('Rewrite: ');
+         }
+      } else if (action === 'grammar') {
+         if (selectedText) {
+             runAiCommand('custom', 'Fix spelling and grammar mistakes in this text, keeping the tone the same:');
+         } else {
+             setAiPrompt('Check grammar: ');
+         }
+      }
+    };
+    window.addEventListener('ai-command', handleAiCommandEvent);
+    return () => window.removeEventListener('ai-command', handleAiCommandEvent);
+  }, [blocks.length, selectedText]); // Add dependencies since we call runAiCommand which uses them
+
   const runAiCommand = async (command: string, customPrompt = '') => {
-    if (!selectedText && command !== 'continue' && command !== 'custom') return;
+    if (!selectedText && command !== 'continue' && command !== 'custom' && command !== 'brainstorm') return;
     
     setAiLoading(true);
     try {
@@ -193,32 +301,95 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
            }
          }
          alert("Data extraction complete!");
+         setAiMenuOpen(false);
+         setAiPrompt('');
       } else {
-        // Insert new blocks below the current selection or at bottom
-        let index = blocks.length - 1;
-        if (focusedId) {
-            index = blocks.findIndex(b => b.id === focusedId);
-        }
-        
-        const generatedLines = newContent.split('\n').filter((l: string) => l.trim().length > 0);
-        const newBlocks: Block[] = generatedLines.map((line: string) => ({
-            id: uuidv4(),
-            type: 'p',
-            content: line
-        }));
-        
-        const updatedBlocks = [...blocks];
-        updatedBlocks.splice(index + 1, 0, ...newBlocks);
-        setBlocks(updatedBlocks);
+        setAiResult(newContent);
       }
       
     } catch (err: any) {
       alert("AI Error: " + err.message);
-    } finally {
-      setAiLoading(false);
       setAiMenuOpen(false);
       setAiPrompt('');
+    } finally {
+      setAiLoading(false);
     }
+  };
+
+  const handleAiAction = (action: 'insert' | 'replace' | 'discard') => {
+    if (action === 'discard') {
+      setAiResult(null);
+      setAiMenuOpen(false);
+      setAiPrompt('');
+      return;
+    }
+    
+    if (!aiResult) return;
+    
+    const lines = aiResult.split('\n').filter((l: string) => l.trim().length > 0);
+    const newBlocks: Block[] = lines.map((line: string) => ({
+        id: uuidv4(),
+        type: 'p',
+        content: line
+    }));
+    
+    const updatedBlocks = [...blocks];
+    let index = blocks.length - 1;
+    if (focusedId) {
+        index = blocks.findIndex(b => b.id === focusedId);
+    }
+    
+    if (action === 'replace' && focusedId) {
+        updatedBlocks.splice(index, 1, ...newBlocks);
+    } else {
+        updatedBlocks.splice(index + 1, 0, ...newBlocks);
+    }
+    
+    setBlocks(updatedBlocks);
+    setAiResult(null);
+    setAiMenuOpen(false);
+    setAiPrompt('');
+  };
+
+  const toggleListening = () => {
+    if (isListening) {
+      setIsListening(false);
+      return;
+    }
+    
+    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    if (!SpeechRecognition) {
+      alert("Speech recognition isn't supported in your browser.");
+      return;
+    }
+    
+    const recognition = new SpeechRecognition();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    
+    recognition.onstart = () => setIsListening(true);
+    recognition.onend = () => setIsListening(false);
+    
+    recognition.onresult = (event: any) => {
+      let finalTranscript = '';
+      for (let i = event.resultIndex; i < event.results.length; ++i) {
+        if (event.results[i].isFinal) {
+          finalTranscript += event.results[i][0].transcript;
+        }
+      }
+      if (finalTranscript) {
+        if (focusedId) {
+          const content = blockRefs.current[focusedId]?.textContent || '';
+          updateBlock(focusedId, { content: content + ' ' + finalTranscript.trim() });
+        } else {
+          // If no focus, add a new block at the end
+          const newBlock: Block = { id: uuidv4(), type: 'p', content: finalTranscript.trim() };
+          setBlocks([...blocks, newBlock]);
+        }
+      }
+    };
+    
+    recognition.start();
   };
 
   const commands = [
@@ -230,6 +401,7 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
     { label: 'Bulleted list', icon: List, type: 'bullet' },
     { label: 'Divider', icon: Minus, type: 'divider' },
     { label: 'Quote', icon: Quote, type: 'quote' },
+    { label: 'Callout', icon: Lightbulb, type: 'callout' },
   ];
 
   return (
@@ -279,14 +451,14 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                     block.type === 'h2' && "text-2xl font-semibold mt-5 mb-2",
                     block.type === 'h3' && "text-xl font-semibold mt-4 mb-1",
                     block.type === 'quote' && "border-l-[3px] border-[#37352F] pl-4 py-1 text-lg my-4",
+                    block.type === 'callout' && "bg-[#F1F1F0] dark:bg-[#2F2F2F] p-4 pr-4 pl-12 rounded flex items-start text-lg my-2 relative before:content-['💡'] before:absolute before:left-4",
                     (block.type === 'todo' || block.type === 'bullet') && "pl-8",
                     block.type === 'todo' && block.checked && "line-through text-[#37352f7a]"
                   )}
                   style={{ whiteSpace: 'pre-wrap' }}
                   data-placeholder={focusedId === block.id && block.type === 'p' ? "Press '/' for commands..." : ""}
-                >
-                  {block.content}
-                </div>
+                  dangerouslySetInnerHTML={{ __html: block.content }}
+                />
               )}
             </div>
           </div>
@@ -296,8 +468,11 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
       {/* Slash Command Menu */}
       {slashMenuOpen && (
         <div 
-          className="fixed z-50 w-80 bg-white rounded-lg shadow-[0_4px_16px_rgba(15,15,15,0.1),0_0_0_1px_rgba(15,15,15,0.05)] overflow-hidden text-sm"
-          style={{ top: slashMenuPos.top + 24, left: slashMenuPos.left }}
+          className="fixed z-50 w-[90%] max-w-[320px] bg-white rounded-lg shadow-[0_4px_16px_rgba(15,15,15,0.1),0_0_0_1px_rgba(15,15,15,0.05)] overflow-hidden text-sm"
+          style={{ 
+            top: Math.max(10, slashMenuPos.top + 24), 
+            left: window.innerWidth < 640 ? '5%' : Math.max(10, Math.min(slashMenuPos.left, window.innerWidth - 330)) 
+          }}
         >
           <div className="px-3 py-1.5 text-[11px] font-bold text-[#37352f7a] uppercase tracking-wider bg-white">
             Basic Blocks
@@ -345,8 +520,12 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
 
       {/* AI Menu */}
       {aiMenuOpen && (
-        <div className="fixed z-50 overflow-hidden" style={{ top: aiMenuPos.top + 10, left: aiMenuPos.left }}>
-           <div className="w-full max-w-2xl bg-white rounded-lg shadow-[0_0_0_1px_rgba(15,15,15,0.05),0_8px_16px_-4px_rgba(15,15,15,0.1)] border border-[#EBEBE9] overflow-hidden z-20">
+        <div className="fixed z-50 overflow-hidden" style={{ 
+          top: Math.max(20, aiMenuPos.top), 
+          left: window.innerWidth < 640 ? 10 : Math.max(10, Math.min(aiMenuPos.left, window.innerWidth - 600)),
+          width: window.innerWidth < 640 ? 'calc(100% - 20px)' : 'auto'
+        }}>
+           <div className="w-full sm:w-[600px] bg-white rounded-lg shadow-[0_0_0_1px_rgba(15,15,15,0.05),0_8px_16px_-4px_rgba(15,15,15,0.1)] border border-[#EBEBE9] overflow-hidden z-20">
               <div className="flex items-center px-3 py-2 border-b border-[#EBEBE9] bg-[#FBFAFB]">
                  <div className="w-5 h-5 mr-2 flex items-center justify-center bg-purple-100 text-purple-600 rounded text-xs">✨</div>
                  <input 
@@ -357,21 +536,47 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
                     onChange={e => setAiPrompt(e.target.value)}
                     onKeyDown={e => {
                         if (e.key === 'Enter') runAiCommand('custom');
-                        if (e.key === 'Escape') setAiMenuOpen(false);
+                        if (e.key === 'Escape') {
+                            setAiMenuOpen(false);
+                            setAiResult(null);
+                        }
                     }}
                  />
-                 <button onClick={() => setAiMenuOpen(false)} className="text-[#37352f4d] hover:text-[#37352F]">×</button>
+                 <button onClick={() => { setAiMenuOpen(false); setAiResult(null); }} className="text-[#37352f4d] hover:text-[#37352F]">×</button>
               </div>
               
               {aiLoading ? (
-                 <div className="p-8 text-center text-[#37352f7a] text-sm flex flex-col items-center gap-3">
-                   <div className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
-                   AI is working on it...
+                 <div className="p-4 space-y-3">
+                   <div className="h-4 bg-purple-100 dark:bg-purple-900/30 rounded w-3/4 animate-pulse" />
+                   <div className="h-4 bg-purple-50 dark:bg-purple-900/20 rounded w-full animate-pulse" />
+                   <div className="h-4 bg-purple-50 dark:bg-purple-900/20 rounded w-5/6 animate-pulse" />
+                   <div className="h-4 bg-purple-50 dark:bg-purple-900/20 rounded w-2/3 animate-pulse" />
+                   <div className="flex items-center gap-2 mt-2">
+                      <div className="w-4 h-4 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs text-purple-600 font-medium">AI is crafting response...</span>
+                   </div>
+                 </div>
+              ) : aiResult ? (
+                 <div className="p-4">
+                   <div className="text-sm text-[#37352F] mb-4 whitespace-pre-wrap max-h-60 overflow-y-auto font-sans leading-relaxed">
+                     {aiResult}
+                   </div>
+                   <div className="flex items-center gap-2 border-t border-[#EBEBE9] pt-3">
+                     <button className="px-3 py-1.5 text-sm bg-[#2EAADC] hover:bg-[#258ab5] text-white font-medium rounded transition-colors" onClick={() => handleAiAction('insert')}>Insert below</button>
+                     {selectedText && (
+                       <button className="px-3 py-1.5 text-sm bg-[#F1F1F0] hover:bg-[#EBEBE9] text-[#37352F] font-medium rounded transition-colors" onClick={() => handleAiAction('replace')}>Replace selection</button>
+                     )}
+                     <button className="px-3 py-1.5 text-sm text-[#37352f8c] hover:text-[#37352F] font-medium rounded transition-colors ml-auto" onClick={() => handleAiAction('discard')}>Discard</button>
+                   </div>
                  </div>
               ) : (
                 <div className="p-1">
                     <div className="px-2 py-1.5 text-[11px] font-bold text-[#37352f7a] uppercase tracking-wider">AI Actions</div>
                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('improve')}><Sparkles size={16} className="opacity-60"/> <span>Improve writing</span></button>
+                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('custom', 'Translate this text into Spanish (or specified language):')}><Languages size={15} className="opacity-60 text-orange-500" /> <span>Translate text</span></button>
+                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('custom', 'Rewrite this paragraph to be more professional and clear:')}><Edit size={15} className="opacity-60 text-indigo-500" /> <span>Rewrite text</span></button>
+                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('custom', 'Fix spelling and grammar mistakes in this text, keeping the tone the same:')}><CheckSquare size={15} className="opacity-60 text-teal-500" /> <span>Check grammar</span></button>
+                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-purple-50 text-purple-600 dark:text-purple-400 font-semibold cursor-pointer rounded flex items-center gap-2 border-t border-[#EBEBE9] mt-1" onClick={() => setWorkspaceModalOpen(true)}><Compass size={15} className="opacity-80 stroke-[2.5]" /> <span>Send to Google Workspace Event/Task</span></button>
                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('summarize')}><MessageSquare size={16} className="opacity-60"/> <span>Summarize</span></button>
                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2" onClick={() => runAiCommand('continue')}><ArrowRight size={16} className="opacity-60"/> <span>Continue writing</span></button>
                     <button className="w-full text-left px-2 py-1.5 text-sm hover:bg-[#F1F1F0] cursor-pointer rounded flex items-center gap-2 border-t border-[#EBEBE9] mt-1" onClick={() => runAiCommand('extract')}><CheckSquare size={16} className="opacity-60"/> <span>Extract to Google Tasks</span></button>
@@ -385,6 +590,42 @@ export function BlockEditor({ initialBlocks, onChange, title, onTitleChange }: B
            </div>
         </div>
       )}
+      {/* Bottom UI Elements */}
+      <div className="fixed bottom-8 right-6 md:right-8 flex space-x-2 z-30">
+        {selectedText && (
+          <button 
+            onClick={() => setWorkspaceModalOpen(true)}
+            title="Send layout contents / selections to Calendar/Tasks"
+            className="h-10 px-4 bg-purple-600 text-white shadow-md rounded-full flex items-center hover:bg-purple-700 text-sm font-medium transition-colors"
+          >
+            <Compass size={16} className="mr-1.5 animate-pulse" /> Workspace Actions
+          </button>
+        )}
+        <button 
+          onClick={toggleListening}
+          className={cn(
+            "w-10 h-10 border border-[#EBEBE9] shadow-md rounded-full flex items-center justify-center transition-colors",
+            isListening ? "bg-red-50 text-red-500 border-red-200" : "bg-white hover:bg-[#F1F1F0] text-[#37352f7a]"
+          )}
+        >
+          {isListening ? <Mic size={18} /> : <MicOff size={18} />}
+        </button>
+        <button 
+          onClick={() => {
+            setAiMenuPos({ top: Math.max(100, window.innerHeight - 400), left: Math.max(20, window.innerWidth / 2 - 250) });
+            setAiMenuOpen(true);
+          }}
+          className="h-10 px-4 bg-white border border-[#EBEBE9] shadow-md rounded-full flex items-center hover:bg-[#F1F1F0] text-sm font-medium transition-colors"
+        >
+          <span className="text-purple-600 mr-2">✨</span> Ask AI
+        </button>
+      </div>
+
+      <SelectionActionModal 
+        isOpen={workspaceModalOpen} 
+        onClose={() => setWorkspaceModalOpen(false)} 
+        selectedText={selectedText || "Page Title: " + title}
+      />
     </div>
   );
 }
