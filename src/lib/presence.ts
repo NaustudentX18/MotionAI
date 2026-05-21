@@ -1,5 +1,5 @@
 /**
- * PresenceManager — WebRTC-based peer presence for OpenNotion.
+ * PresenceManager — WebRTC-based peer presence for MotionAI.
  *
  * Signaling: BroadcastChannel (same device, same origin) + HTTP polling to
  * the app's Express server (/api/presence/signal) for cross-device peers.
@@ -90,7 +90,7 @@ export class PresenceManager {
 
   private initBroadcastChannel() {
     try {
-      this.localBc = new BroadcastChannel('opennotion-presence');
+      this.localBc = new BroadcastChannel('motionai-presence');
       this.localBc.onmessage = (ev) => this.handleBcMessage(ev.data);
       // Announce ourselves to other tabs on the same device
       this.broadcastBc({ type: 'announce', peerId: this.peerId, userId: this.userId, userName: this.userName });

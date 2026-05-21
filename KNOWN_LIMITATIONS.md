@@ -51,4 +51,4 @@ npm run verify
 - Add browser E2E coverage for first render, editor typing persistence, settings provider flow, E2EE lock/unlock, and backlinks display.
 - Add a two-browser Y.js convergence test against the local signaling server.
 - Add a credentialed deployment checklist for Firebase, Google OAuth, and provider-specific AI probes.
-- Decide whether the GitHub-facing name should remain OpenNotion while the UI brand remains MotionAI, or unify the product name.
+- Decide whether the GitHub-facing name should remain MotionAI while the UI brand remains MotionAI, or unify the product name.

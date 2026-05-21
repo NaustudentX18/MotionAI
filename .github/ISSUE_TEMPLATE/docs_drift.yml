@@ -1,0 +1,38 @@
+name: Docs drift
+description: Report a README, roadmap, shipped-status, or limitation mismatch.
+title: "docs: reconcile "
+labels: [docs, trust, needs-triage]
+body:
+  - type: textarea
+    id: mismatch
+    attributes:
+      label: Mismatch
+      description: Which docs disagree?
+      placeholder: README says ..., ROADMAP says ..., docs/SHIPPED.md says ...
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidence
+      description: Link files, tests, or code paths that prove the current status.
+    validations:
+      required: true
+  - type: dropdown
+    id: proposed_status
+    attributes:
+      label: Proposed status label
+      options:
+        - Implemented
+        - Implemented, still hardening
+        - Experimental
+        - Prototype
+        - Planned
+        - Not claimed
+    validations:
+      required: true
+  - type: textarea
+    id: checks
+    attributes:
+      label: Checks to run
+      placeholder: npm run verify:static

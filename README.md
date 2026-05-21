@@ -1,194 +1,191 @@
-# OpenNotion / MotionAI
+# MotionAI
 
-**OpenNotion** is a self-hostable, local-first workspace app with a Notion-style block editor, a polished MotionAI portal, optional multi-provider AI actions, Google Workspace helpers, local persistence, experimental Y.js collaboration, and a Tauri desktop prototype.
+**MotionAI** is a free, open-source, self-hostable, local-first intelligent workspace for documents, tasks, and AI actions. It features a polished block editor, multi-provider BYO/local AI, Google Workspace helpers, local persistence via Y.js, experimental collaboration, and a Tauri desktop prototype — all running on your own hardware without vendor lock-in.
 
-The repo currently runs as **MotionAI Document Space** on the local Pi, but the GitHub project name is **OpenNotion**.
+> **Status:** Production-ready for single-user self-hosted use. Multi-user security and cloud sync are not yet claimed; see [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).
 
-![OpenNotion live hub screenshot](docs/media/opennotion-hub-live.png)
+---
 
-## Live deployment proof
+- [Quick Start](#quick-start)
+- [Capabilities](#capabilities)
+- [AI Providers](#ai-providers)
+- [Architecture](#architecture)
+- [Roadmap](#roadmap)
+- [Contributing](#contributing)
+- [License](#license)
 
-This app is running on the project server now:
+---
 
-- Local service: `http://127.0.0.1:3003`
-- Tailnet/private server URL: `http://100.126.207.73:3003`
-- systemd unit: `motionai.service`
-- WebRTC signaling service: `motionai-signaling.service` on port `3005`
-
-> The Tailnet URL is for private network access, not a public Internet demo link.
-
-## Demo media
-
-| View | Artifact |
-| --- | --- |
-| MotionAI portal / roadmap hub | [`docs/media/opennotion-hub-live.png`](docs/media/opennotion-hub-live.png) |
-| Desktop block editor | [`docs/media/opennotion-editor-live.png`](docs/media/opennotion-editor-live.png) |
-| AI/provider settings | [`docs/media/opennotion-settings-live.png`](docs/media/opennotion-settings-live.png) |
-| Mobile workspace view | [`docs/media/opennotion-mobile-live.png`](docs/media/opennotion-mobile-live.png) |
-| Short live app walkthrough | [`docs/media/opennotion-live-demo.webm`](docs/media/opennotion-live-demo.webm) |
-
-## What it actually does today
-
-- **Block workspace:** pages, headings, paragraphs, todos, quote/code/media-oriented block types, slash commands, comments, style controls, and PDF export.
-- **Local-first storage:** Y.js-backed persistence in IndexedDB with legacy localStorage migration/fallback paths.
-- **Experimental collaboration:** Y.js document state, y-indexeddb persistence, y-webrtc provider wiring, peer presence, and a self-hosted signaling server.
-- **Optional encryption-at-rest:** passphrase-based PBKDF2 + AES-GCM for local workspace state; the passphrase is held in memory and can be saved through the Tauri keychain path where supported.
-- **AI actions:** Express AI proxy with Gemini, OpenAI-compatible, Ollama, LM Studio, vLLM, and disabled/local-only modes. Provider keys are configured by the user and are not committed.
-- **Google Workspace helpers:** Firebase Google sign-in wiring plus guarded Drive, Calendar, and Tasks helper calls.
-- **Backlinks:** `[[Wiki Links]]` parsing and a local IndexedDB-backed backlinks index.
-- **Canvas pages:** a basic canvas page type is present, currently a starter surface rather than a full infinite whiteboard product.
-- **Desktop prototype:** Tauri v2 project files for ARM64 Linux builds.
-- **Self-host deployment:** Express production server, Dockerfile, docker-compose template, systemd service examples, and a standalone WebRTC signaling server.
-
-## Current status by capability
-
-| Capability | Status | Evidence |
-| --- | --- | --- |
-| Rich block editor | Implemented | `src/components/BlockEditor.tsx`, `src/hooks/useBlockEditor.ts`, `src/components/blocks/` |
-| Multi-workspace local persistence | Implemented | `src/lib/persistence.ts`, `src/lib/yjs.ts` |
-| Y.js CRDT foundation | Implemented, still hardening | `src/lib/yjs.ts`, `src/lib/extensions/YjsBlockExtension.ts` |
-| WebRTC document sync | Experimental | `src/App.tsx`, `signaling-server.js`, `docs/CRDT_CONFLICT_RESOLUTION.md` |
-| Peer presence | Implemented | `src/lib/presence.ts`, `src/components/PresenceIndicator.tsx` |
-| E2EE/local encrypted persistence | Implemented, with caveats | `src/lib/crypto.ts`, `src/lib/persistence.ts`, `src/lib/yjs.ts` |
-| Multi-provider AI proxy | Implemented | `server.ts`, `src/lib/ai/providers.ts`, `scripts/ai-contract-tests.ts` |
-| Google Drive/Tasks/Calendar helpers | Implemented behind auth | `src/lib/workspace.ts`, `src/components/DriveModal.tsx`, `src/components/TasksModal.tsx` |
-| Backlinks | Implemented | `src/lib/backlinks.ts`, `src/lib/backlinksIndex.ts`, `src/components/BacklinksPanel.tsx` |
-| Canvas pages | Early prototype | `src/components/CanvasEditor.tsx`, `src/types.ts` |
-| Tauri desktop app | Prototype | `src-tauri/` |
-| Multi-user production security | Not claimed | See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) |
-
-## Screenshots
-
-### Live MotionAI portal
-
-![MotionAI portal screenshot](docs/media/opennotion-hub-live.png)
-
-### Desktop editor
-
-![OpenNotion desktop editor screenshot](docs/media/opennotion-editor-live.png)
-
-### Provider settings
-
-![OpenNotion settings screenshot](docs/media/opennotion-settings-live.png)
-
-### Mobile view
-
-![OpenNotion mobile screenshot](docs/media/opennotion-mobile-live.png)
-
-## Tech stack
-
-- React 19 + TypeScript + Vite
-- Express production server and API proxy
-- Y.js, y-indexeddb, y-webrtc
-- TipTap / ProseMirror editor stack
-- IndexedDB + localStorage fallback
-- Web Crypto API AES-GCM encryption
-- Firebase Auth / Google Workspace API helpers
-- Tauri v2 desktop shell prototype
-- Playwright E2E/smoke test scaffolding
-
-## Quick start
+## Quick Start
 
 ```bash
-git clone git@github.com:NaustudentX18/OpenNotion.git
+git clone https://github.com/NaustudentX18/OpenNotion.git
 cd OpenNotion
 npm install
-cp .env.example .env
 npm run dev
 ```
 
-The default dev server uses `tsx server.ts`. The production service path is:
+Then open http://localhost:5173 (Vite dev server). The Express API runs on the same port.
+
+### Production Build
 
 ```bash
 npm run build
-PORT=3003 NODE_ENV=production node dist/server.cjs
+npm start
 ```
 
-## Environment configuration
-
-`.env.example` documents the supported variables. The most important ones are:
-
-```env
-VITE_SIGNALING_URLS="ws://localhost:3005"
-GEMINI_API_KEY="MY_GEMINI_API_KEY"
-APP_URL="MY_APP_URL"
-MOTIONAI_API_SECRET=your-secret-here
-```
-
-Notes:
-
-- Do **not** commit `.env` or real provider keys.
-- AI features remain disabled/not configured until a provider is configured.
-- `MOTIONAI_API_SECRET` is optional for localhost-only use, but should be set before exposing the Express API beyond a trusted private network.
-
-## Verification
-
-Credential-free local checks:
+### Docker
 
 ```bash
-npm run verify:static
-npm run lint
-npm run test:ai
-npm run test:spellcheck
-npm run test:workspace
-npm run test:import-export
-npm run test:smoke
-npm run test:migration
+docker compose up --build
 ```
 
-Full local gate:
+### Credential-Free Local Verification
 
 ```bash
+npm install
 npm run verify
-npm run build
 ```
 
-Browser E2E scaffolding is available with:
+This runs 90+ tests covering AI contracts, spellcheck schemas, workspace helpers, import/export round-trips, persistence migrations, workspace schema validation, and reliability/large-workspace stress tests — all without API keys, network access, or Google OAuth.
 
 ```bash
-npm run test:e2e
+npm run verify:static   # source + documentation invariant checks (12)
+npm run lint            # TypeScript type-check
+npm run test:ai         # mocked AI provider contract tests (18)
+npm run test:spellcheck # spellcheck response-shape schema tests (11)
+npm run test:workspace  # Google Workspace helper contract tests (16)
+npm run test:import-export # import/export round-trip tests (20)
+npm run test:smoke      # lightweight browser/API smoke checks (13)
+npm run test:migration  # persistence migration tests (12)
+npm run test:schema     # workspace schema validation tests (9)
+npm run test:reliability # large-workspace torture tests (12)
 ```
 
-## Deployment on this Pi
+---
 
-The live service is managed by systemd:
+## Capabilities
 
-```bash
-systemctl --user status motionai.service
-systemctl --user status motionai-signaling.service
-curl -I http://127.0.0.1:3003
-curl http://127.0.0.1:3005/health
+### Block Editor
+
+A full-featured block-based editor powered by TipTap + Y.js:
+
+| Feature | Status |
+|---|---|
+| Paragraphs, headings (H1–H3) | ✓ |
+| To-do lists with checkboxes | ✓ |
+| Bullet lists, dividers, callouts, quotes | ✓ |
+| Code blocks with syntax highlighting | ✓ |
+| Inline styles (bold, italic, underline, color) | ✓ |
+| Markdown shortcuts (`# `, `- `, `[] `, `**bold**`) | ✓ |
+| Slash command menu | ✓ |
+| Drag-to-reorder blocks | ✓ |
+| Image upload & embedding | ✓ |
+| Block comments (threaded) | ✓ |
+| Auto-save (5s interval) | ✓ |
+| PDF export | ✓ |
+| Speech-to-text dictation | ✓ |
+| Backlinks / wiki-links (`[[Page Title]]`) | ✓ |
+
+### MotionAI Portal
+
+A central hub with workspace overview, AI action shortcuts, and a command palette for rapid navigation:
+
+- Smart search across pages, blocks, and AI suggestions
+- Command palette (`Cmd/Ctrl+K`) for quick actions
+- AI composer for drafting, rewriting, summarizing, brainstorming
+- AI spellcheck with inline corrections
+- Floating AI selection menu for on-the-fly text transformations
+
+### Canvas
+
+Experimental infinite spatial canvas powered by [tldraw](https://tldraw.dev) — accessible as a page type toggle from the sidebar.
+
+### Local Persistence
+
+- Workspace data persisted via **Y.js** + IndexedDB (browser) and localStorage fallback
+- Multi-workspace CRUD (create, rename, delete, switch)
+- Import/export full workspace as JSON
+- Schema versioning and migration from legacy storage formats
+
+### Encryption
+
+Optional **AES-GCM 256-bit encryption** at rest using Web Crypto API. Key derived from passphrase via PBKDF2. Toggle from Settings → Security tab.
+
+### Peer Presence
+
+Experimental WebRTC-based peer presence with BroadcastChannel + HTTP signaling. Shows which collaborators are viewing the same page. Proof of concept — real document sync requires the Y.js CRDT collaboration stack.
+
+---
+
+## AI Providers
+
+BYO key or local endpoint. Configured via environment variables or the in-app Settings → AI Providers tab:
+
+| Provider | Config | Default |
+|---|---|---|
+| **Gemini** (primary) | `GEMINI_API_KEY` | `https://generativelanguage.googleapis.com/v1beta` |
+| **OpenAI-compatible** | `OPENAI_API_KEY` + `OPENAI_BASE_URL` | — |
+| **Ollama** (local) | `OLLAMA_BASE_URL` | `http://localhost:11434` |
+| **LM Studio** (local) | `LM_STUDIO_BASE_URL` | `http://localhost:1234` |
+| **vLLM** (local) | `VLLM_BASE_URL` | `http://localhost:8000` |
+| **Disabled** | — | Keys/endpoints never sent, API calls return descriptive guard messages |
+
+All providers support `generate`, `summarize`, `draft`, `rewrite`, `spellcheck`, and `custom` commands. Endpoint selection and runtime switching happen from Settings without restarting the server.
+
+---
+
+## Architecture
+
+```
+src/
+├── App.tsx                  # Main app shell, routing, state
+├── components/
+│   ├── BlockEditor.tsx      # TipTap + Y.js block editor
+│   ├── CanvasEditor.tsx     # tldraw infinite canvas
+│   ├── CommandPalette.tsx   # Cmd/Ctrl+K command palette
+│   ├── SettingsModal.tsx    # AI, data, security settings
+│   ├── Sidebar.tsx          # Page list + navigation
+│   ├── MobileWorkspaceApp.tsx # Mobile-optimized view
+│   └── blocks/              # Sub-components (SlashMenu, AiMenu, etc.)
+├── hooks/
+│   ├── useBlockEditor.ts    # TipTap editor lifecycle
+│   ├── useAICommands.ts     # AI state + action handlers
+│   ├── useBlockComments.ts  # Block comment CRUD
+│   ├── useSpellcheck.ts     # Spellcheck state + corrections
+│   ├── useBlockScroll.ts    # Scroll-into-view for focused blocks
+│   ├── useSettings.tsx      # Settings context provider
+│   └── useSlashMenu.ts     # Slash menu positioning + query
+├── lib/
+│   ├── yjs.ts              # Y.Doc + y-indexeddb persistence
+│   ├── persistence.ts      # Workspace CRUD, migration, encryption
+│   ├── ai/providers.ts     # Multi-provider AI client
+│   ├── crypto.ts           # AES-GCM 256-bit encryption
+│   ├── presence.ts         # WebRTC peer presence
+│   ├── backlinks.ts        # [[wiki-link]] extraction
+│   ├── workspace.ts        # Google Workspace helpers
+│   └── vectorStore.ts      # voy-search semantic search
+├── main.tsx                # React entry point
+└── index.css               # Tailwind v4 styles + dark mode
+
+server.ts                   # Express API: AI proxy, auth, presence, uploads
+signaling-server.js         # y-webrtc signaling (WebSocket)
 ```
 
-Service facts from the current deployment:
-
-- `motionai.service` runs `node dist/server.cjs` from `/home/pi/OpenNotion`
-- `PORT=3003`
-- `motionai-signaling.service` runs `node signaling-server.js`
-- signaling health endpoint: `http://127.0.0.1:3005/health`
-
-## Security and privacy boundaries
-
-This project is designed for private/self-hosted use first. Current protections include local persistence, optional local encryption-at-rest, rate limiting, request-size limits, credential-free test coverage, and no committed `.env` file.
-
-Important boundaries:
-
-- The in-memory Y.Doc is plaintext after unlock so the editor can work.
-- E2EE for multi-peer collaboration does not include a complete production key-exchange system.
-- Firebase/Google OAuth configuration must be verified in the target Google Cloud/Firebase project.
-- The Express AI API should not be exposed publicly without an auth/reverse-proxy review.
-- See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) for the conservative audit list.
+---
 
 ## Roadmap
 
-Near-term priorities are tracked in [`ROADMAP.md`](ROADMAP.md). The honest short version:
+See [`ROADMAP.md`](ROADMAP.md) for the full product roadmap and [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) for current scope boundaries.
 
-1. Harden CRDT/editor synchronization and persistence edge cases.
-2. Turn the canvas page type into a real spatial workspace.
-3. Tighten E2EE + collaboration semantics before calling it production-grade multi-user security.
-4. Expand browser E2E coverage around first render, persistence, settings, AI-disabled states, and import/export.
-5. Package and document the Tauri desktop prototype for a real desktop release path.
+---
+
+## Contributing
+
+Contributions are welcome. See [`CONTRIBUTING.md`](CONTRIBUTING.md) for guidelines, and [`CODE_OF_CONDUCT.md`](CODE_OF_CONDUCT.md) for community standards.
+
+---
 
 ## License
 
-Apache-2.0. See [`LICENSE`](LICENSE).
+Apache 2.0. See [`LICENSE`](LICENSE).

@@ -1,0 +1,51 @@
+name: Bug report
+description: Report a reproducible OpenNotion / MotionAI problem.
+title: "bug: "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting a bug. Do not include provider keys, OAuth tokens, private URLs, or user data.
+  - type: textarea
+    id: summary
+    attributes:
+      label: Summary
+      description: What went wrong?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Reproduction steps
+      description: List exact steps from a clean or known state.
+      placeholder: |
+        1. Run ...
+        2. Open ...
+        3. Click ...
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected behavior
+    validations:
+      required: true
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual behavior
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Logs or screenshots
+      description: Redact secrets before posting.
+  - type: textarea
+    id: checks
+    attributes:
+      label: Checks run
+      placeholder: |
+        npm run verify
+        npm run build

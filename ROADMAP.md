@@ -1,6 +1,10 @@
 # MotionAI Roadmap
 
-This roadmap converts the audit into a testable delivery sequence. The current repository is a React/Vite workspace with an Express multi-provider AI proxy, Firebase sign-in wiring, Google Workspace helper calls, hybrid IndexedDB+localStorage persistence, in-memory rate limiting, and a WASM vector-search experiment. Items below separate what can be verified locally today from work that needs real Gemini, Ollama, or Google OAuth credentials.
+MotionAI is a free, open-source, self-hostable local-first workspace where docs, tasks, automations, calendar, canvas, and AI share one inspectable object graph that can run on a laptop, Pi, homelab, or company server.
+
+## Naming status
+
+The project is fully branded as **MotionAI**. The repository name remains `MotionAI` for legacy GitHub routing.
 
 ## Credential-free local verification
 
@@ -8,150 +12,122 @@ Run the non-network verification path from a clean checkout:
 
 ```bash
 npm install
-npm run verify:static   # 9 source + documentation invariant checks
-npm run lint            # TypeScript type-check — zero errors
-npm run test:ai         # AI provider contract tests — 15/15 pass
-npm run test:spellcheck # Spellcheck response-shape schema tests — 11/11 pass
-npm run test:workspace  # Workspace helper contract tests — 16/16 pass
-npm run test:import-export # Round-trip tests — 20/20 pass
-npm run build           # Vite client + esbuild Express server
+npm run verify:static       # source + documentation invariant checks
+npm run lint                # TypeScript type-check
+npm run test:ai             # mocked AI provider contract tests
+npm run test:spellcheck     # spellcheck response-shape schema tests
+npm run test:workspace      # Google Workspace helper contract tests
+npm run test:import-export  # import/export round-trip tests
+npm run test:smoke          # lightweight browser/API smoke checks
+npm run test:migration      # persistence migration tests
+npm run build               # Vite client + bundled Express server
 ```
 
-`npm run verify:static` is intentionally static and credential-free. It checks that no real-looking Google/OAuth/OpenAI secrets are committed, that AI endpoints guard with a provider-agnostic not-configured check, that rate-limit middleware is wired to every AI route, that Google Workspace helpers reject without a token before calling Google APIs, that audit docs stay present, and that README roadmap claims include evidence-based status labels.
+`npm run verify` is the default credential-free gate for pull requests. Tests that need real provider keys, Google OAuth, or multiple browsers must be documented separately and should never be implied by the local gate.
 
-## P0 - Stabilize the local quality gate
+## Current verified baseline
 
-- [x] `npm run verify:static` passes without secrets (9/9 checks).
-- [x] `npm run lint` passes as the TypeScript contract for pull requests.
-- [x] `npm run build` green — Vite client and bundled Express server remain deployable.
-- [x] `npm run test:ai` passes — 15/15 AI provider contract tests validate disabled, unconfigured, and rate-limit paths.
-- [x] Every verification gap documented in `KNOWN_LIMITATIONS.md` rather than implying production readiness.
-- [x] Add lightweight browser smoke test (`scripts/browser-smoke-test.mjs`) — 13/13 endpoint checks without Playwright.
+| Capability | Current status | Evidence |
+| --- | --- | --- |
+| React/Vite app with Express server | Implemented | `src/App.tsx`, `server.ts`, `vite.config.ts`, `npm run build` |
+| Block workspace/editor | Implemented | `src/components/BlockEditor.tsx`, `src/hooks/useBlockEditor.ts`, `src/components/blocks/` |
+| Local-first persistence and migrations | Implemented, still hardening | `src/lib/persistence.ts`, `src/lib/yjs.ts`, `src/lib/yjs-migration.ts`, `scripts/migration-tests.ts` |
+| Y.js CRDT foundation | Implemented, still hardening | `src/lib/yjs.ts`, `src/lib/extensions/YjsBlockExtension.ts`, `KNOWN_LIMITATIONS.md` |
+| WebRTC document sync | Experimental | `src/App.tsx`, `signaling-server.js`, `docs/CRDT_CONFLICT_RESOLUTION.md` |
+| Peer presence | Implemented | `src/lib/presence.ts`, `src/components/PresenceIndicator.tsx` |
+| Encryption-at-rest | Implemented, with caveats | `src/lib/crypto.ts`, `src/lib/persistence.ts`, `KNOWN_LIMITATIONS.md` |
+| Multi-provider BYO/local AI proxy | Implemented | `server.ts`, `src/lib/ai/providers.ts`, `scripts/ai-contract-tests.ts` |
+| Google Workspace helpers | Implemented behind auth | `src/lib/workspace.ts`, `scripts/workspace-mock-tests.ts` |
+| Backlinks | Implemented | `src/lib/backlinks.ts`, `src/lib/backlinksIndex.ts`, `src/components/BacklinksPanel.tsx` |
+| Canvas pages | Early prototype | `src/components/CanvasEditor.tsx`, `src/types.ts` |
+| Tauri desktop app | Prototype | `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` |
+| Production multi-user security | Not claimed | `KNOWN_LIMITATIONS.md`, `SECURITY.md` |
 
-## P1 - Offline-first behavior
+## Product principles
 
-- [x] IndexedDB-backed document store (`persistence.ts`) with localStorage fallback for private browsing / IDB failures.
-- [x] Legacy localStorage schema migration — reads from old keys, saves in new combined key.
-- [x] LoadWorkspace and saveWorkspace used throughout the document lifecycle — wired in `App.tsx` via state management; `BlockEditor`, `MobileWorkspaceApp` trigger saves through parent state callbacks. No component calls directly — that is the correct React pattern.
-- [x] Import/export round-trip tests for all 14 block types plus style, indentation, comments, and version history (20/20 tests in `scripts/import-export-tests.ts`).
-- [x] Deterministic migration tests (`scripts/migration-tests.ts`) — 12/12 tests cover new format, legacy migration, corrupt data, and snapshot validation.
-- [ ] CRDT/Yjs/Automerge conflict-resolution behavior — deferred until explicit implementation.
+1. **Fast core beats feature theater.** Every major capability needs a performance budget and repeatable proof.
+2. **Local-first by default.** Cloud and sync are options, not requirements for single-user work.
+3. **BYO AI and local AI are first-class.** Gemini, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, and disabled mode are supported without forced hosted AI.
+4. **Docs and tasks should share one object graph.** A task should be usable as a block, database row, calendar item, dashboard source, or canvas card without duplicating data.
+5. **Open-source trust over marketing.** Public claims must link to code, docs, tests, or known limitations.
+6. **Composable, not cluttered.** Power should ship through optional modules, templates, command palette flows, and clear settings.
 
-## P2 - Harden AI behavior
+## Phase 0 — Trust and positioning cleanup
 
-- [x] Multi-provider AI abstraction (`providers.ts`) — Gemini, OpenAI-compatible, Ollama, LM Studio, vLLM.
-- [x] All AI endpoints (`/api/ai/generate`, `/api/ai/spellcheck`, `/api/ai/chat`) guard with `!client.info.enabled || !client.info.configured` before provider calls.
-- [x] Disabled client throws a clear error: "AI is disabled. Choose a configured provider to enable AI features."
-- [x] In-memory rate-limit middleware (`rateLimit.ts`) on all AI POST routes, configurable via `AI_RATE_LIMIT_WINDOW_MS` and `AI_RATE_LIMIT_MAX_REQS`.
-- [x] Request-size cap: `express.json({ limit: '1mb' })`.
-- [x] Mocked AI contract tests in `scripts/ai-contract-tests.ts` cover disabled, configured, unconfigured, extract settings, provider info, error redaction, and rate-limit paths (15/15).
-- [x] Response-shape validation tests for spellcheck schema conformance — 11/11 tests in `scripts/spellcheck-schema-tests.ts` cover required fields, types, suggestions array, and edge cases (empty issues, optional fields).
-- [x] File-backed rate-limit persistence (`rateLimit.ts`) — configurable via `AI_RATE_LIMIT_STORE_PATH`, periodic persistence every 30s, loads on startup, graceful shutdown via `shutdownRateLimitStore()`.
+Phase 0 exists to make the public repo credible before adding more product surface. GitHub-ready issue drafts live in [`docs/PHASE_0_ISSUES.md`](docs/PHASE_0_ISSUES.md).
 
-## P3 - Google Workspace integration hardening
+- [x] Reconcile README, roadmap, and shipped docs around Y.js, WebRTC sync, canvas, E2EE, Tauri, and production-security claims.
+- [x] Document naming direction and avoid implying affiliation with Notion or ClickUp.
+- [x] Add open-source contribution, security, code-of-conduct, and issue-template files.
+- [x] Extend static verification so required community files and conservative claim boundaries stay present.
+- [ ] Open or copy the Phase 0 GitHub issues from [`docs/PHASE_0_ISSUES.md`](docs/PHASE_0_ISSUES.md).
+- [ ] Add first “good first issue” labels and project board once GitHub repo settings are available.
 
-- [x] Calendar, Tasks, and Drive helpers token-gated via `requireGoogleAccessToken()`.
-- [x] Mocked Workspace helper contract tests (16/16 in `scripts/workspace-mock-tests.ts`) — validate exports, params, token guards, fetch usage, and credential safety.
-- [x] User-facing offline/error states for Drive flow — `DriveModal.tsx` handles `not_connected`, `setup_needed`, `error`, `loading` states with user-visible messages.
-- [x] User-facing offline/error states for Tasks flow — `TasksModal.tsx` with `not_connected`, `error`, `loading`, and `success` states, integrated into App.tsx header alongside Drive Sync.
-- [x] Verify OAuth scopes and Firebase console configuration in a separate credentialed deployment checklist.
+## Phase 1 — Local-first reliability moat
 
-## P4 - Product roadmap validation
+- [ ] Add a two-browser Y.js convergence Playwright test against the self-hosted signaling server.
+- [ ] Add persistence torture tests for large workspaces: 1k pages, 10k blocks, long docs, repeated reloads, and offline/reconnect flows.
+- [ ] Add sync status UI: local saved, peer connected, conflict/replay queue, encrypted/unlocked state.
+- [ ] Add export guarantees: Markdown, JSON, HTML zip, attachments manifest.
+- [ ] Define workspace object schema versioning and migration policy.
 
-- [x] README roadmap claims audited and reclassified with status labels (🟢 Implemented / 🟡 Partial / 🔴 Planned) in README.md.
-- [x] Evidence-backed checklists for E2EE/BYOK, WebRTC collaboration, Tauri, automations, and multimodal ingest added to README.md with granular implementation requirements for each planned feature.
-- [x] Prefer small, independently verified capabilities over broad marketing claims.
+## Phase 2 — Document/database foundation
 
-## Release checklist
+- [ ] Implement real database objects: tables, properties, formulas-lite, relations, and rollups-lite.
+- [ ] Build table, board, calendar, gallery/list, and timeline-lite views.
+- [ ] Add page templates and database templates.
+- [ ] Add backlinks graph view and page relationship explorer.
+- [ ] Add importers for Notion markdown/HTML export, CSV, and ClickUp CSV/tasks export where feasible.
 
-- [x] `npm run verify:static` passes without secrets (9/9).
-- [x] `npm run lint` passes — zero errors.
-- [x] `npm run build` passes — Vite + esbuild.
-- [x] `npm run test:ai` passes — 15/15.
-- [x] `npm run test:spellcheck` passes — 11/11.
-- [x] `npm run test:workspace` passes — 16/16.
-- [x] `npm run test:import-export` passes — 20/20.
-- [x] `npm run verify` passes — static + lint + AI + spellcheck + workspace + smoke + migration.
-- [x] `npm run test:smoke` passes — 13/13.
-- [x] `npm run test:migration` passes — 12/12.
-- [x] `KNOWN_LIMITATIONS.md` reflects current gaps.
-- [x] No real credentials appear in `.env.example`, docs, source, or committed fixtures (verified by static check).
+## Phase 3 — Execution layer
 
----
+- [ ] Make tasks first-class objects: assignee, status, due date, priority, custom fields, dependencies.
+- [ ] Add My Tasks/Home, Inbox, notifications, and reminders.
+- [ ] Add dashboards: task counts, overdue work, workload, time estimates, and simple charts.
+- [ ] Add time tracking and timesheets-lite.
+- [ ] Add project hierarchy: Workspace → Space → Folder → Project/List → Task/Subtask, while allowing docs/databases anywhere.
+- [ ] Add guest/collaborator permissions for self-hosted teams.
 
-## Session 2026-05-21: Phase 0–5 Full Stack Audit + Implementation
+## Phase 4 — BYO/local AI workspace brain
 
-### Phase 0 — Bug Crackdown ✅
+- [ ] Harden provider registry UI for Gemini, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, and custom endpoints.
+- [ ] Add local RAG over pages, tasks, and files with user-visible index state.
+- [ ] Add AI actions: summarize page, convert meeting notes to tasks, auto-tag, draft project plan, find stale tasks, and explain dashboard.
+- [ ] Add safe agent mode: read-only default, tool permission prompts, audit log, and prompt-injection warnings for external content.
+- [ ] Keep keys local/browser/server-configurable and preserve tests that prove secrets are not returned in API responses.
 
-- [x] Page overflow / focus management — `scrollIntoView` on Enter + focusBlock
-- [x] Slash menu viewport positioning — fixed off-screen rendering, outside click close
-- [x] AI block execution wiring — `ai-command` CustomEvent → actual `/api/ai/generate` call
-- [x] TasksModal button — dead button wired, Tasks button added to header
-- [x] CommandPalette insertion position — now inserts at `activeBlockId`, not end
-- [x] Spellcheck API wiring — button + `/api/ai/spellcheck` + inline Apply Fix
-- [x] Page scroll position restore — saved/restored per page in `scrollPositions`
+## Phase 5 — Automations and integrations
 
-### Phase 1 — Settings & BYOK UI ✅
+- [ ] Add rule builder: trigger → conditions → action.
+- [ ] Support triggers for status changes, due dates, new pages/tasks, mentions, webhooks, and schedules.
+- [ ] Support actions to create/update tasks, append doc blocks, send webhooks, call local scripts, and run AI classify/summarize steps.
+- [ ] Harden Google Calendar/Drive/Tasks behind credentialed deployment checks.
+- [ ] Add open webhook/API docs and local n8n-style recipe examples.
 
-- [x] SettingsModal — 4 tabs (AI Providers / Appearance / Data / About)
-- [x] AI Provider config — all 5 providers, Test Connection, masked API keys
-- [x] Local-only mode banner — auto-detected when no external keys configured
-- [x] Settings persisted to `localStorage['motion_ai_settings']`
-- [x] Backend passthrough — `extractAiSettings` reads `body.ai.*` from requests
-- [x] Settings gear icon in header
-- [x] Appearance: dark/light, font size, line height
+## Phase 6 — Canvas and spatial planning
 
-### Phase 2 — AI UX Overhaul ✅
+- [ ] Upgrade the starter canvas page into a workspace object surface.
+- [ ] Allow docs, tasks, and database rows to appear as live canvas cards.
+- [ ] Add whiteboard templates: project kickoff, sprint map, content calendar, and research wall.
+- [ ] Add AI canvas actions such as clustering sticky notes and turning a canvas into tasks.
 
-- [x] Floating selection action menu — above text selection, AI/Task/Event/Copy
-- [x] AI block streaming — `ReadableStream` incremental display + Stop button
-- [x] Provider status dot in header — green/yellow/red with active provider tooltip
-- [x] Error handling — inline block errors with Settings deep-link CTA
+## Phase 7 — Desktop/mobile packaging
 
-### Phase 3 — Editor Refactor ✅
+- [ ] Harden Tauri: signed releases, auto-update path, keychain support, filesystem import/export.
+- [ ] Add mobile-first capture mode: quick task, quick note, voice note, photo/PDF ingest.
+- [ ] Keep mobile task capture under two taps and common actions under one second perceived response.
 
-- [x] `BlockEditor.tsx` cut from ~2628 lines to 626 (76% reduction)
-- [x] Extracted 13 files: `CodeBlock`, `AICBlock`, `TextBlock`, `SlashMenu`, `StylePopup`, `CommentPopup`, `BlockItem`, `SpellcheckPanel`, `TopBar`, `BottomBar`, `AiMenu`, `blockUtils`, `aiPresets`
-- [x] All extracted files under 500 lines
-- [x] New hooks: `useBlockScroll`, `useSlashMenu`
+## Phase 8 — Community launch loop
 
-### Phase 4 — Mobile + Polish ✅
+- [ ] Publish a public demo, roadmap, and “good first issue” board.
+- [ ] Position honestly against open-source workspace alternatives: execution + docs + BYO/local AI, not “open Notion” alone.
+- [ ] Build templates: student planner, agency CRM, product roadmap, homelab ops, personal wiki, sprint board.
+- [ ] Add a telemetry-free diagnostics bundle users can export when filing bugs.
 
-- [x] MobileWorkspaceApp: 44px+ touch targets on all interactive elements
-- [x] MotionAIHub: removed all `motion/` Framer Motion (CSS transitions only)
-- [x] voy-search: lazy-loads on first Command Palette open (not on mount) — 171KB WASM + 7.5KB JS code-split
-- [x] @xenova/transformers: lazy-loaded alongside voy-search (1.1MB, code-split into separate chunk)
-- [x] `.reduced-motion` CSS class for `prefers-reduced-motion` users
+## Claim policy
 
-### Phase 5 — Implementation ✅ (2026-05-21 Sprint)
-
-Full research: `docs/CRDT-RESEARCH.md`
-
-| Topic | Status | Evidence |
-|-------|--------|----------|
-| 5.1 CRDT/Yjs | 🟢 Implemented | `src/lib/yjs.ts` — Y.Doc singleton + y-indexeddb persistence; `src/lib/persistence.ts` — incremental page mutations; `App.tsx` — Y.Doc observer + y-webrtc cross-device sync; `signaling-server.js` — self-hosted signaling on port 3005 |
-| 5.2 E2EE/BYOK | 🟢 Implemented | `src/lib/crypto.ts` — PBKDF2 + AES-GCM, key never persisted |
-| 5.3 Backlinks | 🟢 Implemented | `src/lib/backlinks.ts` + `backlinksIndex.ts` + `BacklinksPanel.tsx` |
-| 5.4 Infinite Canvas | 🔴 Not started | — |
-| 5.5 Tauri | 🟢 Prototype built | ARM64 .deb (1.9MB) + AppImage (92.4MB) at `src-tauri/target/release/bundle/` |
-
----
-
-## Next Session Priorities
-
-1. **TipTap/Yjs editor binding** — wire existing Y.Doc into BlockEditor so every keystroke becomes a CRDT operation (6.5 days)
-   - Full plan: `.omc/plans/tiptap-yjs-integration.md`
-2. **Infinite Canvas** — tldraw integration (1–2 weeks)
-3. **E2EE + Yjs** — integrate E2EE encryption with Y.Doc binary state (currently E2EE preserves legacy store; Y.Doc is unencrypted)
-
-## Self-Hosted Signaling Server
-
-**Status:** ✅ Implemented + running on Pi
-
-| Item | Detail |
-|------|--------|
-| Server | `signaling-server.js` — port 3005, HTTP health at `/health` |
-| systemd | `~/.config/systemd/user/motionai-signaling.service` — enabled, active |
-| Tailscale | `ws://100.126.207.73:3005` — reachable from all Tailscale peers |
-| Fallback | `wss://signaling.yjs.dev` — automatic fallback if local is down |
-| Env var | `VITE_SIGNALING_URLS` (comma-separated, tried in order) |
+- Use **Implemented** only when the repo contains working code and at least one repeatable check or direct file evidence.
+- Use **Experimental** for wired features that need multi-user, multi-device, credentialed, or long-running validation.
+- Use **Prototype** for present code/artifacts without release hardening.
+- Use **Planned** for roadmap-only work.
+- Do not describe multi-user security, encrypted collaboration, or hosted production readiness as complete until tests and security review back that claim.

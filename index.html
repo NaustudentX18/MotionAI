@@ -3,11 +3,233 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>My Google AI Studio App</title>
+    <title>MotionAI — Local-First Intelligent Workspace</title>
+    <meta name="description" content="MotionAI is a free, open-source, self-hostable local-first workspace for documents, tasks, and AI actions." />
+    <meta name="theme-color" content="#7C3AED" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <style>
+      *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+        background: #0A0A0A;
+        color: #E4E4E7;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        overflow: hidden;
+      }
+
+      /* ─── Background gradient orbs ───────────────────────────── */
+      .bg-orbs {
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        z-index: 0;
+      }
+      .bg-orbs::before,
+      .bg-orbs::after {
+        content: '';
+        position: absolute;
+        border-radius: 50%;
+        filter: blur(120px);
+        opacity: 0.15;
+      }
+      .bg-orbs::before {
+        width: 600px; height: 600px;
+        background: #7C3AED;
+        top: -200px; right: -150px;
+        animation: orbFloat 12s ease-in-out infinite;
+      }
+      .bg-orbs::after {
+        width: 500px; height: 500px;
+        background: #06B6D4;
+        bottom: -200px; left: -150px;
+        animation: orbFloat 15s ease-in-out infinite reverse;
+      }
+
+      @keyframes orbFloat {
+        0%, 100% { transform: translate(0, 0) scale(1); }
+        33% { transform: translate(30px, -40px) scale(1.05); }
+        66% { transform: translate(-20px, 20px) scale(0.95); }
+      }
+
+      /* ─── Loading container ──────────────────────────────────── */
+      .loader {
+        position: relative;
+        z-index: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 40px;
+      }
+
+      /* ─── Logo mark ──────────────────────────────────────────── */
+      .logo-mark {
+        width: 72px;
+        height: 72px;
+        position: relative;
+        animation: logoPulse 2s ease-in-out infinite;
+      }
+
+      .logo-ring {
+        position: absolute;
+        inset: 0;
+        border: 3px solid transparent;
+        border-radius: 50%;
+        background: conic-gradient(from 0deg, #7C3AED, #06B6D4, #8B5CF6, #7C3AED) border-box;
+        -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
+        -webkit-mask-composite: xor;
+        mask-composite: exclude;
+        animation: ringSpin 2s linear infinite;
+      }
+
+      .logo-dot {
+        position: absolute;
+        top: 50%; left: 50%;
+        transform: translate(-50%, -50%);
+        width: 24px; height: 24px;
+        background: linear-gradient(135deg, #7C3AED, #8B5CF6);
+        border-radius: 8px;
+        animation: dotMorph 2s ease-in-out infinite;
+      }
+
+      @keyframes ringSpin {
+        to { transform: rotate(360deg); }
+      }
+      @keyframes logoPulse {
+        0%, 100% { transform: scale(1); }
+        50% { transform: scale(1.05); }
+      }
+      @keyframes dotMorph {
+        0%, 100% { border-radius: 8px; transform: translate(-50%, -50%) rotate(0deg); }
+        50% { border-radius: 50%; transform: translate(-50%, -50%) rotate(45deg); }
+      }
+
+      /* ─── Brand text ─────────────────────────────────────────── */
+      .brand {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+      .brand-name {
+        font-size: 28px;
+        font-weight: 800;
+        letter-spacing: -0.5px;
+        background: linear-gradient(135deg, #E4E4E7, #A1A1AA);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        background-clip: text;
+      }
+      .brand-tagline {
+        font-size: 13px;
+        font-weight: 400;
+        color: #71717A;
+        letter-spacing: 0.3px;
+      }
+
+      /* ─── Loading bar ────────────────────────────────────────── */
+      .progress-track {
+        width: 200px;
+        height: 3px;
+        background: #27272A;
+        border-radius: 4px;
+        overflow: hidden;
+      }
+      .progress-bar {
+        height: 100%;
+        width: 0%;
+        background: linear-gradient(90deg, #7C3AED, #8B5CF6, #06B6D4);
+        border-radius: 4px;
+        animation: loader 2.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards infinite;
+        background-size: 200% 100%;
+        animation: loader 2.4s ease-in-out infinite;
+      }
+
+      @keyframes loader {
+        0% { width: 0%; transform: translateX(-100%); }
+        50% { width: 60%; transform: translateX(0%); }
+        100% { width: 100%; transform: translateX(100%); }
+      }
+
+      /* ─── Status dots ────────────────────────────────────────── */
+      .status-row {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #52525B;
+        font-weight: 400;
+      }
+      .status-dot {
+        width: 6px; height: 6px;
+        border-radius: 50%;
+        background: #7C3AED;
+        animation: dotBlink 1.4s ease-in-out infinite;
+      }
+      .status-dot:nth-child(2) { animation-delay: 0.2s; }
+      .status-dot:nth-child(3) { animation-delay: 0.4s; }
+
+      @keyframes dotBlink {
+        0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+        40% { opacity: 1; transform: scale(1); }
+      }
+
+      /* ─── Footer ─────────────────────────────────────────────── */
+      .footer {
+        position: fixed;
+        bottom: 24px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 1;
+        font-size: 11px;
+        color: #3F3F46;
+        letter-spacing: 0.5px;
+        text-transform: uppercase;
+      }
+      .footer a {
+        color: #52525B;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+      .footer a:hover { color: #A1A1AA; }
+    </style>
   </head>
   <body>
+    <div class="bg-orbs"></div>
+
+    <div class="loader">
+      <div class="logo-mark">
+        <div class="logo-ring"></div>
+        <div class="logo-dot"></div>
+      </div>
+
+      <div class="brand">
+        <span class="brand-name">MotionAI</span>
+        <span class="brand-tagline">Local-First Intelligent Workspace</span>
+      </div>
+
+      <div class="progress-track">
+        <div class="progress-bar"></div>
+      </div>
+
+      <div class="status-row">
+        <span class="status-dot"></span>
+        <span class="status-dot"></span>
+        <span class="status-dot"></span>
+        <span>Loading workspace…</span>
+      </div>
+    </div>
+
+    <div class="footer">
+      <a href="https://github.com/NaustudentX18/OpenNotion" target="_blank" rel="noopener">MotionAI &mdash; Open Source</a>
+    </div>
+
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
-

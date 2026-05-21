@@ -1,0 +1,40 @@
+name: Feature request
+description: Propose a capability for the local-first workspace roadmap.
+title: "feat: "
+labels: [enhancement, needs-triage]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What user pain does this solve?
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the smallest useful version.
+    validations:
+      required: true
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Docs/editor
+        - Tasks/execution
+        - Databases/views
+        - BYO/local AI
+        - Collaboration/sync
+        - Canvas
+        - Desktop/mobile
+        - Integrations/automations
+        - Other
+    validations:
+      required: true
+  - type: textarea
+    id: proof
+    attributes:
+      label: Acceptance criteria and verification
+      description: How should we prove it works without overclaiming?

@@ -1,0 +1,30 @@
+name: Phase 0 task
+description: Trust, positioning, community, and claim-hygiene work.
+title: "phase-0: "
+labels: [phase-0, needs-triage]
+body:
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What trust or positioning gap does this close?
+    validations:
+      required: true
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      placeholder: |
+        - [ ] ...
+        - [ ] ...
+    validations:
+      required: true
+  - type: textarea
+    id: verification
+    attributes:
+      label: Verification
+      placeholder: |
+        npm run verify:static
+        npm run lint
+    validations:
+      required: true

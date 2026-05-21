@@ -35,12 +35,71 @@ check('package exposes credential-free local verification scripts and contract t
 });
 
 check('required documentation artifacts exist', () => {
-  for (const file of ['ROADMAP.md', 'KNOWN_LIMITATIONS.md']) {
+  for (const file of ['ROADMAP.md', 'KNOWN_LIMITATIONS.md', 'docs/SHIPPED.md']) {
     assert.ok(exists(file), `${file} is missing`);
     const body = read(file);
     assert.ok(body.includes('Credential-free local verification'), `${file} must document local verification`);
     assert.ok(body.length > 500, `${file} should contain useful audit detail`);
   }
+});
+
+check('AI safety and provider guarantees doc is grounded in source-level contracts', () => {
+  const doc = read('docs/AI_SAFETY_AND_PROVIDER_GUARANTEES.md');
+  const server = read('server.ts');
+  const providers = read('src/lib/ai/providers.ts');
+  const aiContracts = read('scripts/ai-contract-tests.ts');
+
+  for (const phrase of [
+    'Phase 4 trust/safety slice',
+    'BYO and local-provider defaults are supported',
+    'AI endpoint responses do not return provider secrets',
+    'What is not claimed',
+    'server.ts',
+    'src/lib/ai/providers.ts',
+    'scripts/ai-contract-tests.ts',
+  ]) {
+    assert.ok(doc.includes(phrase), `AI safety doc must include: ${phrase}`);
+  }
+
+  assert.match(server, /keysReturned: false/, 'server AI responses should keep keysReturned false markers');
+  assert.match(server, /safeErrorMessage\(err, \[settings\.apiKey\]\)/, 'server should redact per-request AI keys in provider errors');
+  assert.match(providers, /keysReturned: false/, 'provider metadata should keep keysReturned false markers');
+  assert.match(providers, /function isLocalBaseUrl\(/, 'provider logic should distinguish local OpenAI-compatible base URLs');
+  assert.match(aiContracts, /keysReturned: false/, 'AI contract tests should assert secret non-return response markers');
+  assert.match(aiContracts, /safeErrorMessage redacts API keys/, 'AI contract tests should assert error redaction');
+});
+
+check('community health and issue-template files exist', () => {
+  for (const file of [
+    'CONTRIBUTING.md',
+    'SECURITY.md',
+    'CODE_OF_CONDUCT.md',
+    'docs/PRODUCT_NAMING.md',
+    'docs/PHASE_0_ISSUES.md',
+    '.github/ISSUE_TEMPLATE/config.yml',
+    '.github/ISSUE_TEMPLATE/bug_report.yml',
+    '.github/ISSUE_TEMPLATE/feature_request.yml',
+    '.github/ISSUE_TEMPLATE/docs_drift.yml',
+    '.github/ISSUE_TEMPLATE/phase_0_task.yml',
+  ]) {
+    assert.ok(exists(file), `${file} is missing`);
+    assert.ok(read(file).length > 100, `${file} should contain useful guidance`);
+  }
+});
+
+check('public capability docs use aligned conservative status language', () => {
+  const readme = read('README.md');
+  const roadmap = read('ROADMAP.md');
+  const shipped = read('docs/SHIPPED.md');
+  for (const body of [readme, roadmap, shipped]) {
+    assert.match(body, /Y\.js|Yjs/, 'docs should mention Y.js/Yjs status');
+    assert.match(body, /Experimental/, 'docs should label collaboration or sync as experimental where applicable');
+    assert.match(body, /Prototype|Early prototype/, 'docs should label prototype surfaces');
+    assert.match(body, /Not claimed/, 'docs should avoid production security overclaims');
+  }
+  assert.match(readme, /BYO\/local AI/, 'README should foreground BYO/local AI positioning');
+  assert.match(roadmap, /Phase 0 — Trust and positioning cleanup/, 'ROADMAP should expose Phase 0 trust work');
+  assert.match(shipped, /Production multi-user security \| Not claimed/, 'SHIPPED should not claim production multi-user security');
 });
 
 check('example environment does not contain real-looking secrets', () => {

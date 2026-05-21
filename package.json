@@ -1,5 +1,5 @@
 {
-  "name": "opennotion-motionai",
+  "name": "motionai-workspace",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -13,15 +13,17 @@
     "signaling": "node signaling-server.js",
     "dev:all": "npm-run-all --parallel signaling dev",
     "verify:static": "node scripts/static-verify.mjs",
-    "verify": "npm run verify:static && npm run lint && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:smoke && npm run test:migration",
-    "test": "npm run verify:static && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:import-export && npm run test:migration",
+    "verify": "npm run verify:static && npm run lint && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:smoke && npm run test:migration && npm run test:reliability",
+    "test": "npm run verify:static && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:import-export && npm run test:migration && npm run test:reliability",
     "test:ai": "npx tsx scripts/ai-contract-tests.ts",
     "test:spellcheck": "npx tsx scripts/spellcheck-schema-tests.ts",
     "test:workspace": "npx tsx scripts/workspace-mock-tests.ts",
+    "test:schema": "npx tsx scripts/workspace-schema-tests.ts",
     "test:import-export": "npx tsx scripts/import-export-tests.ts",
     "test:smoke": "node scripts/browser-smoke-test.mjs",
     "test:e2e": "playwright test",
-    "test:migration": "npx tsx scripts/migration-tests.ts"
+    "test:migration": "npx tsx scripts/migration-tests.ts",
+    "test:reliability": "npx tsx scripts/reliability-tests.ts"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
@@ -87,7 +89,7 @@
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.6.0"
   },
-  "description": "Self-hostable local-first workspace with MotionAI UI, block editing, optional AI actions, Y.js persistence, and Tauri prototype.",
+  "description": "Self-hostable local-first intelligent workspace with block editing, BYO/local AI actions, Y.js persistence, and Tauri desktop.",
   "license": "Apache-2.0",
   "repository": {
     "type": "git",

@@ -162,15 +162,15 @@ export function useBlockEditor({
     });
 
     // Generate or retrieve anonymous user identity for collaboration
-    const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('opennotion-username') : null;
+    const storedUserName = typeof window !== 'undefined' ? localStorage.getItem('motionai-username') : null;
     const userName = storedUserName || `Anonymous-${Math.floor(Math.random() * 10000)}`;
     if (typeof window !== 'undefined' && !storedUserName) {
-      localStorage.setItem('opennotion-username', userName);
+      localStorage.setItem('motionai-username', userName);
     }
     const userColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
 
     // Set up WebrtcProvider for peer collaboration
-    const provider = getWebrtcProvider(`opennotion-${pageId}`);
+    const provider = getWebrtcProvider(`motionai-${pageId}`);
     provider.awareness.setLocalStateField('user', {
       name: userName,
       color: userColor,

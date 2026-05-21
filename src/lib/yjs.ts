@@ -57,7 +57,7 @@ export function getYDoc(): Y.Doc {
 
 // ─── WebrtcProvider for peer collaboration ─────────────────────────────────────
 
-const DEFAULT_ROOM = 'opennotion-collab';
+const DEFAULT_ROOM = 'motionai-collab';
 
 export function getWebrtcProvider(roomName: string = DEFAULT_ROOM): WebrtcProvider {
   if (webrtcProviders.has(roomName)) return webrtcProviders.get(roomName)!;
