@@ -1,5 +1,5 @@
 {
-  "name": "react-example",
+  "name": "opennotion-motionai",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -86,5 +86,15 @@
     "vite": "^6.2.3",
     "vite-plugin-top-level-await": "^1.6.0",
     "vite-plugin-wasm": "^3.6.0"
+  },
+  "description": "Self-hostable local-first workspace with MotionAI UI, block editing, optional AI actions, Y.js persistence, and Tauri prototype.",
+  "license": "Apache-2.0",
+  "repository": {
+    "type": "git",
+    "url": "git+ssh://git@github.com/NaustudentX18/OpenNotion.git"
+  },
+  "homepage": "https://github.com/NaustudentX18/OpenNotion#readme",
+  "bugs": {
+    "url": "https://github.com/NaustudentX18/OpenNotion/issues"
   }
 }

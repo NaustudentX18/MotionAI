@@ -131,7 +131,7 @@ export default function App() {
       const signalingList = (
         import.meta.env.VITE_SIGNALING_URLS ||
         import.meta.env.VITE_SIGNALING_URL ||
-        'ws://localhost:3004,wss://signaling.yjs.dev'
+        'ws://localhost:3005'
       ).split(',').map((s: string) => s.trim()).filter(Boolean);
 
       rtcProvider = new WebrtcProvider('motionai-workspace-v1', getYDoc(), {

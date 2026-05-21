@@ -1,343 +1,194 @@
-# 🚀 MotionAI (Modern Workspace Core & Homelab Hub)
+# OpenNotion / MotionAI
 
-> Transforming messy thoughts, long-form transcripts, and markdown files into beautiful, highly structured, isometric knowledge-base databases. Powered by Gemini-3.5-flash and fully persistent on private sandboxed server networks.
+**OpenNotion** is a self-hostable, local-first workspace app with a Notion-style block editor, a polished MotionAI portal, optional multi-provider AI actions, Google Workspace helpers, local persistence, experimental Y.js collaboration, and a Tauri desktop prototype.
 
----
+The repo currently runs as **MotionAI Document Space** on the local Pi, but the GitHub project name is **OpenNotion**.
 
-```
-   ┌────────────────────────────────────────────────────────┐
-   │                                                        │
-   │    ███╗   ███╗ ██████╗ ████████╗██╗ ██████╗ ███╗   ██╗ │
-   │    ████╗ ████║██╔═══██╗╚══██╔══╝██║██╔═══██╗████╗  ██║ │
-   │    ██╔████╔██║██║   ██║   ██║   ██║██║   ██║██╔██╗ ██║ │
-   │    ██║╚██╔╝██║██║   ██║   ██║   ██║██║   ██║██║╚██╗██║ │
-   │    ██║ ╚═╝ ██║╚██████╔╝   ██║   ██║╚██████╔╝██║ ╚████║ │
-   │    ╚═╝     ╚═╝ ╚═════╝    ╚═╝   ╚═╝ ╚═════╝ ╚═╝  ╚═══╝ │
-   │                                                🤖      │
-   │                                                        │
-   └────────────────────────────────────────────────────────┘
-```
+![OpenNotion live hub screenshot](docs/media/opennotion-hub-live.png)
 
-[![Release](https://img.shields.io/badge/Release-v0.0.0--dev-blueviolet?style=for-the-badge)](https://github.com/JakeMalby/MotionAI)
-[![Stack](https://img.shields.io/badge/Stack-React%2019--Vite--TypeScript-blue?style=for-the-badge&logo=react)](https://vite.dev)
-[![Engine](https://img.shields.io/badge/AI--Engine-Multi--Provider-emerald?style=for-the-badge&logo=google)](https://ai.google.dev)
-[![Database](https://img.shields.io/badge/Persistence-IndexedDB%2B%20Firebase-orange?style=for-the-badgeFirebase-Firestore%20Sandbox-orange?style=for-the-badge&logo=firebaselogo=firebase)](https://firebase.google.com)
+## Live deployment proof
 
-Welcome to **MotionAI**, an elite visual workspace customized for family, partners, and homelab environments. Designed from the ground up to solve the core architectural gaps of traditional cloud suites (offline-first lags, lack of customer-held encryption keys, and centralized hosting dependencies), MotionAI provides a gorgeous, desktop-grade and mobile-fluid notebook environment.
+This app is running on the project server now:
 
----
+- Local service: `http://127.0.0.1:3003`
+- Tailnet/private server URL: `http://100.126.207.73:3003`
+- systemd unit: `motionai.service`
+- WebRTC signaling service: `motionai-signaling.service` on port `3005`
 
-## 🗺️ The Ultimate Roadmap: What Traditional Workspaces are Missing (and how we build it!)
+> The Tailnet URL is for private network access, not a public Internet demo link.
 
-Below is a detailed engineering analysis of the primary product flaws in traditional cloud workspaces, accompanied by **MotionAI's massive roadmap and progressive solutions** to become the ultimate power tool.
+## Demo media
 
-### 1. 🌐 Offline-First Database & CRDT Sync Engine  🔴 Planned
+| View | Artifact |
+| --- | --- |
+| MotionAI portal / roadmap hub | [`docs/media/opennotion-hub-live.png`](docs/media/opennotion-hub-live.png) |
+| Desktop block editor | [`docs/media/opennotion-editor-live.png`](docs/media/opennotion-editor-live.png) |
+| AI/provider settings | [`docs/media/opennotion-settings-live.png`](docs/media/opennotion-settings-live.png) |
+| Mobile workspace view | [`docs/media/opennotion-mobile-live.png`](docs/media/opennotion-mobile-live.png) |
+| Short live app walkthrough | [`docs/media/opennotion-live-demo.webm`](docs/media/opennotion-live-demo.webm) |
 
-- **The Traditional Flaw:** Legacy tools do not handle offline editing gracefully. Working on a flight, train, or high-latency network results in warning blocks and slow synchronization lockouts.
-- **The MotionAI Solution:** Implementation of a hybrid **Yjs / Automerge** replication layer directly over the browser's IndexedDB. Your changes persist instantly to cache state on the client, and seamlessly replicate to the cloud only when network indicators turn green.
-  > 🟡 **Current status:** Hybrid IndexedDB + localStorage persistence is implemented. CRDT/Yjs/Automerge replication is not yet implemented — see [ROADMAP.md](ROADMAP.md) P1.
+## What it actually does today
 
-### 2. 🔐 Zero-Knowledge Cryptographic Client Encryption (E2EE) & BYOK  🔴 Planned
+- **Block workspace:** pages, headings, paragraphs, todos, quote/code/media-oriented block types, slash commands, comments, style controls, and PDF export.
+- **Local-first storage:** Y.js-backed persistence in IndexedDB with legacy localStorage migration/fallback paths.
+- **Experimental collaboration:** Y.js document state, y-indexeddb persistence, y-webrtc provider wiring, peer presence, and a self-hosted signaling server.
+- **Optional encryption-at-rest:** passphrase-based PBKDF2 + AES-GCM for local workspace state; the passphrase is held in memory and can be saved through the Tauri keychain path where supported.
+- **AI actions:** Express AI proxy with Gemini, OpenAI-compatible, Ollama, LM Studio, vLLM, and disabled/local-only modes. Provider keys are configured by the user and are not committed.
+- **Google Workspace helpers:** Firebase Google sign-in wiring plus guarded Drive, Calendar, and Tasks helper calls.
+- **Backlinks:** `[[Wiki Links]]` parsing and a local IndexedDB-backed backlinks index.
+- **Canvas pages:** a basic canvas page type is present, currently a starter surface rather than a full infinite whiteboard product.
+- **Desktop prototype:** Tauri v2 project files for ARM64 Linux builds.
+- **Self-host deployment:** Express production server, Dockerfile, docker-compose template, systemd service examples, and a standalone WebRTC signaling server.
 
-- **The Traditional Flaw:** Typical cloud platform administrators have access to read your notebooks in plaintext. Strict enterprise and privacy-focused groups cannot hold their own cryptographic keys.
-- **The MotionAI Solution:** Pure AES-GCM 256-bit encryption managed in the browser using the **Web Crypto API**. Before syncing payload blocks to the cloud databases, documents are wrapped with a key known only to your devices. Bring-Your-Own-Key (BYOK) protocols for ultimate sovereignty.
-  > 🔴 **Current status:** No encryption implementation exists. This is a planned roadmap item — see [ROADMAP.md](ROADMAP.md) P4.
+## Current status by capability
 
-### 3. 🧠 Smart Semantic Local Knowledge Retrieval (RAG)  🟡 Partial
+| Capability | Status | Evidence |
+| --- | --- | --- |
+| Rich block editor | Implemented | `src/components/BlockEditor.tsx`, `src/hooks/useBlockEditor.ts`, `src/components/blocks/` |
+| Multi-workspace local persistence | Implemented | `src/lib/persistence.ts`, `src/lib/yjs.ts` |
+| Y.js CRDT foundation | Implemented, still hardening | `src/lib/yjs.ts`, `src/lib/extensions/YjsBlockExtension.ts` |
+| WebRTC document sync | Experimental | `src/App.tsx`, `signaling-server.js`, `docs/CRDT_CONFLICT_RESOLUTION.md` |
+| Peer presence | Implemented | `src/lib/presence.ts`, `src/components/PresenceIndicator.tsx` |
+| E2EE/local encrypted persistence | Implemented, with caveats | `src/lib/crypto.ts`, `src/lib/persistence.ts`, `src/lib/yjs.ts` |
+| Multi-provider AI proxy | Implemented | `server.ts`, `src/lib/ai/providers.ts`, `scripts/ai-contract-tests.ts` |
+| Google Drive/Tasks/Calendar helpers | Implemented behind auth | `src/lib/workspace.ts`, `src/components/DriveModal.tsx`, `src/components/TasksModal.tsx` |
+| Backlinks | Implemented | `src/lib/backlinks.ts`, `src/lib/backlinksIndex.ts`, `src/components/BacklinksPanel.tsx` |
+| Canvas pages | Early prototype | `src/components/CanvasEditor.tsx`, `src/types.ts` |
+| Tauri desktop app | Prototype | `src-tauri/` |
+| Multi-user production security | Not claimed | See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) |
 
-- **The Traditional Flaw:** Standard productivity AI searches globally or performs keyword lookups, but lacks personalized, context-aware semantic block categorization or local multi-modal transcript extraction.
-- **The MotionAI Solution:** Run a client-side vector search index (WASM-based). It chunks user documents and files, matches similarity distances, and injects relevant page blocks into the AI prompt matrix on demand.
-  > 🟡 **Current status:** WASM vector search (`voy-search`) is implemented and lazy-loads on first search. No coverage yet for model download availability, memory pressure, or search quality — see `KNOWN_LIMITATIONS.md`.
+## Screenshots
 
-### 4. 🕸️ Obsidian-style Bi-directional Backlink Graph  🔴 Planned
+### Live MotionAI portal
 
-- **The Traditional Flaw:** Typical note systems list backlinks inside basic text elements, but lack geometric visualizations of how your documents and resources relate as a cerebral network.
-- **The MotionAI Solution:** An interactive, 3D/2D **Force-Directed Graph** rendered in high contrast directly within our sidebar, mapping references dynamically with clustering
-  > 🔴 **Current status:** Not implemented. This is a planned roadmap item.
+![MotionAI portal screenshot](docs/media/opennotion-hub-live.png)
 
-### 5. 🐳 HomeLab Self-Hosting & Absolute Sovereignty  🟡 Partial
+### Desktop editor
 
-- **The Traditional Flaw:** Leading productivity platforms are entirely closed-source, SaaS-bound, and vendor-locked.
-- **The MotionAI Solution:** Lightweight Docker Compose orchestrations with built-in Reverse Proxy templates that publish solely on port `3000` to sit cleanly behind custom OpenMediaVault (OMV), Synology, or standard server stacks.
-  > 🟡 **Current status:** Express server is deployable via `npm run build` + `npm run start`. No `docker-compose.yml` exists in the repository yet — the README example is aspirational.
+![OpenNotion desktop editor screenshot](docs/media/opennotion-editor-live.png)
 
-### 6. ⚡ P2P WebRTC Collaboration Mesh  🔴 Planned
+### Provider settings
 
-- **The Traditional Flaw:** Requires centralized proprietary servers to see cursor positions and live edits.
-- **The MotionAI Solution:** Decentralized multiplayer scaling using WebRTC networking. Devices can sync and collaborate locally even without external internet access, syncing state dynamically when isolated edge nodes reconnect.
-  > 🔴 **Current status:** Not implemented. No WebRTC code exists in the repository.
+![OpenNotion settings screenshot](docs/media/opennotion-settings-live.png)
 
-### 7. 🎨 Generative Infinite Spatial Canvas (Whiteboards)  🔴 Planned
+### Mobile view
 
-- **The Traditional Flaw:** Block editors are strictly vertical and linear. Visual canvas systems require external embeds that break the unified UX model.
-- **The MotionAI Solution:** Fully integrated tldraw/Fabric.js spatial canvas blocks where notes, images, diagramming, and UI wireframes can be dynamically organized across an infinite zoomable plane, parsed semantically by the AI model.
-  > 🔴 **Current status:** Not implemented. No tldraw/Fabric.js integration exists.
+![OpenNotion mobile screenshot](docs/media/opennotion-mobile-live.png)
 
-### 8. ⚙️ Secure Local Lambda Automations  🔴 Planned
+## Tech stack
 
-- **The Traditional Flaw:** Demands expensive third-party automation accounts for robust operations.
-- **The MotionAI Solution:** Built-in webhooks and local triggered automations using isolated WASM runtimes. Set up recurring cron jobs, local file-system watchers, and programmatic logic paths that execute directly on your synced state.
-  > 🔴 **Current status:** Not implemented. No WASM runtime or automation engine exists.
+- React 19 + TypeScript + Vite
+- Express production server and API proxy
+- Y.js, y-indexeddb, y-webrtc
+- TipTap / ProseMirror editor stack
+- IndexedDB + localStorage fallback
+- Web Crypto API AES-GCM encryption
+- Firebase Auth / Google Workspace API helpers
+- Tauri v2 desktop shell prototype
+- Playwright E2E/smoke test scaffolding
 
-### 9. 📱 Native Core Performance (Tauri integration)  🔴 Planned
-
-- **The Traditional Flaw:** Sluggish native wrappers taking heavy RAM tolls without deep OS integrations.
-- **The MotionAI Solution:** Compiling our decoupled frontend natively via Tauri (Rust backend), enabling zero-latency "Spotlight" quick-search commands anywhere on your desktop and deeply integrated mobile biometric secure containers.
-  > 🔴 **Current status:** Not implemented. No Tauri/Rust integration exists.
-
-### 10. 🎙️ Multi-modal AI Ingestors (Whisper & Layout Parsers)  🔴 Planned
-
-- **The Traditional Flaw:** No mechanism to passively capture ambient audio notes or instantly decipher complex scanned PDF layouts.
-- **The MotionAI Solution:** Client-side speech-to-text integration using lightweight Whisper models in WASM, and Gemini vision passes that transform heavy manuals or audio lectures natively into block architectures and flashcards.
-  > 🔴 **Current status:** Not implemented. No Whisper WASM or vision pipeline exists.
-
----
-
----
-
-## ✅ What's Built (Session 2026-05-21)
-
-### Phase 0 — Bug Crackdown
-- Fixed page overflow / scroll-into-view on Enter key
-- Fixed slash menu viewport positioning
-- Wired AI block execution end-to-end (was event-dispatching to nowhere)
-- Wired Tasks button in header (was a dead button)
-- Fixed CommandPalette block insertion at cursor position
-- Wired spellcheck API call
-- Restored page scroll position on navigation
-
-### Phase 1 — Settings & BYOK UI 🟡 Partial
-- **Settings Modal** (`SettingsModal.tsx`) — 4 tabs: AI Providers, Appearance, Data, About
-- Per-provider config: baseUrl, model, API key (masked), Test Connection button
-- Local-only mode detection + banner
-- Settings gear icon in header
-- Appearance: dark/light, font size, line height
-- Data: export/import JSON workspace, clear data
-
-### Phase 2 — AI UX Overhaul 🟡 Partial
-- **Floating Selection Menu** — appears above text selection with AI, Task, Event, Copy
-- **AI Block Streaming** — incremental text display with Stop button
-- **Provider Status Dot** — green (external), yellow (local), red (not configured)
-- Improved error handling — inline errors with Settings deep-link
-
-### Phase 3 — BlockEditor Refactor 🟢 Implemented
-- Monolithic 2628-line `BlockEditor.tsx` → 13 focused files
-- All files under 500 lines
-- Hooks: `useBlockScroll`, `useSlashMenu`
-- Extracted: `CodeBlock`, `AICBlock`, `TextBlock`, `SlashMenu`, `StylePopup`, `CommentPopup`, `BlockItem`, `SpellcheckPanel`, `TopBar`, `BottomBar`, `AiMenu`, `blockUtils`, `aiPresets`
-
-### Phase 4 — Mobile + Polish 🟡 Partial
-- MobileWorkspaceApp: 44px+ touch targets
-- MotionAIHub: removed `motion/` Framer Motion (CSS transitions only)
-- voy-search: lazy-loads on first Command Palette open
-- Reduced-motion CSS support via `prefers-reduced-motion`
-
-### Phase 5 — Research
-- Full research report: `.omc/research/opennotion-phase5-research.md`
-- Top recommendation: Backlinks (5.3) — highest ROI, 1-2 weeks
-
----
-
-## 📋 P4: Implementation Checklists for Planned Features
-
-The following features are aspirational roadmap items with no implementation code yet. Each checklist defines what "done" looks like.
-
-### 🔐 E2EE & BYOK (currently 🔴 Planned)
-
-- [ ] **AES-GCM-256 encryption module** — wrap page content using Web Crypto API before persistence, with key derived from user passphrase
-- [ ] **BYOK import/export** — allow user to supply their own 256-bit key as a base64-encoded string
-- [ ] **Key never leaves client** — confirm via static analysis that encryption key is never serialized to server-bound payloads
-- [ ] **Encrypted persistence layer** — store ciphertext in IndexedDB/Firebase, decrypt on read, with plaintext never written to storage
-- [ ] **Key rotation UI** — allow re-encrypting all content with a new key
-- [ ] **Contract tests** — encrypt/decrypt round-trip with known key, wrong-key decryption failure, BYOK import validation
-- [ ] **Static verify check** — no plaintext `Page` objects written to unencrypted channels
-
-### ⚡ P2P WebRTC Collaboration (currently 🔴 Planned)
-
-- [ ] **Signaling channel** — lightweight WebSocket or Firebase-based signaling for peer discovery
-- [ ] **CRDT sync layer** — Yjs or Automerge document type initialized per page, synced via WebRTC data channels
-- [ ] **Peer presence UI** — cursors, selection highlights, and user avatars from active collaborators
-- [ ] **Offline resilience** — local edits queued when disconnected, synced on reconnect
-- [ ] **Multi-tab support** — same user on multiple browser tabs collaborates with themselves
-- [ ] **Contract tests** — two peers converge to identical document state after sync
-
-### 🎨 Infinite Spatial Canvas (currently 🔴 Planned)
-
-- [ ] **Canvas block type** — new `BlockType = 'canvas'` with tldraw or Fabric.js integration
-- [ ] **Dual-mode editor** — toggle between block-editor and spatial-canvas per page
-- [ ] **Canvas-to-block export** — extract structured text/shapes from canvas into document blocks
-- [ ] **AI canvas parsing** — semantic analysis of spatial layouts (diagrams, wireframes, mind maps)
-
-### ⚙️ Local Lambda Automations (currently 🔴 Planned)
-
-- [ ] **Webhook receiver** — Express endpoint that accepts triggers and runs user-defined automation scripts
-- [ ] **WASM runtime** — execute user-provided WASM modules in a sandboxed worker
-- [ ] **Cron scheduler** — in-process scheduler (e.g., `node-cron`) for recurring automations
-- [ ] **Trigger catalog** — pre-built triggers: page update, file watch, webhook, timer
-- [ ] **Automation test suite** — mock trigger → WASM execution → state change verification
-
-### 📱 Tauri Native App (currently 🔴 Planned)
-
-- [ ] **Tauri project scaffolding** — `npm create tauri-app` with React frontend bindings
-- [ ] **Spotlight search** — OS-level global shortcut that searches pages via the local IndexedDB
-- [ ] **System tray integration** — background agent with quick-note and notification capabilities
-- [ ] **Biometric unlock** — platform biometric API (Touch ID / Windows Hello) for E2EE key release
-
-### 🎙️ Multi-modal AI Ingest (currently 🔴 Planned)
-
-- [ ] **Whisper WASM integration** — client-side speech-to-text using `whisper.cpp` WASM build or transformers.js
-- [ ] **Audio block type** — record or upload audio, transcribe, and insert as block content
-- [ ] **Vision/layout parser** — use Gemini Vision or a WASM OCR pipeline to extract structured content from PDFs and images
-- [ ] **File upload zone** — drag-and-drop PDF, image, and audio files with immediate processing
-- [ ] **End-to-end test** — upload audio file → transcribed text appears in editor → editable
-
----
-
-## 🛠️ Step-by-Step Deployment Master Guide
-
-### System Hardware/Software Prerequisites
-
-- Node.js (v20+ Recommended)
-- NPM (v10+)
-- Docker & Docker-Compose (Optional, for clean home hosting)
-
----
-
-### Step 1: Environment Variables Configuration
-
-Duplicate the `.env.example` file in the root directory into `.env` and configure your API tokens. Secret keys like `GEMINI_API_KEY` are safely isolated server-side.
+## Quick start
 
 ```bash
-# Clone the template
+git clone git@github.com:NaustudentX18/OpenNotion.git
+cd OpenNotion
+npm install
 cp .env.example .env
+npm run dev
 ```
 
-Edit your `.env`:
+The default dev server uses `tsx server.ts`. The production service path is:
+
+```bash
+npm run build
+PORT=3003 NODE_ENV=production node dist/server.cjs
+```
+
+## Environment configuration
+
+`.env.example` documents the supported variables. The most important ones are:
 
 ```env
-# Port bound to ingress routing (Required: 3000)
-PORT=3000
-NODE_ENV=production
-
-# Core Gemini API Key (Secret Server-Side Variable)
-GEMINI_API_KEY=AIzaSyYourSecretGeminiKeyHere...
-
-# Firebase Cloud Sync Configuration
-FIREBASE_PROJECT_ID=thinking-reality-98gvj
+VITE_SIGNALING_URLS="ws://localhost:3005"
+GEMINI_API_KEY="MY_GEMINI_API_KEY"
+APP_URL="MY_APP_URL"
+MOTIONAI_API_SECRET=your-secret-here
 ```
 
----
+Notes:
 
-### Step 2: Provision Cloud Database Sandbox (Firestore)
+- Do **not** commit `.env` or real provider keys.
+- AI features remain disabled/not configured until a provider is configured.
+- `MOTIONAI_API_SECRET` is optional for localhost-only use, but should be set before exposing the Express API beyond a trusted private network.
 
-Ensure authorized family or collaborators can access and sync work safely by implementing secure database rules.
+## Verification
 
-Go to your **Firebase Console** → **Firestore** → **Rules**, and paste:
-
-```javascript
-rules_version = '2';
-service cloud.firestore {
-  match /databases/{database}/documents {
-    match /pages/{document} {
-      // Allows signed-in family members to sync workspaces securely
-      allow read, write: if request.auth != null;
-    }
-  }
-}
-```
-
----
-
-### Step 3: Deployment Options
-
-#### Option A: Quick Manual Run (NPM)
-
-Install dependencies and build the TypeScript Express proxy bundle.
+Credential-free local checks:
 
 ```bash
-# 1. Install production packages
-npm install
+npm run verify:static
+npm run lint
+npm run test:ai
+npm run test:spellcheck
+npm run test:workspace
+npm run test:import-export
+npm run test:smoke
+npm run test:migration
+```
 
-# 2. Build Vite Client & compile Express Server bundle
+Full local gate:
+
+```bash
+npm run verify
 npm run build
-
-# 3. Spin up server on Port 3000
-npm run start
 ```
 
-#### Option B: Deploy on Homelab / NAS (Docker Compose)
-
-Use this command to spin up MotionAI as an isolated background container:
+Browser E2E scaffolding is available with:
 
 ```bash
-docker-compose up -d --build
+npm run test:e2e
 ```
 
-`docker-compose.yml`:
+## Deployment on this Pi
 
-```yaml
-version: "3.8"
+The live service is managed by systemd:
 
-services:
-  motionai:
-    image: node:20-alpine
-    container_name: motionai-core
-    working_dir: /app
-    volumes:
-      - .:/app
-    environment:
-      - PORT=3000
-      - NODE_ENV=production
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
-    ports:
-      - "3000:3000"
-    command: sh -c "npm install && npm run build && npm run start"
-    restart: unless-stopped
+```bash
+systemctl --user status motionai.service
+systemctl --user status motionai-signaling.service
+curl -I http://127.0.0.1:3003
+curl http://127.0.0.1:3005/health
 ```
 
----
+Service facts from the current deployment:
 
-## 📊 Connection Topology & Architecture Snapshot
+- `motionai.service` runs `node dist/server.cjs` from `/home/pi/OpenNotion`
+- `PORT=3003`
+- `motionai-signaling.service` runs `node signaling-server.js`
+- signaling health endpoint: `http://127.0.0.1:3005/health`
 
-Below is the network data-flow layout for MotionAI. To ensure maximum safety, secret AI and third-party tokens are **never** exposed in the client browser.
+## Security and privacy boundaries
 
-```
-       ┌────────────────────────────────────────────────────────┐
-       │                 CLIENT BROWSER ENVIRONMENT             │
-       │                                                        │
-       │   ┌───────────────────────┐    ┌───────────────────┐   │
-       │   │   Interactive Rich    │    │ Mobile Workspace  │   │
-       │   │   Editor (React/Vite) │◄──►│ Client View       │   │
-       │   └───────────────────────┘    └───────────────────┘   │
-       └───────────────────────▲────────────────────────────────┘
-                               │
-               Handshake through exclusive PORT 3000 only
-                               │
-       ┌───────────────────────▼────────────────────────────────┐
-       │                  SECURE BACKEND WORKSPACE              │
-       │                                                        │
-       │   ┌───────────────────────┐    ┌───────────────────┐   │
-       │   │  Express API Proxy    │▲──►│ Google Drive      │   │
-       │   │  (server.ts bundle)   ││   │ Workspace gateway │   │
-       │   └───────────▲───────────┘│   └───────────────────┘   │
-       └───────────────│────────────└───────────────────────────┘
-                       │
-             Internal Secret Handshake
-                       │
-       ┌───────────────▼────────────────────────────────────────┐
-       │                  EXTERNAL INTEGRATION CORES            │
-       │                                                        │
-       │  ┌───────────────────────┐     ┌─────────────────────┐ │
-       │  │ Gemini Generative Pro │     │ Firestore Database  │ │
-       │  │ (gemini-3.5-flash AI) │     │ (Secure rules flow) │ │
-       │  └───────────────────────┘     └─────────────────────┘ │
-       └────────────────────────────────────────────────────────┘
-```
+This project is designed for private/self-hosted use first. Current protections include local persistence, optional local encryption-at-rest, rate limiting, request-size limits, credential-free test coverage, and no committed `.env` file.
 
----
+Important boundaries:
 
-## 🌟 The MotionAI Design Philosophy
+- The in-memory Y.Doc is plaintext after unlock so the editor can work.
+- E2EE for multi-peer collaboration does not include a complete production key-exchange system.
+- Firebase/Google OAuth configuration must be verified in the target Google Cloud/Firebase project.
+- The Express AI API should not be exposed publicly without an auth/reverse-proxy review.
+- See [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) for the conservative audit list.
 
-MotionAI balances minimalist structure with rich visual feedback. Every component handles touch/desktop interactions flawlessly, prioritizing Inter font for general reading layout with JetBrains Mono for diagnostic system updates.
+## Roadmap
 
-For any deployment feedback or feature contributions, coordinate directly with the principal workspace administrators.
+Near-term priorities are tracked in [`ROADMAP.md`](ROADMAP.md). The honest short version:
+
+1. Harden CRDT/editor synchronization and persistence edge cases.
+2. Turn the canvas page type into a real spatial workspace.
+3. Tighten E2EE + collaboration semantics before calling it production-grade multi-user security.
+4. Expand browser E2E coverage around first render, persistence, settings, AI-disabled states, and import/export.
+5. Package and document the Tauri desktop prototype for a real desktop release path.
+
+## License
+
+Apache-2.0. See [`LICENSE`](LICENSE).

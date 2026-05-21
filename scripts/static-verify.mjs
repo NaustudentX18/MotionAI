@@ -20,6 +20,10 @@ function check(name, fn) {
 check('package exposes credential-free local verification scripts and contract tests', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.type, 'module');
+  assert.equal(pkg.name, 'opennotion-motionai');
+  assert.equal(pkg.license, 'Apache-2.0');
+  assert.ok(pkg.description?.includes('Self-hostable local-first workspace'));
+  assert.ok(pkg.repository?.url?.includes('NaustudentX18/OpenNotion.git'));
   assert.equal(pkg.scripts['verify:static'], 'node scripts/static-verify.mjs');
   assert.ok(pkg.scripts.verify?.includes('verify:static'));
   assert.ok(pkg.scripts.verify?.includes('test:ai'), 'verify script should include test:ai');
@@ -105,15 +109,23 @@ check('source has no accidental credential literals outside placeholders', () =>
   assert.doesNotMatch(combined, /sk-[A-Za-z0-9_-]{20,}/, 'OpenAI-style secret literal found');
 });
 
-check('README roadmap claims include evidence-based status labels', () => {
+check('README is evidence-backed and does not overclaim production readiness', () => {
   const readme = read('README.md');
-  const sections = [...readme.matchAll(/### \d+\. 🚀 Offline/g)];
-  // Actually check for status labels on roadmap sections
-  const labeledSections = [...readme.matchAll(/### \d+\. .+ \uD83D\uDD34 Planned|### \d+\. .+ \uD83D\uDFE2 Partial/g)];
-  // Check for current status annotations
-  const statusAnnotations = [...readme.matchAll(/> 🟡|> 🔴/g)];
-  assert.ok(labeledSections.length >= 3, `expected at least 3 roadmap sections with status labels, found ${labeledSections.length}`);
-  assert.ok(statusAnnotations.length >= 6, `expected at least 6 implementation status annotations, found ${statusAnnotations.length}`);
+  assert.match(readme, /Current status by capability/, 'README should include an implementation status table');
+  assert.match(readme, /Implemented, still hardening/, 'README should distinguish implemented features from hardening work');
+  assert.match(readme, /Experimental/, 'README should label experimental collaboration claims');
+  assert.match(readme, /Not claimed/, 'README should explicitly avoid production security overclaims');
+  assert.match(readme, /KNOWN_LIMITATIONS\.md/, 'README should point readers to conservative limitations');
+  for (const mediaFile of [
+    'docs/media/opennotion-hub-live.png',
+    'docs/media/opennotion-editor-live.png',
+    'docs/media/opennotion-settings-live.png',
+    'docs/media/opennotion-mobile-live.png',
+    'docs/media/opennotion-live-demo.webm',
+  ]) {
+    assert.ok(readme.includes(mediaFile), `README should reference ${mediaFile}`);
+    assert.ok(exists(mediaFile), `${mediaFile} should exist`);
+  }
 });
 
 for (const result of checks) {

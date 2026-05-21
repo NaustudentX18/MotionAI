@@ -4,6 +4,7 @@ import { parseWikiLinks } from './backlinks';
 const DB_NAME = 'open_notion_backlinks';
 const DB_VERSION = 1;
 const STORE_NAME = 'backlinks';
+const INDEX_KEY = 'current';
 
 /** Maps page title → array of page IDs that link to it */
 type BacklinksMap = Record<string, string[]>;
@@ -33,8 +34,8 @@ async function readAllBacklinks(): Promise<BacklinksMap> {
     db = await openDB();
     return await new Promise((resolve, reject) => {
       const transaction = db!.transaction(STORE_NAME, 'readonly');
-      const request = transaction.objectStore(STORE_NAME).getAll();
-      request.onsuccess = () => resolve(request.result?.[0] ?? {});
+      const request = transaction.objectStore(STORE_NAME).get(INDEX_KEY);
+      request.onsuccess = () => resolve(request.result ?? {});
       request.onerror = () => reject(request.error);
     });
   } catch {
@@ -53,7 +54,7 @@ async function writeBacklinks(map: BacklinksMap): Promise<void> {
       const transaction = db!.transaction(STORE_NAME, 'readwrite');
       transaction.oncomplete = () => resolve();
       transaction.onerror = () => reject(transaction.error);
-      transaction.objectStore(STORE_NAME).put(map);
+      transaction.objectStore(STORE_NAME).put(map, INDEX_KEY);
     });
   } catch (err) {
     console.warn('Failed to write backlinks index', err);
@@ -135,10 +136,6 @@ export class BacklinksIndex {
       for (const title of parseWikiLinks(block.content)) {
         titles.add(title);
       }
-    }
-    // Also check the page title itself
-    if (page.title) {
-      titles.add(page.title);
     }
     return Array.from(titles);
   }

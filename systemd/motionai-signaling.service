@@ -28,9 +28,6 @@ StandardOutput=journal
 StandardError=journal
 SyslogIdentifier=motionai-signaling
 
-# Watchdog — if the process freezes (doesn't respond to SIGUSR1), kill and restart
-WatchdogSec=30
-
 # Graceful shutdown
 TimeoutStopSec=10
 
