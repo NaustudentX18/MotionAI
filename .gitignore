@@ -6,3 +6,21 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Runtime data
+data/
+
+# OMC session state (auto-generated)
+.omc/
+
+# Session handover artifacts
+HANDOVER*.md
+
+# Rust build artifacts
+src-tauri/target/
+src-tauri/gen/
+
+# Agent research artifacts (not part of the project)
+docs/CRDT-RESEARCH.md
+docs/SHIPPED.md
+docs/TAURI-BUILD.md

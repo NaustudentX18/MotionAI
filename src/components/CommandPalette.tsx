@@ -15,6 +15,7 @@ interface CommandPaletteProps {
   onAiAction: (action: string) => void;
   onInsertBlocks?: (blocks: Block[]) => void;
   currentPage?: Page | null;
+  activeBlockId?: string | null;
 }
 
 const SUGGESTED_TOPICS = [
@@ -31,14 +32,15 @@ const GENERATION_STEPS = [
   'Refining Markdown and Aligning structure with Workspace layout...',
 ];
 
-export function CommandPalette({ 
-  isOpen, 
-  onClose, 
-  pages, 
-  onSelectPage, 
+export function CommandPalette({
+  isOpen,
+  onClose,
+  pages,
+  onSelectPage,
   onAiAction,
   onInsertBlocks,
-  currentPage
+  currentPage,
+  activeBlockId
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
   const [isBrainstormingMode, setIsBrainstormingMode] = useState(false);

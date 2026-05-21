@@ -6,6 +6,7 @@ import {
 import { Block, BlockType } from '../types';
 import { parseMarkdownToHtml } from './BlockEditor';
 import { cn } from '../lib/utils';
+import { sanitizeHtml } from '../lib/sanitize';
 
 interface AiComposerModalProps {
   isOpen: boolean;
@@ -133,7 +134,7 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
       if (data.error) throw new Error(data.error);
 
       // Translate generated Markdown to high contrast style elements inside blocks
-      const htmlContent = parseMarkdownToHtml(data.text || '');
+      const htmlContent = sanitizeHtml(parseMarkdownToHtml(data.text || ''));
       setPreviewContent(htmlContent);
     } catch (err: any) {
       setError(err.message || 'Generation issue encountered');
@@ -146,7 +147,7 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
     try {
       // Strip html tags to get plain text
       const tempDiv = document.createElement('div');
-      tempDiv.innerHTML = previewContent;
+      tempDiv.innerHTML = sanitizeHtml(previewContent);
       const plainText = tempDiv.textContent || tempDiv.innerText || '';
       await navigator.clipboard.writeText(plainText);
       setCopied(true);
@@ -161,7 +162,7 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
       type: activeType,
       aiPrompt: prompt,
       aiContext: context,
-      content: previewContent
+      content: sanitizeHtml(previewContent)
     });
     onClose();
   };
@@ -427,9 +428,9 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
                   <div 
                     contentEditable
                     suppressContentEditableWarning
-                    onInput={(e) => setPreviewContent((e.target as HTMLDivElement).innerHTML)}
+                    onInput={(e) => setPreviewContent(sanitizeHtml((e.target as HTMLDivElement).innerHTML))}
                     className="outline-none min-h-[250px] leading-relaxed break-words font-sans text-sm focus:ring-1 focus:ring-purple-200 p-2 rounded-xl dark:text-gray-200 markdown-body prose prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{ __html: previewContent }}
+                    dangerouslySetInnerHTML={{ __html: sanitizeHtml(previewContent) }}
                   />
                   
                   <div className="text-[10px] text-gray-400 select-none font-mono py-1 border-t border-[#F1F1F0] dark:border-zinc-800 flex items-center gap-1 bg-gray-50/50 dark:bg-transparent px-2.5 rounded-lg border">

@@ -21,7 +21,6 @@ import {
   ShieldAlert,
   Info,
 } from "lucide-react";
-import { motion, AnimatePresence } from "motion/react";
 
 interface RoadmapItem {
   id: string;
@@ -466,14 +465,8 @@ services:
 
         {/* Diagnostic Loading Console Dropdown block */}
         <div className="flex-1 min-w-0">
-          <AnimatePresence>
-            {isLoadingActive && (
-              <motion.div
-                initial={{ opacity: 0, y: -10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: -10 }}
-                className="mb-6 p-4 bg-black rounded-xl border border-stone-800 font-mono text-xs text-stone-300 space-y-1 shadow-inner relative"
-              >
+          {isLoadingActive && (
+              <div className="mb-6 p-4 bg-black rounded-xl border border-stone-800 font-mono text-xs text-stone-300 space-y-1 shadow-inner relative">
                 <div className="absolute top-2 right-2 flex items-center gap-1.5 text-[10px] text-purple-400 font-bold">
                   <span className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-ping" />
                   <span>BOOT DIAGNOSTICS</span>
@@ -490,9 +483,8 @@ services:
                     {log}
                   </p>
                 ))}
-              </motion.div>
+              </div>
             )}
-          </AnimatePresence>
 
           {/* TAB CONTENT: 1. ROADMAP OVERVIEW */}
           {activeTab === "roadmap" && (

@@ -1,8 +1,44 @@
 import { getAccessToken } from './firebase';
 
-export async function addGoogleCalendarEvent(summary: string, description: string, startTime: Date, endTime: Date) {
+const WORKSPACE_ROOT_NAME = 'MotionAI Workspace';
+const WORKSPACE_SUBFOLDER_NAMES = [
+  '📂 Projects & Work',
+  '📂 Personal & Life',
+  '📂 Meetings & Agendas',
+  '📂 AI Content & Drafts',
+] as const;
+
+async function requireGoogleAccessToken(): Promise<string> {
   const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  if (!token) {
+    throw new Error('Google Drive is not connected. Use Link Workspace first, then reopen Drive Sync.');
+  }
+  return token;
+}
+
+async function parseGoogleError(res: Response, fallback: string): Promise<Error> {
+  const text = await res.text();
+  if (!text) return new Error(fallback);
+
+  try {
+    const data = JSON.parse(text);
+    const message = data?.error?.message || data?.error_description || data?.message;
+    if (message) {
+      return new Error(`${fallback}: ${message}`);
+    }
+  } catch {
+    // Fall through to include the raw response body below.
+  }
+
+  return new Error(`${fallback}: ${text}`);
+}
+
+function escapeDriveQueryValue(value: string): string {
+  return value.replace(/\\/g, '\\\\').replace(/'/g, "\\'");
+}
+
+export async function addGoogleCalendarEvent(summary: string, description: string, startTime: Date, endTime: Date) {
+  const token = await requireGoogleAccessToken();
 
   const res = await fetch('https://www.googleapis.com/calendar/v3/calendars/primary/events', {
     method: 'POST',
@@ -18,19 +54,18 @@ export async function addGoogleCalendarEvent(summary: string, description: strin
     }),
   });
 
-  if (!res.ok) throw new Error('Failed to create calendar event');
+  if (!res.ok) throw await parseGoogleError(res, 'Failed to create calendar event');
   return res.json();
 }
 
 export async function addGoogleTask(title: string, notes?: string, dueDate?: Date) {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  const token = await requireGoogleAccessToken();
 
   // get default tasklist
   const listsRes = await fetch('https://www.googleapis.com/tasks/v1/users/@me/lists', {
     headers: { Authorization: `Bearer ${token}` },
   });
-  if (!listsRes.ok) throw new Error('Failed to fetch task lists');
+  if (!listsRes.ok) throw await parseGoogleError(listsRes, 'Failed to fetch task lists');
   const listsData = await listsRes.json();
   const defaultList = listsData.items?.[0];
   if (!defaultList) throw new Error('No task list found');
@@ -47,7 +82,7 @@ export async function addGoogleTask(title: string, notes?: string, dueDate?: Dat
     body: JSON.stringify(payload),
   });
 
-  if (!res.ok) throw new Error('Failed to create task');
+  if (!res.ok) throw await parseGoogleError(res, 'Failed to create task');
   return res.json();
 }
 
@@ -57,9 +92,13 @@ export interface DriveFile {
   mimeType: string;
 }
 
+export interface WorkspaceStructure {
+  rootId: string;
+  subfolders: Record<string, string>;
+}
+
 export async function listGoogleDriveFiles(): Promise<DriveFile[]> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  const token = await requireGoogleAccessToken();
 
   const res = await fetch(
     "https://www.googleapis.com/drive/v3/files?pageSize=30&fields=files(id,name,mimeType)&q=trashed = false and (mimeType = 'application/vnd.google-apps.document' or mimeType = 'text/plain' or mimeType = 'application/json')",
@@ -68,14 +107,13 @@ export async function listGoogleDriveFiles(): Promise<DriveFile[]> {
     }
   );
 
-  if (!res.ok) throw new Error('Failed to list Google Drive files');
+  if (!res.ok) throw await parseGoogleError(res, 'Failed to list Google Drive files');
   const data = await res.json();
   return data.files || [];
 }
 
 export async function createDriveFolder(name: string, parentId?: string): Promise<string> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  const token = await requireGoogleAccessToken();
 
   const body: any = {
     name,
@@ -95,20 +133,18 @@ export async function createDriveFolder(name: string, parentId?: string): Promis
   });
 
   if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Failed to create Google Drive folder: ${errText}`);
+    throw await parseGoogleError(res, 'Failed to create Google Drive folder');
   }
   const data = await res.json();
   return data.id;
 }
 
 export async function findDriveFolder(name: string, parentId?: string): Promise<string | null> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  const token = await requireGoogleAccessToken();
 
-  let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${name.replace(/'/g, "\\'")}' and trashed = false`;
+  let query = `mimeType = 'application/vnd.google-apps.folder' and name = '${escapeDriveQueryValue(name)}' and trashed = false`;
   if (parentId) {
-    query += ` and '${parentId}' in parents`;
+    query += ` and '${escapeDriveQueryValue(parentId)}' in parents`;
   }
 
   const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${encodeURIComponent(query)}&fields=files(id,name)`, {
@@ -116,31 +152,34 @@ export async function findDriveFolder(name: string, parentId?: string): Promise<
   });
 
   if (!res.ok) {
-    const errText = await res.text();
-    throw new Error(`Failed to check folder existence: ${errText}`);
+    throw await parseGoogleError(res, 'Failed to check folder existence');
   }
   const data = await res.json();
   return data.files && data.files.length > 0 ? data.files[0].id : null;
 }
 
-export async function setupWorkspaceStructure(): Promise<{
-  rootId: string;
-  subfolders: Record<string, string>;
-}> {
-  let rootId = await findDriveFolder("MotionAI Workspace");
-  if (!rootId) {
-    rootId = await createDriveFolder("MotionAI Workspace");
-  }
-
-  const subfolderNames = [
-    "📂 Projects & Work",
-    "📂 Personal & Life",
-    "📂 Meetings & Agendas",
-    "📂 AI Content & Drafts"
-  ];
+export async function getWorkspaceStructureStatus(): Promise<WorkspaceStructure | null> {
+  const rootId = await findDriveFolder(WORKSPACE_ROOT_NAME);
+  if (!rootId) return null;
 
   const subfolders: Record<string, string> = {};
-  for (const name of subfolderNames) {
+  for (const name of WORKSPACE_SUBFOLDER_NAMES) {
+    const subId = await findDriveFolder(name, rootId);
+    if (!subId) return null;
+    subfolders[name] = subId;
+  }
+
+  return { rootId, subfolders };
+}
+
+export async function setupWorkspaceStructure(): Promise<WorkspaceStructure> {
+  let rootId = await findDriveFolder(WORKSPACE_ROOT_NAME);
+  if (!rootId) {
+    rootId = await createDriveFolder(WORKSPACE_ROOT_NAME);
+  }
+
+  const subfolders: Record<string, string> = {};
+  for (const name of WORKSPACE_SUBFOLDER_NAMES) {
     let subId = await findDriveFolder(name, rootId);
     if (!subId) {
       subId = await createDriveFolder(name, rootId);
@@ -152,8 +191,7 @@ export async function setupWorkspaceStructure(): Promise<{
 }
 
 export async function getGoogleDriveFileContent(fileId: string, mimeType: string): Promise<string> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  const token = await requireGoogleAccessToken();
 
   let url = `https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`;
   if (mimeType === 'application/vnd.google-apps.document') {
@@ -164,13 +202,12 @@ export async function getGoogleDriveFileContent(fileId: string, mimeType: string
     headers: { Authorization: `Bearer ${token}` },
   });
 
-  if (!res.ok) throw new Error('Failed to fetch file content');
+  if (!res.ok) throw await parseGoogleError(res, 'Failed to fetch file content');
   return res.text();
 }
 
 export async function createGoogleDriveFile(title: string, content: string, parentFolderId?: string): Promise<DriveFile> {
-  const token = await getAccessToken();
-  if (!token) throw new Error('Not authenticated with Google Workspace');
+  const token = await requireGoogleAccessToken();
 
   const metadata: any = {
     name: `${title}.txt`,
@@ -190,7 +227,7 @@ export async function createGoogleDriveFile(title: string, content: string, pare
     body: JSON.stringify(metadata),
   });
 
-  if (!metaRes.ok) throw new Error('Failed to create Google Drive file metadata');
+  if (!metaRes.ok) throw await parseGoogleError(metaRes, 'Failed to create Google Drive file metadata');
   const file = await metaRes.json();
 
   // Step 2: Upload file media content
@@ -203,7 +240,6 @@ export async function createGoogleDriveFile(title: string, content: string, pare
     body: content,
   });
 
-  if (!contentRes.ok) throw new Error('Failed to upload file content to Google Drive');
+  if (!contentRes.ok) throw await parseGoogleError(contentRes, 'Failed to upload file content to Google Drive');
   return file;
 }
-

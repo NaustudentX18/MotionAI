@@ -1,0 +1,25 @@
+use tauri_plugin_store::StoreExt;
+
+// Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
+#[tauri::command]
+async fn store_key(app: tauri::AppHandle, workspace_id: String, key: String) -> Result<(), String> {
+    let store = app.store("keychain.json").map_err(|e| e.to_string())?;
+    store.set(&workspace_id, serde_json::Value::String(key));
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+#[tauri::command]
+async fn retrieve_key(app: tauri::AppHandle, workspace_id: String) -> Result<Option<String>, String> {
+    let store = app.store("keychain.json").map_err(|e| e.to_string())?;
+    let value = store.get(&workspace_id);
+    Ok(value.and_then(|v| v.as_str().map(String::from)))
+}
+
+#[tauri::command]
+async fn delete_key(app: tauri::AppHandle, workspace_id: String) -> Result<(), String> {
+    let store = app.store("keychain.json").map_err(|e| e.to_string())?;
+    let _ = store.delete(&workspace_id);
+    store.save().map_err(|e| e.to_string())?;
+    Ok(())
+}

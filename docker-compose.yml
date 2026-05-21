@@ -1,0 +1,95 @@
+services:
+  # ─── MotionAI App ───────────────────────────────────────────────────────────
+  motionai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: motionai
+    ports:
+      - "${APP_PORT:-3000}:3000"
+    environment:
+      # App
+      PORT: 3000
+      NODE_ENV: production
+      # Auth (optional - only required if server is exposed beyond localhost)
+      MOTIONAI_API_SECRET: "${MOTIONAI_API_SECRET:-}"
+      # AI Provider keys
+      GEMINI_API_KEY: "${GEMINI_API_KEY:-}"
+      VITE_SIGNALING_URLS: "${VITE_SIGNALING_URLS:-ws://host.docker.internal:3005}"
+      # Optional: Ollama local AI (uncomment if using local models)
+      # OLLAMA_BASE_URL: "http://host.docker.internal:11434"
+    volumes:
+      - motionai_data:/app/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    networks:
+      - motionai_net
+
+  # ─── Ollama (optional - local AI) ──────────────────────────────────────────
+  # Uncomment to enable local AI models via Ollama.
+  # Access from the app via: http://host.docker.internal:11434
+  # Or set OLLAMA_BASE_URL env var on the motionai service above.
+  #
+  # ollama:
+  #   image: ollama/ollama
+  #   container_name: motionai_ollama
+  #   ports:
+  #     - "11434:11434"
+  #   volumes:
+  #     - ollama_data:/root/.ollama
+  #   restart: unless-stopped
+  #   pull_policy: always
+  #   # Pull model on first start (qwen2.5:7b is a good Pi 5 model)
+  #   entrypoint: ["/bin/sh", "-c"]
+  #   command: >
+  #     "ollama pull qwen2.5:7b && tail -f /dev/null"
+  #   healthcheck:
+  #     test: ["CMD", "curl", "-sf", "http://localhost:11434/api/tags"]
+  #     interval: 60s
+  #     timeout: 10s
+  #     retries: 5
+  #     start_period: 60s
+  #   networks:
+  #     - motionai_net
+
+  # ─── Tailscale Subnet Router (optional) ───────────────────────────────────
+  # Provides remote access to the homelab without opening ports.
+  # Requires TAILSCALE_AUTH_KEY environment variable.
+  # 1. Create an auth key at https://login.tailscale.com/settings/keys
+  # 2. Add it to your .env file: TAILSCALE_AUTH_KEY=tskey-auth-xxxxx
+  # 3. Uncomment this section and the networks section below.
+  #
+  # tailscale:
+  #   image: tailscale/tailscale
+  #   container_name: motionai_tailscale
+  #   environment:
+  #     - TS_USERSPACE=true
+  #     - TS_STATE_DIR=/var/lib/tailscale
+  #     - TS_AUTH_KEY=${TAILSCALE_AUTH_KEY:-}
+  #     - TS_HOSTNAME=motionai
+  #     - TS_ROUTES=192.168.0.0/16,10.0.0.0/8
+  #     - TS_EXTRA_ARGS=--accept-dns=false
+  #   volumes:
+  #     - tailscale_state:/var/lib/tailscale
+  #     - /dev/net/tun:/dev/net/tun
+  #   cap_add:
+  #     - NET_ADMIN
+  #   restart: unless-stopped
+  #   networks:
+  #     - motionai_net
+
+# ─── Networks ────────────────────────────────────────────────────────────────
+networks:
+  motionai_net:
+    driver: bridge
+
+# ─── Volumes ─────────────────────────────────────────────────────────────────
+volumes:
+  motionai_data:
+  # ollama_data:
+  # tailscale_state:

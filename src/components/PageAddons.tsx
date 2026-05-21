@@ -1,6 +1,16 @@
 import React, { useState } from 'react';
-import { Page, PageVersion, Block } from '../types';
-import { History, RotateCcw, Users, Wifi, Trash2, Shield, Circle, Activity, UserPlus, Play } from 'lucide-react';
+import { Page, PageVersion } from '../types';
+import { History, RotateCcw, Users, Link2 } from 'lucide-react';
+import { BacklinksPanel } from './BacklinksPanel';
+
+function stringToColor(str: string): string {
+  const PALETTE = ['#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#EC4899', '#14B8A6', '#F97316'];
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = str.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return PALETTE[Math.abs(hash) % PALETTE.length];
+}
 
 interface PageAddonsProps {
   currentPage: Page | null;
@@ -9,8 +19,11 @@ interface PageAddonsProps {
   // Collaboration / Peer editors
   collaborationActive: boolean;
   onToggleCollaboration: (active: boolean) => void;
-  activePeers: Array<{ name: string; email: string; color: string; status: 'typing' | 'idle' }>;
-  onTriggerMockEdit: (peerName: string) => void;
+  presencePeers: Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>;
+  // Backlinks
+  pages: Page[];
+  backlinks: string[];
+  onNavigateToPage: (pageId: string) => void;
 }
 
 export function PageAddons({
@@ -19,10 +32,12 @@ export function PageAddons({
   onSaveSnapshot,
   collaborationActive,
   onToggleCollaboration,
-  activePeers,
-  onTriggerMockEdit
+  presencePeers,
+  pages,
+  backlinks,
+  onNavigateToPage
 }: PageAddonsProps) {
-  const [activeTab, setActiveTab] = useState<'history' | 'collab'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'collab' | 'links'>('history');
 
   if (!currentPage) return null;
 
@@ -53,6 +68,17 @@ export function PageAddons({
         >
           <Users size={14} />
           Peers & Sync {collaborationActive && <span className="w-1.5 h-1.5 bg-green-500 rounded-full animate-ping" />}
+        </button>
+        <button
+          onClick={() => setActiveTab('links')}
+          className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            activeTab === 'links'
+              ? 'border-purple-600 text-purple-600 dark:text-purple-400 font-bold'
+              : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+        >
+          <Link2 size={14} />
+          Links
         </button>
       </div>
 
@@ -125,41 +151,63 @@ export function PageAddons({
 
             <div className="p-3 bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100 dark:border-blue-950/20 rounded-lg text-xs leading-relaxed text-blue-700 dark:text-blue-400">
               {collaborationActive ? (
-                <span>🛜 <strong>Active connection</strong>. Your changes are live synced. Select peer editors below to trigger collaborative edits on your board.</span>
+                <span>🛜 <strong>Active connection</strong>. Your workspace is synced with peers via WebRTC.</span>
               ) : (
                 <span>Offline local mode. Enable sync to engage collaborative editing with peers concurrently on this Workspace board.</span>
               )}
             </div>
 
             <div className="space-y-3 pt-2">
-              <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 block">Active Team Members</span>
+              <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 block">
+                {presencePeers.length > 0 ? `Connected Peers (${presencePeers.length})` : 'No Peers Connected'}
+              </span>
 
-              {activePeers.map((peer, idx) => (
-                <div
-                  key={peer.name}
-                  className="p-3 border border-[#EBEBE9] dark:border-[#2F2F2F] rounded-lg bg-white dark:bg-[#252525] flex items-center justify-between group"
-                >
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase" style={{ backgroundColor: peer.color }}>
-                      {peer.name[0]}
-                    </div>
-                    <div>
-                      <div className="text-xs font-semibold text-[#37352f] dark:text-gray-200">{peer.name}</div>
-                      <div className="text-[9px] text-gray-400">{peer.status === 'typing' ? '✍️ Typing live suggestion...' : '🛋️ Idle'}</div>
-                    </div>
-                  </div>
-
-                  {collaborationActive && (
-                    <button
-                      onClick={() => onTriggerMockEdit(peer.name)}
-                      className="p-1 px-2 text-[10px] font-medium bg-purple-50 hover:bg-purple-100 text-purple-700 rounded border border-purple-200 flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
-                      <Play size={10} /> Type Mock
-                    </button>
-                  )}
+              {presencePeers.length === 0 && (
+                <div className="text-center py-4 text-xs text-gray-400 italic">
+                  No other devices are currently connected to this workspace.
                 </div>
-              ))}
+              )}
+
+              {presencePeers.map((peer) => {
+                const isRecent = Date.now() - peer.lastSeen < 30000;
+                const peerColor = stringToColor(peer.peerId);
+                return (
+                  <div
+                    key={peer.peerId}
+                    className="p-3 border border-[#EBEBE9] dark:border-[#2F2F2F] rounded-lg bg-white dark:bg-[#252525] flex items-center justify-between group"
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <div
+                        className="w-5 h-5 rounded-full flex items-center justify-center text-[10px] font-bold text-white uppercase shrink-0"
+                        style={{ backgroundColor: peerColor }}
+                      >
+                        {peer.userName[0]}
+                      </div>
+                      <div>
+                        <div className="text-xs font-semibold text-[#37352f] dark:text-gray-200">{peer.userName}</div>
+                        <div className="text-[9px] text-gray-400">
+                          {isRecent ? '✍️ Active now' : '🛋️ Idle'}
+                        </div>
+                      </div>
+                    </div>
+                    {isRecent && (
+                      <span className="w-1.5 h-1.5 bg-green-400 rounded-full animate-pulse" />
+                    )}
+                  </div>
+                );
+              })}
             </div>
+          </div>
+        )}
+
+        {activeTab === 'links' && (
+          <div className="pt-2">
+            <BacklinksPanel
+              currentPage={currentPage}
+              pages={pages}
+              backlinks={backlinks}
+              onNavigateToPage={onNavigateToPage}
+            />
           </div>
         )}
       </div>

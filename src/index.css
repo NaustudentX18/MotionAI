@@ -47,3 +47,78 @@ html.dark .shadow-\[0_0_0_1px_rgba\(15\,15\,15\,0\.05\)\,0_8px_16px_-4px_rgba\(1
 html.dark .shadow-md {
    box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.5) !important;
 }
+
+/* Reduced motion - disable all animations/transitions */
+.reduced-motion,
+.reduced-motion * {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+  scroll-behavior: auto !important;
+}
+
+/* Drag handle — grip icon shown on block hover */
+.drag-handle {
+  position: absolute;
+  left: -28px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 20px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s;
+  color: #9ca3af;
+  font-size: 12px;
+  user-select: none;
+  z-index: 10;
+  border-radius: 3px;
+  background: transparent;
+}
+
+.drag-handle:active {
+  cursor: grabbing;
+}
+
+.ProseMirror [data-type]:hover > .drag-handle,
+.ProseMirror [data-type]:hover .drag-handle {
+  opacity: 1;
+}
+
+.drag-handle:hover {
+  background: #f3f4f6;
+  color: #6b7280;
+}
+
+html.dark .drag-handle:hover {
+  background: #2f2f2f;
+  color: #d4d4d4;
+}
+
+/* Add left padding to blocks to make room for the drag handle */
+.ProseMirror [data-type] {
+  position: relative;
+  padding-left: 28px;
+}
+
+/* Drop indicator */
+.ProseMirror [data-type].drop-above {
+  border-top: 2px solid #8b5cf6;
+}
+
+.ProseMirror [data-type].drop-below {
+  border-bottom: 2px solid #8b5cf6;
+}
+
+/* Comment indicator badge */
+.ProseMirror [data-type][data-comments]:not([data-comments="[]"])::before {
+  content: '💬';
+  position: absolute;
+  left: -20px;
+  top: 2px;
+  font-size: 12px;
+  pointer-events: none;
+}

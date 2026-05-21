@@ -570,9 +570,9 @@ export function MobileWorkspaceApp({
               {/* Top Navigation Headers row (exactly like image) */}
               <div className="pt-3 pb-2 px-4 border-b border-stone-800 flex items-center gap-1 select-none overflow-x-auto no-scrollbar shrink-0">
                 {/* J Profile circle */}
-                <button 
+                <button
                   onClick={() => setIsWorkspaceMenuOpen(true)}
-                  className="w-9 h-9 rounded-full bg-stone-800 border border-stone-700 font-bold font-mono text-stone-300 text-sm flex items-center justify-center hover:bg-stone-700 transition-colors shrink-0 mr-1.5 cursor-pointer relative"
+                  className="w-11 h-11 min-w-11 rounded-full bg-stone-800 border border-stone-700 font-bold font-mono text-stone-300 text-sm flex items-center justify-center hover:bg-stone-700 transition-colors shrink-0 mr-1.5 cursor-pointer relative"
                 >
                   J
                   <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#191919] rounded-full animate-ping" />
@@ -581,9 +581,9 @@ export function MobileWorkspaceApp({
                 {/* Home tab button */}
                 <button
                   onClick={() => { setActiveTab('home'); setMobileEditingPageId(null); }}
-                  className={`h-9 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'home'
-                      ? 'bg-stone-800 text-white shadow-md font-bold scale-102 border border-stone-700'
+                      ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
@@ -594,9 +594,9 @@ export function MobileWorkspaceApp({
                 {/* Chats tab button */}
                 <button
                   onClick={() => setActiveTab('chats')}
-                  className={`h-9 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'chats'
-                      ? 'bg-stone-800 text-white shadow-md font-bold scale-102 border border-stone-700'
+                      ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
@@ -607,9 +607,9 @@ export function MobileWorkspaceApp({
                 {/* Meeting tab button */}
                 <button
                   onClick={() => setActiveTab('meeting')}
-                  className={`h-9 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'meeting'
-                      ? 'bg-stone-800 text-white shadow-md font-bold scale-102 border border-stone-700'
+                      ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
@@ -620,9 +620,9 @@ export function MobileWorkspaceApp({
                 {/* Inbox tab button */}
                 <button
                   onClick={() => setActiveTab('inbox')}
-                  className={`h-9 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'inbox'
-                      ? 'bg-stone-800 text-white shadow-md font-bold scale-102 border border-stone-700'
+                      ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
@@ -1306,57 +1306,57 @@ export function MobileWorkspaceApp({
                 {/* Quick Add Custom Block Drawer inside Editor */}
                 <div className="pt-6 border-t border-stone-850">
                   {!addingBlockType ? (
-                    <div className="flex flex-wrap items-center gap-1.5">
+                    <div className="flex flex-wrap items-center gap-2">
                       <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider font-mono block w-full py-1">Quick Add:</span>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('p')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Text
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('todo')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + To-do
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('bullet')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Bullet
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('h1')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Head 1
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('h2')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Head 2
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('h3')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Head 3
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('quote')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Quote
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('callout')}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Callout
                       </button>
-                      <button 
+                      <button
                         onClick={() => {
                           if (activeMobilePage) {
                             onUpdatePage(activeMobilePage.id, {
@@ -1364,11 +1364,11 @@ export function MobileWorkspaceApp({
                             });
                           }
                         }}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Divider
                       </button>
-                      <button 
+                      <button
                         onClick={() => {
                           if (activeMobilePage) {
                             onUpdatePage(activeMobilePage.id, {
@@ -1376,13 +1376,13 @@ export function MobileWorkspaceApp({
                             });
                           }
                         }}
-                        className="px-2.5 py-1.5 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + Code
                       </button>
-                      <button 
+                      <button
                         onClick={() => setAddingBlockType('ai-summary')}
-                        className="px-2.5 py-1.5 bg-purple-950/35 hover:bg-purple-950/50 border border-purple-900/30 text-purple-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors"
+                        className="min-h-11 min-w-11 px-3 py-2 bg-purple-950/35 hover:bg-purple-950/50 border border-purple-900/30 text-purple-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
                       >
                         + AI Summary
                       </button>

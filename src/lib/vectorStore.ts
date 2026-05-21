@@ -27,6 +27,8 @@ export async function getEmbedding(text: string): Promise<number[]> {
   return Array.from(output.data);
 }
 
+const CHUNK_SIZE = 5;
+
 // Global Voy instance for the client-side vector DB
 let voyIndex: any = null;
 
@@ -46,6 +48,110 @@ interface BaseVoyDocument {
   embeddings: number[];
 }
 
+function chunkPage(page: Page, seenContent: Set<string>): BaseVoyDocument[] {
+  const chunks: BaseVoyDocument[] = [];
+  const pageTitle = page.title || 'Untitled';
+
+  // Group blocks into semantic sections
+  // Headings start new sections; consecutive text blocks are grouped
+  let currentSectionBlocks: Block[] = [];
+  let currentSectionTitle = pageTitle;
+
+  for (const block of page.blocks) {
+    // Headings start a new section
+    if (block.type === 'h1' || block.type === 'h2' || block.type === 'h3') {
+      // Flush current section
+      if (currentSectionBlocks.length > 0) {
+        const chunk = createChunk(currentSectionBlocks, pageTitle, currentSectionTitle, seenContent);
+        if (chunk) chunks.push(chunk);
+      }
+      currentSectionBlocks = [block];
+      currentSectionTitle = stripHtml(block.content || '');
+    } else if (block.content && block.content.trim()) {
+      // Add to current section (skip dividers and empty blocks)
+      currentSectionBlocks.push(block);
+    }
+  }
+
+  // Flush last section
+  if (currentSectionBlocks.length > 0) {
+    const chunk = createChunk(currentSectionBlocks, pageTitle, currentSectionTitle, seenContent);
+    if (chunk) chunks.push(chunk);
+  }
+
+  return chunks;
+}
+
+function createChunk(blocks: Block[], pageTitle: string, sectionTitle: string, seenContent: Set<string>): BaseVoyDocument | null {
+  const parts: string[] = [];
+
+  for (const block of blocks) {
+    const typePrefix = getTypePrefix(block.type);
+    const text = stripHtml(block.content || '').trim();
+    if (text) {
+      parts.push(`${typePrefix} ${text}`);
+    }
+  }
+
+  if (parts.length === 0) return null;
+
+  const chunkText = `[Page: ${pageTitle}] > ${sectionTitle}\n${parts.join('\n')}`;
+
+  // Deduplication check
+  if (seenContent.has(chunkText)) {
+    return null;
+  }
+  seenContent.add(chunkText);
+
+  const id = `chunk-${blocks[0].id}-${Date.now()}`;
+
+  return {
+    id,
+    title: chunkText,
+    url: `${pageTitle}|${blocks[0].id}`,
+    embeddings: [],
+  };
+}
+
+function getTypePrefix(type: string): string {
+  const map: Record<string, string> = {
+    p: '[P]',
+    h1: '[H1]',
+    h2: '[H2]',
+    h3: '[H3]',
+    bullet: '[LIST]',
+    todo: '[TODO]',
+    code: '[CODE]',
+    quote: '[QUOTE]',
+    callout: '[CALLOUT]',
+    divider: '[DIVIDER]',
+    'ai-summary': '[AI]',
+    'ai-draft': '[AI]',
+    'ai-rewrite': '[AI]',
+  };
+  return map[type] || '[P]';
+}
+
+function stripHtml(html: string): string {
+  return html.replace(/<[^>]*>/g, '');
+}
+
+async function computeEmbeddingsInChunks(
+  items: BaseVoyDocument[],
+  onProgress?: (done: number, total: number) => void,
+): Promise<void> {
+  for (let i = 0; i < items.length; i += CHUNK_SIZE) {
+    const chunk = items.slice(i, i + CHUNK_SIZE);
+    const embeddings = await Promise.all(
+      chunk.map((item) => getEmbedding(item.title)),
+    );
+    embeddings.forEach((emb, j) => {
+      items[i + j].embeddings = emb;
+    });
+    onProgress?.(Math.min(i + CHUNK_SIZE, items.length), items.length);
+  }
+}
+
 export async function initVectorDB(pages: Page[]) {
   if (voyIndex) return voyIndex;
 
@@ -53,30 +159,17 @@ export async function initVectorDB(pages: Page[]) {
 
   // Extract all text chunks from pages
   const items: BaseVoyDocument[] = [];
+  const seenContent = new Set<string>(); // For deduplication
 
   for (const page of pages) {
-    for (const block of page.blocks) {
-      if (block.content && block.content.trim().length > 0) {
-        items.push({
-          id: block.id,
-          title: `[Page: ${page.title || "Untitled"}] ${block.content}`,
-          url: `${page.id}|${block.id}`,
-          embeddings: [], // Will be mapped later, but we need to do this efficiently
-        });
-      }
-    }
+    const pageChunks = chunkPage(page, seenContent);
+    items.push(...pageChunks);
   }
 
-  // Pre-compute embeddings (in a real app you'd batch this and show a progress bar or background worker)
-  // For demo, we are doing sequentially to not freeze the browser totally on huge data
-  // But wait, it's better to do it one by one or on demand.
-
-  // Actually, computing all of them at once can take 10s of seconds if there are many pages.
-  // We'll compute them for the current state.
-  for (let i = 0; i < items.length; i++) {
-    const textContext = items[i].title;
-    items[i].embeddings = await getEmbedding(textContext);
-  }
+  // Pre-compute embeddings in chunks for better performance
+  await computeEmbeddingsInChunks(items, (done, total) => {
+    console.log(`[vector] Embedding progress: ${done}/${total}`);
+  });
 
   // Define the resource payload for voy
   const resource = {
@@ -95,7 +188,10 @@ export async function initVectorDB(pages: Page[]) {
 export async function addOrUpdateBlock(page: Page, block: Block) {
   if (!voyIndex || !block.content.trim()) return;
 
-  const textContext = `[Page: ${page.title || "Untitled"}] ${block.content}`;
+  const pageTitle = page.title || 'Untitled';
+  const typePrefix = getTypePrefix(block.type);
+  const text = stripHtml(block.content || '').trim();
+  const textContext = `[Page: ${pageTitle}] > ${pageTitle}\n${typePrefix} ${text}`;
   const embeddings = await getEmbedding(textContext);
 
   voyIndex.add({
@@ -103,7 +199,7 @@ export async function addOrUpdateBlock(page: Page, block: Block) {
       {
         id: block.id,
         title: textContext,
-        url: `${page.id}|${block.id}`,
+        url: `${pageTitle}|${block.id}`,
         embeddings,
       },
     ],

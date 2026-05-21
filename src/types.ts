@@ -1,4 +1,4 @@
-export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite' | 'code';
+export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite' | 'code' | 'image';
 
 export interface BlockComment {
   id: string;
@@ -35,6 +35,8 @@ export interface PageVersion {
   blocks: Block[];
 }
 
+export type PageType = 'block' | 'canvas';
+
 export interface Page {
   id: string;
   title: string;
@@ -44,4 +46,5 @@ export interface Page {
   createdAt: number;
   updatedAt: number;
   versions?: PageVersion[];
+  pageType?: PageType;
 }

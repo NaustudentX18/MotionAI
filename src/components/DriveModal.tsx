@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, X, Loader2, FileText, Upload, Folder, CheckCircle } from 'lucide-react';
-import { listGoogleDriveFiles, getGoogleDriveFileContent, createGoogleDriveFile, setupWorkspaceStructure, DriveFile } from '../lib/workspace';
+import { HardDrive, X, Loader2, FileText, Upload, Folder, CheckCircle, AlertCircle, Link2 } from 'lucide-react';
+import { listGoogleDriveFiles, getGoogleDriveFileContent, createGoogleDriveFile, setupWorkspaceStructure, getWorkspaceStructureStatus, DriveFile, WorkspaceStructure } from '../lib/workspace';
 import { Page, Block } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { cn } from '../lib/utils';
@@ -12,18 +12,18 @@ interface DriveModalProps {
   onPageImported: (title: string, blocks: Block[]) => void;
 }
 
+type DriveStatus = 'not_connected' | 'listing' | 'setup_needed' | 'setup_complete' | 'error';
+
 export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: DriveModalProps) {
   const [loading, setLoading] = useState(false);
+  const [driveStatus, setDriveStatus] = useState<DriveStatus>('listing');
   const [files, setFiles] = useState<DriveFile[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [exportSuccess, setExportSuccess] = useState(false);
 
   // Structured workspace layout state
-  const [structuredFolderInfo, setStructuredFolderInfo] = useState<{
-    rootId: string;
-    subfolders: Record<string, string>;
-  } | null>(null);
+  const [structuredFolderInfo, setStructuredFolderInfo] = useState<WorkspaceStructure | null>(null);
   const [settingUpStructure, setSettingUpStructure] = useState(false);
   const [selectedFolderId, setSelectedFolderId] = useState<string>('');
 
@@ -33,26 +33,42 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
     } else {
       setExportSuccess(false);
       setError(null);
+      setSelectedFolderId('');
     }
   }, [isOpen]);
 
   const loadFiles = async () => {
     setLoading(true);
+    setDriveStatus('listing');
     setError(null);
     try {
-      // Step 1: Initialize perfect folder structure automatically
-      setSettingUpStructure(true);
-      const structure = await setupWorkspaceStructure();
-      setStructuredFolderInfo(structure);
-      setSettingUpStructure(false);
-
-      // Step 2: List Drive files for import
       const driveFiles = await listGoogleDriveFiles();
       setFiles(driveFiles);
+
+      const structure = await getWorkspaceStructureStatus();
+      setStructuredFolderInfo(structure);
+      setDriveStatus(structure ? 'setup_complete' : 'setup_needed');
     } catch (err: any) {
-      setError(err.message || 'Failed connection to Google Drive');
+      const message = err.message || 'Failed connection to Google Drive';
+      setError(message);
+      setStructuredFolderInfo(null);
+      setDriveStatus(message.includes('not connected') ? 'not_connected' : 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSetupStructure = async () => {
+    setSettingUpStructure(true);
+    setError(null);
+    try {
+      const structure = await setupWorkspaceStructure();
+      setStructuredFolderInfo(structure);
+      setDriveStatus('setup_complete');
+    } catch (err: any) {
+      setError(err.message || 'Failed to set up Google Drive folders');
+      setDriveStatus('error');
+    } finally {
       setSettingUpStructure(false);
     }
   };
@@ -146,27 +162,71 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
         </div>
 
         <div className="flex-1 overflow-y-auto p-5 space-y-4">
-          {/* Automatic Structure Provisioning Status Card */}
-          {settingUpStructure ? (
-            <div className="p-4 rounded-xl bg-amber-50/40 dark:bg-amber-950/10 border border-amber-100 dark:border-amber-900/20 flex items-center gap-3">
-              <Loader2 className="animate-spin text-amber-500 shrink-0" size={18} />
-              <div className="text-xs">
-                <div className="font-bold text-amber-800 dark:text-amber-400">Organizing Workspace...</div>
-                <div className="text-amber-600/80 dark:text-amber-500/80">Setting up "MotionAI Workspace" folder tree structures.</div>
-              </div>
-            </div>
-          ) : structuredFolderInfo ? (
-            <div className="p-4 rounded-xl bg-purple-50/20 dark:bg-purple-950/5 border border-purple-100/50 dark:border-purple-900/10 space-y-2.5">
-              <div className="flex items-center justify-between text-xs pb-2 border-b border-purple-100/20">
-                <div className="flex items-center gap-1.5 font-bold text-purple-700 dark:text-purple-400">
-                  <Folder size={14} className="text-purple-500" />
-                  <span>MotionAI Workspace Storage Box Built!</span>
+          {/* Drive connection and folder setup status */}
+          <div className={cn(
+            "p-4 rounded-xl border space-y-3",
+            driveStatus === 'error' || driveStatus === 'not_connected'
+              ? "bg-red-50/60 dark:bg-red-950/10 border-red-200 dark:border-red-900/20"
+              : driveStatus === 'setup_complete'
+                ? "bg-purple-50/20 dark:bg-purple-950/5 border-purple-100/50 dark:border-purple-900/10"
+                : "bg-amber-50/40 dark:bg-amber-950/10 border-amber-100 dark:border-amber-900/20"
+          )}>
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-start gap-3 min-w-0">
+                {driveStatus === 'listing' || settingUpStructure ? (
+                  <Loader2 className="animate-spin text-amber-500 shrink-0 mt-0.5" size={18} />
+                ) : driveStatus === 'setup_complete' ? (
+                  <CheckCircle className="text-emerald-500 shrink-0 mt-0.5" size={18} />
+                ) : driveStatus === 'not_connected' ? (
+                  <Link2 className="text-red-500 shrink-0 mt-0.5" size={18} />
+                ) : driveStatus === 'error' ? (
+                  <AlertCircle className="text-red-500 shrink-0 mt-0.5" size={18} />
+                ) : (
+                  <Folder className="text-amber-500 shrink-0 mt-0.5" size={18} />
+                )}
+                <div className="text-xs min-w-0">
+                  <div className={cn(
+                    "font-bold",
+                    driveStatus === 'error' || driveStatus === 'not_connected'
+                      ? "text-red-700 dark:text-red-400"
+                      : driveStatus === 'setup_complete'
+                        ? "text-purple-700 dark:text-purple-400"
+                        : "text-amber-800 dark:text-amber-400"
+                  )}>
+                    {driveStatus === 'listing' && 'Listing Drive files...'}
+                    {driveStatus === 'not_connected' && 'Google Drive not connected'}
+                    {driveStatus === 'setup_needed' && 'Folder setup needed'}
+                    {driveStatus === 'setup_complete' && 'Folder setup complete'}
+                    {driveStatus === 'error' && 'Google Drive error'}
+                  </div>
+                  <div className="text-[#37352f99] dark:text-gray-400 mt-0.5">
+                    {driveStatus === 'setup_complete'
+                      ? 'Exports can be placed into the MotionAI Workspace folders below.'
+                      : driveStatus === 'setup_needed'
+                        ? 'Opening this modal only lists files. Create the MotionAI Workspace folders when you choose.'
+                        : driveStatus === 'not_connected'
+                          ? 'Use Link Workspace to approve Google access, then reopen Drive Sync.'
+                          : driveStatus === 'error'
+                            ? 'Check the message below, then reconnect if Google says the token or scopes are invalid.'
+                            : 'Reading importable Docs/text files and checking whether the workspace folders already exist.'}
+                  </div>
                 </div>
-                <span className="text-[10px] text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/20 px-2 py-0.5 rounded-full font-mono flex items-center gap-1 font-bold">
-                  <CheckCircle size={10} /> Unified Tree Active
-                </span>
               </div>
-              <div className="grid grid-cols-2 gap-2 text-[11px] text-[#37352F] dark:text-gray-300">
+              {driveStatus !== 'setup_complete' && driveStatus !== 'not_connected' && (
+                <button
+                  type="button"
+                  onClick={handleSetupStructure}
+                  disabled={settingUpStructure || loading}
+                  className="shrink-0 flex items-center px-3 py-1.5 text-xs font-semibold bg-purple-650 hover:bg-purple-700 text-white rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  {settingUpStructure ? <Loader2 className="animate-spin mr-1.5" size={12} /> : <Folder className="mr-1.5" size={12} />}
+                  Create folders
+                </button>
+              )}
+            </div>
+
+            {structuredFolderInfo && (
+              <div className="grid grid-cols-2 gap-2 text-[11px] text-[#37352F] dark:text-gray-300 pt-2 border-t border-purple-100/20">
                 {Object.keys(structuredFolderInfo.subfolders).map((fName) => (
                   <div key={fName} className="flex items-center gap-1.5 bg-[#F4F4F3]/50 dark:bg-[#1E1E1E] px-2.5 py-1.5 rounded-md border border-[#EBEBE9] dark:border-[#2F2F2F] font-medium">
                     <span className="text-emerald-500 text-xs">✓</span>
@@ -174,20 +234,24 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
                   </div>
                 ))}
               </div>
+            )}
+
+            <div className="text-[10px] leading-relaxed text-[#37352f7a] dark:text-gray-500">
+              Google permissions: Drive read-only lists/imports existing Docs and text files; Drive file creates and manages only files/folders this app creates. Calendar and Tasks scopes power the existing Workspace actions outside this dialog.
             </div>
-          ) : null}
+          </div>
 
           {/* Export Panel Block */}
           {currentPage && (
             <div className="p-4 rounded-xl border border-gray-150 dark:border-[#2F2F2F] bg-[#F4F4F3]/30 dark:bg-[#1A1A1A]/30 space-y-3">
               <div className="flex items-start justify-between">
                 <div>
-                  <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Unified Folder Placement</h4>
+                  <h4 className="text-xs font-bold text-gray-500 dark:text-gray-400 uppercase tracking-wider">Drive Export</h4>
                   <p className="text-sm font-semibold text-[#37352F] dark:text-[#D4D4D4] mt-0.5">Export "{currentPage.title || 'Untitled'}"</p>
                 </div>
                 <button 
                   onClick={handleExport}
-                  disabled={exporting || settingUpStructure}
+                  disabled={exporting || settingUpStructure || driveStatus === 'not_connected'}
                   className="flex items-center px-3 py-1.5 text-xs font-semibold bg-purple-650 hover:bg-purple-700 text-white rounded-lg transition-colors cursor-pointer disabled:opacity-50 shadow-xs"
                 >
                   {exporting ? (
@@ -198,10 +262,15 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
                   Export File
                 </button>
               </div>
+              {!structuredFolderInfo && (
+                <div className="text-[11px] text-[#37352f7a] dark:text-gray-400 pt-2 border-t border-[#EBEBE9] dark:border-[#2F2F2F]">
+                  Folder setup has not been created. Export will save to your Drive root unless you explicitly create the MotionAI Workspace folders above.
+                </div>
+              )}
               {structuredFolderInfo && (
                 <div className="space-y-2 pt-2 border-t border-[#EBEBE9] dark:border-[#2F2F2F]">
                   <div className="flex items-center justify-between text-[11px] font-bold text-gray-400 dark:text-gray-550 uppercase tracking-wider">
-                    <span>Select target directory for perfect arrangement</span>
+                    <span>Select target directory</span>
                     <span className="text-purple-600 dark:text-purple-400 font-mono font-bold text-[9px] lowercase bg-purple-50 dark:bg-purple-950/30 px-1.5 py-0.5 rounded-sm">default destination</span>
                   </div>
                   <div className="grid grid-cols-2 gap-2">
@@ -239,7 +308,7 @@ export function DriveModal({ isOpen, onClose, currentPage, onPageImported }: Dri
 
           {exportSuccess && (
             <div className="p-3 bg-emerald-50 dark:bg-emerald-950/10 border border-emerald-200 dark:border-emerald-900/25 text-emerald-800 dark:text-emerald-400 text-xs rounded-xl text-center font-bold">
-              ✨ Export Completed: Page saved into correct folder category structure!
+              Export completed: page saved to Google Drive.
             </div>
           )}
 
