@@ -1,6 +1,6 @@
 import { GoogleGenAI, Type } from '@google/genai';
 
-export type AiProviderId = 'disabled' | 'gemini' | 'openai-compatible' | 'ollama' | 'lmstudio' | 'vllm';
+export type AiProviderId = 'disabled' | 'gemini' | 'openai-compatible' | 'ollama' | 'lmstudio' | 'vllm' | 'custom-endpoint';
 
 export interface AiRequestSettings {
   provider?: string;
@@ -52,6 +52,10 @@ const PROVIDER_ALIASES: Record<string, AiProviderId> = {
   lmstudio: 'lmstudio',
   'lm-studio': 'lmstudio',
   vllm: 'vllm',
+  custom: 'custom-endpoint',
+  'custom-endpoint': 'custom-endpoint',
+  custom_endpoint: 'custom-endpoint',
+  endpoint: 'custom-endpoint',
 };
 
 const DEFAULT_TIMEOUT_MS = 30_000;
@@ -64,6 +68,7 @@ export function getConfiguredProviders(): AiProviderInfo[] {
     providerInfo('ollama'),
     providerInfo('lmstudio'),
     providerInfo('vllm'),
+    providerInfo('custom-endpoint'),
     providerInfo('disabled'),
   ];
 }
@@ -71,7 +76,7 @@ export function getConfiguredProviders(): AiProviderInfo[] {
 export function resolveProviderId(input?: string): AiProviderId {
   const normalized = (input || '').trim().toLowerCase();
   if (!normalized) return autoProviderId();
-  return PROVIDER_ALIASES[normalized] || 'openai-compatible';
+  return PROVIDER_ALIASES[normalized] || 'custom-endpoint';
 }
 
 export function extractAiSettings(body: any): AiRequestSettings {
@@ -96,10 +101,10 @@ export function createAiClient(settings: AiRequestSettings = {}): AiClient {
 export async function probeAi(settings: AiRequestSettings = {}): Promise<{ ok: boolean; provider: AiProviderInfo; message: string }> {
   const client = createAiClient(settings);
   if (client.info.id === 'disabled') {
-    return { ok: true, provider: client.info, message: 'AI is disabled.' };
+    return { ok: true, provider: client.info, message: 'AI is disabled. No provider call was made.' };
   }
   if (!client.info.configured) {
-    return { ok: false, provider: client.info, message: `${client.info.label} is not configured.` };
+    return { ok: false, provider: client.info, message: providerUnavailableMessage(client.info) };
   }
 
   try {
@@ -108,6 +113,22 @@ export async function probeAi(settings: AiRequestSettings = {}): Promise<{ ok: b
   } catch (error) {
     return { ok: false, provider: client.info, message: safeErrorMessage(error, [settings.apiKey]) };
   }
+}
+
+export function providerUnavailableMessage(info: AiProviderInfo): string {
+  if (info.id === 'disabled' || !info.enabled) {
+    return 'AI is disabled. Choose and configure a provider before using AI features.';
+  }
+  if (info.id === 'gemini') {
+    return 'Google Gemini is not configured. Add a Gemini API key and model name.';
+  }
+  if (info.id === 'custom-endpoint') {
+    return 'Custom endpoint is not configured. Add an OpenAI-compatible base URL and model name.';
+  }
+  if (info.id === 'openai-compatible' && !isLocalBaseUrl(info.baseUrl)) {
+    return 'OpenAI-compatible provider is not configured. Add a base URL, model name, and API key for remote endpoints.';
+  }
+  return `${info.label} is not configured. Add a base URL and model name.`;
 }
 
 export function safeErrorMessage(error: unknown, extraSecrets: Array<string | undefined> = []): string {
@@ -141,19 +162,19 @@ function providerInfo(id: AiProviderId, settings: AiRequestSettings = {}): AiPro
     return {
       id,
       label: 'Google Gemini',
-      configured: Boolean(settings.apiKey || process.env.GEMINI_API_KEY),
+      configured: Boolean(model && (settings.apiKey || process.env.GEMINI_API_KEY)),
       enabled: true,
       model,
       keysReturned: false,
     };
   }
 
-  const { baseUrl, model } = openAiCompatibleConfig(id, settings);
+  const { baseUrl, model, apiKey } = openAiCompatibleConfig(id, settings);
   const requiresKey = id === 'openai-compatible' && !isLocalBaseUrl(baseUrl);
   return {
     id,
     label: providerLabel(id),
-    configured: Boolean(baseUrl && model && (!requiresKey || settings.apiKey || process.env.OPENAI_API_KEY)),
+    configured: Boolean(baseUrl && model && (!requiresKey || apiKey)),
     enabled: true,
     model,
     baseUrl,
@@ -166,6 +187,7 @@ function providerLabel(id: AiProviderId): string {
     case 'ollama': return 'Ollama';
     case 'lmstudio': return 'LM Studio';
     case 'vllm': return 'vLLM';
+    case 'custom-endpoint': return 'Custom endpoint';
     default: return 'OpenAI-compatible';
   }
 }
@@ -187,7 +209,7 @@ function geminiClient(settings: AiRequestSettings): AiClient {
   return {
     info,
     async generateText(prompt, options = {}) {
-      if (!apiKey) throw new Error('Gemini provider is not configured. Set GEMINI_API_KEY or pass a request apiKey.');
+      if (!apiKey) throw new Error(providerUnavailableMessage(info));
       const ai = new GoogleGenAI({ apiKey });
       const response = await withTimeout(
         ai.models.generateContent({
@@ -215,7 +237,7 @@ function openAiCompatibleClient(id: AiProviderId, settings: AiRequestSettings): 
   return {
     info,
     async generateText(prompt, options = {}) {
-      if (!baseUrl || !model) throw new Error(`${providerLabel(id)} provider is not configured.`);
+      if (!baseUrl || !model) throw new Error(providerUnavailableMessage(info));
       const messages = toOpenAiMessages(prompt, options.systemInstruction);
       if (options.jsonSchema) {
         messages.push({ role: 'user', content: 'Return only valid JSON. Do not wrap the JSON in markdown.' });
@@ -265,6 +287,13 @@ function openAiCompatibleConfig(id: AiProviderId, settings: AiRequestSettings): 
       baseUrl: settings.baseUrl || process.env.VLLM_BASE_URL || 'http://localhost:8000/v1',
       model: settings.model || process.env.VLLM_MODEL || process.env.OPENAI_MODEL || 'local-model',
       apiKey: settings.apiKey || process.env.VLLM_API_KEY || process.env.OPENAI_API_KEY,
+    };
+  }
+  if (id === 'custom-endpoint') {
+    return {
+      baseUrl: settings.baseUrl || process.env.CUSTOM_AI_BASE_URL || '',
+      model: settings.model || process.env.CUSTOM_AI_MODEL || '',
+      apiKey: settings.apiKey || process.env.CUSTOM_AI_API_KEY || process.env.OPENAI_API_KEY,
     };
   }
   return {
@@ -344,6 +373,7 @@ function knownSecrets(): string[] {
     process.env.OLLAMA_API_KEY,
     process.env.LM_STUDIO_API_KEY,
     process.env.VLLM_API_KEY,
+    process.env.CUSTOM_AI_API_KEY,
   ].filter((value): value is string => Boolean(value && value.length > 3));
 }
 

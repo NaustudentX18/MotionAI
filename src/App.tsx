@@ -164,9 +164,9 @@ export default function App() {
       setCurrentPageId(exists ? snapshot.currentPageId : snapshot.pages[0]?.id ?? null);
     };
 
-    pagesMap.observe(observer);
+    doc.on('update', observer);
     return () => {
-      pagesMap.unobserve(observer);
+      doc.off('update', observer);
     };
   }, [workspaceLoaded]);
 
@@ -380,6 +380,9 @@ export default function App() {
     addPageToStore(newPage);
     setCurrentPageIdInStore(newPage.id);
     setCurrentPageId(newPage.id);
+    if (viewMode === 'hub') {
+      setViewMode('desktop');
+    }
   };
 
   const updateCurrentPage = (updates: Partial<Page>) => {
@@ -801,6 +804,9 @@ export default function App() {
            onSelectPage={(id) => {
              setCurrentPageIdInStore(id);
              setCurrentPageId(id);
+             if (viewMode === 'hub') {
+               setViewMode('desktop');
+             }
              if (window.innerWidth < 768) setSidebarOpen(false);
            }}
            onAddPage={addPage}

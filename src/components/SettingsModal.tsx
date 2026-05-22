@@ -20,24 +20,127 @@ const PROVIDER_ORDER: AiProviderId[] = [
   'lmstudio',
   'vllm',
   'openai-compatible',
+  'custom-endpoint',
   'disabled',
 ];
 
 // ─── Provider Card ────────────────────────────────────────────────────────────
 
-interface StatusBadgeProps { configured: boolean; enabled: boolean; error?: boolean; }
+interface ProviderUiMeta {
+  description: string;
+  baseUrlLabel: string;
+  baseUrlPlaceholder: string;
+  modelPlaceholder: string;
+  keyLabel: string;
+  keyPlaceholder: string;
+  keyHint: string;
+  requiresBaseUrl: boolean;
+  requiresModel: boolean;
+  requiresKey: boolean;
+}
 
-function StatusBadge({ configured, enabled, error }: StatusBadgeProps) {
-  if (error || !enabled) return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400">Not configured</span>;
+const PROVIDER_UI: Record<AiProviderId, ProviderUiMeta> = {
+  disabled: {
+    description: 'Turns off AI calls. Documents stay editable, but AI actions return a disabled response without contacting a provider.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: '',
+    modelPlaceholder: '',
+    keyLabel: 'API Key',
+    keyPlaceholder: '',
+    keyHint: 'No key is used in disabled mode.',
+    requiresBaseUrl: false,
+    requiresModel: false,
+    requiresKey: false,
+  },
+  gemini: {
+    description: 'Google Gemini API. Requires a Gemini API key; no Base URL is sent from the browser settings.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: 'Gemini SDK managed endpoint',
+    modelPlaceholder: 'e.g. gemini-3.5-flash',
+    keyLabel: 'Gemini API Key',
+    keyPlaceholder: 'AIza...',
+    keyHint: 'Stored only in local browser settings and never returned by MotionAI API responses.',
+    requiresBaseUrl: false,
+    requiresModel: true,
+    requiresKey: true,
+  },
+  'openai-compatible': {
+    description: 'OpenAI or OpenAI-compatible hosted API. Remote endpoints require an API key.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: PROVIDER_BASE_URLS['openai-compatible'],
+    modelPlaceholder: 'e.g. gpt-4o-mini',
+    keyLabel: 'API Key',
+    keyPlaceholder: 'sk-...',
+    keyHint: 'Required for remote endpoints. Local loopback endpoints may use a dummy bearer token.',
+    requiresBaseUrl: true,
+    requiresModel: true,
+    requiresKey: true,
+  },
+  ollama: {
+    description: 'Local Ollama OpenAI-compatible endpoint. Best for local-only traffic when bound to loopback.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: PROVIDER_BASE_URLS.ollama,
+    modelPlaceholder: 'e.g. llama3.1',
+    keyLabel: 'Optional API Key',
+    keyPlaceholder: 'optional',
+    keyHint: 'Usually blank for local Ollama.',
+    requiresBaseUrl: true,
+    requiresModel: true,
+    requiresKey: false,
+  },
+  lmstudio: {
+    description: 'Local LM Studio server using its OpenAI-compatible API.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: PROVIDER_BASE_URLS.lmstudio,
+    modelPlaceholder: 'e.g. local-model',
+    keyLabel: 'Optional API Key',
+    keyPlaceholder: 'optional',
+    keyHint: 'Usually blank for local LM Studio.',
+    requiresBaseUrl: true,
+    requiresModel: true,
+    requiresKey: false,
+  },
+  vllm: {
+    description: 'Self-hosted vLLM OpenAI-compatible server.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: PROVIDER_BASE_URLS.vllm,
+    modelPlaceholder: 'e.g. Qwen/Qwen2.5-Coder-7B-Instruct',
+    keyLabel: 'Optional API Key',
+    keyPlaceholder: 'optional',
+    keyHint: 'Set only if your vLLM gateway requires one.',
+    requiresBaseUrl: true,
+    requiresModel: true,
+    requiresKey: false,
+  },
+  'custom-endpoint': {
+    description: 'Any OpenAI-compatible custom endpoint. Use this for proxies or providers that are not covered above.',
+    baseUrlLabel: 'Base URL',
+    baseUrlPlaceholder: PROVIDER_BASE_URLS['custom-endpoint'],
+    modelPlaceholder: 'model name required by your endpoint',
+    keyLabel: 'Optional API Key',
+    keyPlaceholder: 'optional provider token',
+    keyHint: 'Only sent to the selected endpoint during AI requests; never echoed back by MotionAI.',
+    requiresBaseUrl: true,
+    requiresModel: true,
+    requiresKey: false,
+  },
+};
+
+interface StatusBadgeProps { configured: boolean; enabled: boolean; disabledMode: boolean; }
+
+function StatusBadge({ configured, enabled, disabledMode }: StatusBadgeProps) {
+  if (disabledMode) return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-600 dark:bg-stone-800 dark:text-stone-300">Disabled</span>;
+  if (!enabled) return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-stone-800 dark:text-stone-400">Inactive</span>;
   if (configured) return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-green-50 text-green-600 dark:bg-green-950/30 dark:text-green-400">Configured</span>;
-  return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 dark:bg-stone-800 dark:text-stone-400">Not configured</span>;
+  return <span className="inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full bg-red-50 text-red-600 dark:bg-red-950/30 dark:text-red-400">Needs setup</span>;
 }
 
 interface ProviderCardProps {
   id: AiProviderId;
   config: ProviderConfig;
   isActive: boolean;
-  onToggle: (enabled: boolean) => void;
+  configured: boolean;
+  onSelect: () => void;
   onChange: (field: keyof ProviderConfig, value: string | boolean) => void;
   onTest: () => void;
   testStatus: 'idle' | 'testing' | 'ok' | 'error';
@@ -45,10 +148,12 @@ interface ProviderCardProps {
 }
 
 function ProviderCard({
-  id, config, isActive, onToggle, onChange, onTest, testStatus, testMessage,
+  id, config, isActive, configured, onSelect, onChange, onTest, testStatus, testMessage,
 }: ProviderCardProps) {
   const [showKey, setShowKey] = useState(false);
-  const baseUrlPlaceholder = PROVIDER_BASE_URLS[id] || '';
+  const meta = PROVIDER_UI[id];
+  const disabledMode = id === 'disabled';
+  const canTest = !disabledMode && (id === 'gemini' ? Boolean(config.model && config.apiKey) : Boolean(config.baseUrl && config.model));
 
   return (
     <div className={cn(
@@ -56,84 +161,93 @@ function ProviderCard({
       isActive ? "border-purple-400 bg-purple-50/50 dark:bg-purple-950/10" : "border-gray-200 dark:border-stone-700"
     )}>
       <div className="flex items-start justify-between gap-3 mb-3">
-        <div className="flex items-center gap-2">
+        <label className="flex items-start gap-2 cursor-pointer">
           <input
             type="radio"
             name="activeProvider"
             checked={isActive}
-            onChange={() => onToggle(true)}
-            className="accent-purple-600"
+            onChange={onSelect}
+            className="accent-purple-600 mt-0.5"
           />
-          <span className="font-semibold text-sm text-[#37352F] dark:text-[#E3E3E3]">
-            {PROVIDER_LABELS[id]}
+          <span>
+            <span className="font-semibold text-sm text-[#37352F] dark:text-[#E3E3E3]">
+              {PROVIDER_LABELS[id]}
+            </span>
+            {isActive && <span className="ml-2 text-xs bg-purple-600 text-white px-1.5 py-0.5 rounded">Active</span>}
+            <span className="block text-xs text-gray-500 dark:text-stone-400 mt-1 max-w-xl">{meta.description}</span>
           </span>
-          {isActive && <span className="text-xs bg-purple-600 text-white px-1.5 py-0.5 rounded">Active</span>}
-        </div>
-        <StatusBadge configured={config.baseUrl !== '' && config.model !== ''} enabled={config.enabled} />
+        </label>
+        <StatusBadge configured={configured} enabled={config.enabled || isActive} disabledMode={disabledMode && isActive} />
       </div>
 
-      <div className="space-y-2.5 ml-6">
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-stone-400 mb-1">Base URL</label>
-          <input
-            type="url"
-            value={config.baseUrl}
-            onChange={e => onChange('baseUrl', e.target.value)}
-            placeholder={baseUrlPlaceholder}
-            className="w-full text-sm px-2.5 py-1.5 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] focus:outline-none focus:ring-1 focus:ring-purple-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-stone-400 mb-1">Model</label>
-          <input
-            type="text"
-            value={config.model}
-            onChange={e => onChange('model', e.target.value)}
-            placeholder="e.g. llama3.1, gpt-4o-mini"
-            className="w-full text-sm px-2.5 py-1.5 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] focus:outline-none focus:ring-1 focus:ring-purple-500"
-          />
-        </div>
-        <div>
-          <label className="block text-xs text-gray-500 dark:text-stone-400 mb-1">API Key</label>
-          <div className="relative">
+      {!disabledMode && (
+        <div className="space-y-2.5 ml-6">
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-stone-400 mb-1">
+              {meta.baseUrlLabel}{meta.requiresBaseUrl ? ' *' : ''}
+            </label>
             <input
-              type={showKey ? 'text' : 'password'}
-              value={config.apiKey}
-              onChange={e => onChange('apiKey', e.target.value)}
-              placeholder={id === 'gemini' ? 'AIza...' : 'sk-...'}
-              className="w-full text-sm px-2.5 py-1.5 pr-8 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] focus:outline-none focus:ring-1 focus:ring-purple-500"
+              type="url"
+              value={config.baseUrl}
+              onChange={e => onChange('baseUrl', e.target.value)}
+              placeholder={meta.baseUrlPlaceholder}
+              disabled={!meta.requiresBaseUrl}
+              className="w-full text-sm px-2.5 py-1.5 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] focus:outline-none focus:ring-1 focus:ring-purple-500 disabled:opacity-60 disabled:cursor-not-allowed"
             />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-stone-400 mb-1">Model{meta.requiresModel ? ' *' : ''}</label>
+            <input
+              type="text"
+              value={config.model}
+              onChange={e => onChange('model', e.target.value)}
+              placeholder={meta.modelPlaceholder}
+              className="w-full text-sm px-2.5 py-1.5 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] focus:outline-none focus:ring-1 focus:ring-purple-500"
+            />
+          </div>
+          <div>
+            <label className="block text-xs text-gray-500 dark:text-stone-400 mb-1">{meta.keyLabel}{meta.requiresKey ? ' *' : ''}</label>
+            <div className="relative">
+              <input
+                type={showKey ? 'text' : 'password'}
+                value={config.apiKey}
+                onChange={e => onChange('apiKey', e.target.value)}
+                placeholder={meta.keyPlaceholder}
+                className="w-full text-sm px-2.5 py-1.5 pr-8 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] focus:outline-none focus:ring-1 focus:ring-purple-500"
+              />
+              <button
+                type="button"
+                onClick={() => setShowKey(v => !v)}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-stone-300"
+              >
+                {showKey ? 'Hide' : 'Show'}
+              </button>
+            </div>
+            <p className="text-[11px] text-gray-400 dark:text-stone-500 mt-1">{meta.keyHint}</p>
+          </div>
+          <div className="flex items-center gap-3 pt-1">
             <button
-              type="button"
-              onClick={() => setShowKey(v => !v)}
-              className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-gray-400 hover:text-gray-600 dark:hover:text-stone-300"
+              onClick={onTest}
+              disabled={testStatus === 'testing' || !canTest}
+              className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-gray-600 dark:text-stone-300 hover:bg-gray-50 dark:hover:bg-stone-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
             >
-              {showKey ? 'Hide' : 'Show'}
+              {testStatus === 'testing' ? <Loader size={11} className="animate-spin" /> : null}
+              {testStatus === 'ok' ? <CheckCircle size={11} className="text-green-500" /> : null}
+              {testStatus === 'error' ? <XCircle size={11} className="text-red-500" /> : null}
+              Test Connection
             </button>
+            {testMessage && (
+              <span className={cn(
+                "text-xs",
+                testStatus === 'ok' ? "text-green-600 dark:text-green-400" :
+                testStatus === 'error' ? "text-red-600 dark:text-red-400" : "text-gray-500"
+              )}>
+                {testMessage.length > 80 ? testMessage.slice(0, 80) + '…' : testMessage}
+              </span>
+            )}
           </div>
         </div>
-        <div className="flex items-center gap-3 pt-1">
-          <button
-            onClick={onTest}
-            disabled={testStatus === 'testing' || !config.baseUrl}
-            className="flex items-center gap-1.5 text-xs px-3 py-1.5 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-gray-600 dark:text-stone-300 hover:bg-gray-50 dark:hover:bg-stone-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-          >
-            {testStatus === 'testing' ? <Loader size={11} className="animate-spin" /> : null}
-            {testStatus === 'ok' ? <CheckCircle size={11} className="text-green-500" /> : null}
-            {testStatus === 'error' ? <XCircle size={11} className="text-red-500" /> : null}
-            Test Connection
-          </button>
-          {testMessage && (
-            <span className={cn(
-              "text-xs",
-              testStatus === 'ok' ? "text-green-600 dark:text-green-400" :
-              testStatus === 'error' ? "text-red-600 dark:text-red-400" : "text-gray-500"
-            )}>
-              {testMessage.length > 80 ? testMessage.slice(0, 80) + '…' : testMessage}
-            </span>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   );
 }
@@ -143,15 +257,6 @@ function ProviderCard({
 function AiTab() {
   const { settings, updateSettings, localMode } = useSettings();
   const [testStates, setTestStates] = useState<Record<AiProviderId, { status: 'idle' | 'testing' | 'ok' | 'error'; message: string }>>({} as any);
-
-  const handleToggle = useCallback((id: AiProviderId, enabled: boolean) => {
-    updateSettings({
-      providers: {
-        ...settings.providers,
-        [id]: { ...settings.providers[id], enabled },
-      },
-    });
-  }, [settings.providers, updateSettings]);
 
   const handleChange = useCallback((id: AiProviderId, field: keyof ProviderConfig, value: string | boolean) => {
     updateSettings({
@@ -189,7 +294,25 @@ function AiTab() {
   }, [settings.providers]);
 
   const setActiveProvider = (id: AiProviderId) => {
-    updateSettings({ activeProvider: id });
+    updateSettings({
+      activeProvider: id,
+      providers: {
+        ...settings.providers,
+        [id]: { ...settings.providers[id], enabled: id !== 'disabled' },
+      },
+    });
+  };
+
+  const isConfigured = (id: AiProviderId): boolean => {
+    if (id === 'disabled') return true;
+    const config = settings.providers[id];
+    if (!config) return false;
+    if (id === 'gemini') return Boolean(config.model && config.apiKey);
+    const hasEndpoint = Boolean(config.baseUrl && config.model);
+    if (id === 'openai-compatible' && !/^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(config.baseUrl)) {
+      return hasEndpoint && Boolean(config.apiKey);
+    }
+    return hasEndpoint;
   };
 
   return (
@@ -207,10 +330,12 @@ function AiTab() {
       )}
       {PROVIDER_ORDER.map(id => (
         <ProviderCard
+          key={id}
           id={id}
           config={settings.providers[id]}
           isActive={settings.activeProvider === id}
-          onToggle={enabled => handleToggle(id, enabled)}
+          configured={isConfigured(id)}
+          onSelect={() => setActiveProvider(id)}
           onChange={(field, value) => handleChange(id, field, value)}
           onTest={() => handleTest(id)}
           testStatus={testStates[id]?.status || 'idle'}

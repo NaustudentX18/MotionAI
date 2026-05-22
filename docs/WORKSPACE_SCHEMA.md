@@ -55,6 +55,21 @@ Increment `schemaVersion` when any of these change:
 
 Do **not** bump for implementation-only changes that produce the same envelope and snapshot shape.
 
+### Migration semantics
+
+Schema migrations must be deterministic, non-destructive by default, and covered by `npm run test:migration` plus the relevant schema/import-export tests.
+
+Rules:
+
+1. New exporters write the latest supported `schemaVersion`.
+2. Importers may accept legacy bare `{ pages, currentPageId }` snapshots and normalize them into the current envelope contract with warnings.
+3. Future `schemaVersion` values must fail clearly instead of best-effort importing unknown data.
+4. Invalid references such as a missing `currentPageId` are normalized only when the import path explicitly defines a safe repair; otherwise validation fails.
+5. Any destructive replacement must be explicit and recoverable. Append/collision repair is the default user-facing import behavior.
+6. Unsupported/prototype runtime types must either be accepted by the schema because the runtime can already create them, or be downgraded/rejected with a specific warning before public claims are made.
+7. Migration tests should include at least one legacy snapshot, one corrupt snapshot, one invalid-reference repair/rejection case, and one current-envelope round trip.
+
+
 ## Object graph
 
 ### Root
@@ -104,7 +119,7 @@ interface PageV1 {
   createdAt: number;
   updatedAt: number;
   versions?: PageVersionV1[];
-  pageType?: 'block' | 'canvas';
+  pageType?: 'block' | 'canvas' | 'database' | 'dashboard';
 }
 ```
 
@@ -115,7 +130,10 @@ Rules:
 - `icon` and `cover` are nullable scalars.
 - `createdAt` and `updatedAt` are Unix epoch milliseconds.
 - `updatedAt` should be advanced on user-visible mutations.
-- `pageType` defaults to `'block'` when missing. `'canvas'` pages currently have no block content contract beyond `blocks: []`.
+- `pageType` defaults to `'block'` when missing. Runtime-supported page types are `'block'`, `'canvas'`, `'database'`, and `'dashboard'`; schema validation must stay in lockstep with `PAGE_TYPES` in `src/types.ts`.
+- `'canvas'` pages currently have no block content contract beyond `blocks: []`.
+- `'database'` pages may include a `database` block used by the current database UI.
+- `'dashboard'` pages are accepted as an experimental runtime page type so backups do not reject existing user work; public docs must continue to label dashboard behavior conservatively until dedicated tests exist.
 - `versions` is local page history only. It is not a CRDT audit log and is not a replacement for export backups.
 
 ### PageVersionV1
@@ -154,7 +172,8 @@ type BlockType =
   | 'ai-draft'
   | 'ai-rewrite'
   | 'code'
-  | 'image';
+  | 'image'
+  | 'database';
 
 interface BlockV1 {
   id: string;
@@ -173,6 +192,8 @@ interface BlockV1 {
 Rules:
 
 - `id`, `type`, and `content` are required.
+- Runtime-supported block types are defined by `BLOCK_TYPES` in `src/types.ts`; schema validation must use that canonical list so editor/runtime/export contracts do not drift.
+- `database` blocks are Level A workspace-backup data and may round-trip through JSON backups. They are not a Level C text/PDF export guarantee.
 - `content` is stored as a string. Some legacy/current flows may contain inline HTML; importers must sanitize before render and exporters should strip or encode according to the target format.
 - `indentLevel` is hierarchical indentation and should be clamped to `0..4`.
 - `checked` only has meaning for `todo`.

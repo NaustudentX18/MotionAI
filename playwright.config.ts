@@ -7,6 +7,7 @@ export default defineConfig({
   retries: process.env.CI ? 2 : 0,
   workers: process.env.CI ? 1 : undefined,
   reporter: 'html',
+  timeout: 60_000,
   use: {
     baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     trace: 'on-first-retry',
@@ -17,5 +18,12 @@ export default defineConfig({
       use: { ...devices['Desktop Chrome'] },
     },
   ],
-  webServer: undefined, // Don't auto-start - assume app is already running
+  webServer: process.env.PLAYWRIGHT_BASE_URL
+    ? undefined
+    : {
+        command: 'VITE_SIGNALING_URLS=ws://localhost:3005 npm run dev:all',
+        url: 'http://localhost:3000/api/health',
+        reuseExistingServer: true,
+        timeout: 30_000,
+      },
 });

@@ -39,6 +39,7 @@ export const DEFAULT_SETTINGS: MotionAiSettings = {
     ollama: { ...DEFAULT_PROVIDER_CONFIG, baseUrl: 'http://localhost:11434/v1' },
     lmstudio: { ...DEFAULT_PROVIDER_CONFIG, baseUrl: 'http://localhost:1234/v1' },
     vllm: { ...DEFAULT_PROVIDER_CONFIG, baseUrl: 'http://localhost:8000/v1' },
+    'custom-endpoint': { ...DEFAULT_PROVIDER_CONFIG },
   },
   appearance: { ...DEFAULT_APPEARANCE },
 };
@@ -50,6 +51,7 @@ export const PROVIDER_BASE_URLS: Record<AiProviderId, string> = {
   ollama: 'http://localhost:11434/v1',
   lmstudio: 'http://localhost:1234/v1',
   vllm: 'http://localhost:8000/v1',
+  'custom-endpoint': 'https://your-provider.example/v1',
 };
 
 export const PROVIDER_LABELS: Record<AiProviderId, string> = {
@@ -59,6 +61,7 @@ export const PROVIDER_LABELS: Record<AiProviderId, string> = {
   ollama: 'Ollama',
   lmstudio: 'LM Studio',
   vllm: 'vLLM',
+  'custom-endpoint': 'Custom Endpoint',
 };
 
 const STORAGE_KEY = 'motion_ai_settings';
@@ -90,10 +93,12 @@ export function saveSettings(settings: MotionAiSettings): void {
 }
 
 export function isLocalMode(settings: MotionAiSettings): boolean {
-  return Object.entries(settings.providers).every(([id, config]) => {
-    if (id === 'disabled' || id === 'gemini') return true;
-    return !config.apiKey;
-  });
+  const active = settings.activeProvider;
+  if (active === 'disabled') return true;
+  if (active === 'gemini') return false;
+  const config = settings.providers[active];
+  if (!config) return true;
+  return !config.apiKey && /^https?:\/\/(localhost|127\.0\.0\.1|0\.0\.0\.0|\[::1\])/i.test(config.baseUrl);
 }
 
 export function applyAppearanceSettings(appearance: AppearanceSettings): void {

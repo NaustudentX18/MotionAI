@@ -6,7 +6,8 @@ This document defines what Phase 1 export/import must guarantee for MotionAI. It
 
 | Surface | Current implementation | Current guarantee |
 | --- | --- | --- |
-| JSON workspace snapshot | `WorkspaceSnapshot` in `src/lib/yjs.ts` / `src/lib/persistence.ts`; tested by `scripts/import-export-tests.ts` | Type-level JSON round-trip for pages, blocks, styles, comments, and versions. Not yet a user-facing file format. |
+| JSON workspace backup | Pure helpers in `src/lib/workspaceImportExport.ts`; tested by `scripts/import-export-tests.ts` | Level A `motionai.workspace` JSON envelope round-trips supported workspace fields, rejects unsupported schema versions, repairs append collisions, returns recovery snapshots for explicit replace, and refuses obvious secret-like exports. Not yet wired to UI. |
+| JSON workspace snapshot | `WorkspaceSnapshot` in `src/lib/yjs.ts` / `src/lib/persistence.ts`; tested by `scripts/import-export-tests.ts` | Compatibility shape for in-memory/runtime projection. Bare snapshots are accepted as legacy import input and normalized by the Level A helpers. |
 | Google Drive text export | `DriveModal.handleExport()` | Exports the current page as plain text to a Google Drive `.txt` file created by this app. Formatting is lossy. |
 | Google Drive import | `DriveModal.handleImport()` | Imports Google Docs/text as one paragraph block per non-empty line. Formatting is lossy. |
 | PDF export | `BlockEditor.exportPageAsPdf()` | Renders the current page DOM to a PDF. Intended for human-readable output, not re-import. |
@@ -67,6 +68,16 @@ Guarantees:
 ## Format-specific guarantees
 
 ### Workspace JSON export (`motionai.workspace`, Level A)
+
+Implemented pure API:
+
+- `src/lib/workspaceImportExport.ts` exports `exportWorkspaceJson(snapshot, options)` and `importWorkspaceJson(raw, options)`.
+- The file format is a two-space-indented JSON envelope with `schema: 'motionai.workspace'`, `schemaVersion: 1`, `exportedAt`, `appName: 'MotionAI'`, `source`, and `workspace`.
+- `append` is the safe default behavior for callers to expose in UI. It preserves existing pages, appends imported pages, rewrites colliding imported page ids, updates imported `currentPageId`, and rewrites imported `parentId` references that point at renamed imported pages.
+- `replace` is explicit and returns a `recoverySnapshot` when the caller provides the existing workspace. UI wiring must save or download that recovery snapshot before destructive restore.
+- Future envelope versions throw `UnsupportedWorkspaceSchemaVersionError`; legacy bare `{ pages, currentPageId }` snapshots import with a warning.
+- Export serializes only workspace data fields and scans the final JSON for obvious provider-key/token/passphrase patterns before returning bytes.
+- These helpers are credential-free and do not touch Google Drive, provider keys, passphrases, localStorage, IndexedDB, Yjs, or PDF/text export paths.
 
 Required behavior:
 
@@ -204,35 +215,15 @@ All import paths must satisfy these invariants:
 
 ## Implementation-ready API sketch
 
-Add pure helpers before UI wiring:
+Add pure helpers before UI wiring. Level A workspace backup/restore now exists in `src/lib/workspaceImportExport.ts`:
 
 ```ts
 export type ImportMode = 'append' | 'replace';
-
-export interface ExportResult {
-  filename: string;
-  mimeType: 'application/json';
-  body: string;
-}
-
-export interface ImportWarning {
-  code: string;
-  message: string;
-  path?: string;
-}
-
-export interface ImportResult {
-  snapshot: WorkspaceSnapshot;
-  warnings: ImportWarning[];
-}
-
-export function exportWorkspaceJson(snapshot: WorkspaceSnapshot): ExportResult;
-export function importWorkspaceJson(raw: string, mode: ImportMode, existing?: WorkspaceSnapshot): ImportResult;
-export function exportPageJson(page: Page): ExportResult;
-export function importPageJson(raw: string, existingPages: Page[]): { page: Page; warnings: ImportWarning[] };
-export function pageToPlainText(page: Page): string;
-export function plainTextToPage(title: string, text: string): Page;
+export function exportWorkspaceJson(snapshot: WorkspaceSnapshot, options?: ExportWorkspaceOptions): WorkspaceExportResult;
+export function importWorkspaceJson(raw: string, options: ImportWorkspaceOptions): WorkspaceImportResult;
 ```
+
+Level B page JSON and Level C plain text parser helpers remain future work and must stay separate from the Level A workspace backup path.
 
 Test these helpers directly, then connect them to `DriveModal`, browser download UI, or future file-open UI.
 
@@ -253,8 +244,8 @@ Extend existing scripts or add focused test files without touching package scrip
 
 ## Suggested follow-up sequencing
 
-1. Add pure serializer/parser/migration helpers and tests.
-2. Update `yDocToSnapshot()` projection so migrated TipTap JSON pages still produce `blocks` in snapshots.
-3. Add UI copy that distinguishes backup JSON from lossy text/PDF export.
-4. Wire Level A JSON download/import locally.
-5. Teach Drive JSON import/export to use Level A/Level B envelopes when the selected file is JSON.
+1. Update `yDocToSnapshot()` projection so migrated TipTap JSON pages still produce `blocks` in snapshots.
+2. Add UI copy that distinguishes backup JSON from lossy text/PDF export.
+3. Wire Level A JSON download/import locally using `src/lib/workspaceImportExport.ts`.
+4. Teach Drive JSON import/export to use Level A/Level B envelopes when the selected file is JSON.
+5. Add separate Level B page JSON and Level C plain-text parser helpers without mixing them into backup/restore.

@@ -10,6 +10,7 @@ import {
   extractAiSettings,
   getConfiguredProviders,
   probeAi,
+  providerUnavailableMessage,
   safeErrorMessage,
   spellcheckResponseSchema,
   type ChatMessage,
@@ -170,7 +171,7 @@ async function startServer() {
     const client = createAiClient(settings);
 
     if (!client.info.enabled || !client.info.configured) {
-      return res.status(503).json({ error: `${client.info.label} is not configured.`, provider: client.info, keysReturned: false });
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
     }
 
     try {
@@ -187,7 +188,7 @@ async function startServer() {
     const settings = extractAiSettings(req.body || {});
     const client = createAiClient(settings);
     if (!client.info.enabled || !client.info.configured) {
-      return res.status(503).json({ error: `${client.info.label} is not configured.`, provider: client.info, keysReturned: false });
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
     }
 
     const { blocks } = req.body || {};
@@ -247,7 +248,7 @@ async function startServer() {
     const settings = extractAiSettings(req.body || {});
     const client = createAiClient(settings);
     if (!client.info.enabled || !client.info.configured) {
-      return res.status(503).json({ error: `${client.info.label} is not configured.`, provider: client.info, keysReturned: false });
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
     }
 
     const { history, message } = req.body || {};
