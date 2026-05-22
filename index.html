@@ -8,220 +8,243 @@
     <meta name="theme-color" content="#7C3AED" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
       body {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #0A0A0A;
+        background: #09090B;
         color: #E4E4E7;
         min-height: 100vh;
         display: flex;
-        align-items: center;
-        justify-content: center;
+        flex-direction: column;
         overflow: hidden;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
       }
 
-      /* ─── Background gradient orbs ───────────────────────────── */
-      .bg-orbs {
-        position: fixed;
-        inset: 0;
-        pointer-events: none;
-        z-index: 0;
-      }
-      .bg-orbs::before,
-      .bg-orbs::after {
-        content: '';
-        position: absolute;
-        border-radius: 50%;
-        filter: blur(120px);
-        opacity: 0.15;
-      }
-      .bg-orbs::before {
-        width: 600px; height: 600px;
-        background: #7C3AED;
-        top: -200px; right: -150px;
-        animation: orbFloat 12s ease-in-out infinite;
-      }
-      .bg-orbs::after {
-        width: 500px; height: 500px;
-        background: #06B6D4;
-        bottom: -200px; left: -150px;
-        animation: orbFloat 15s ease-in-out infinite reverse;
+      .grid-bg {
+        position: fixed; inset: 0; pointer-events: none; z-index: 0;
+        background-image:
+          linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
+        background-size: 64px 64px;
       }
 
-      @keyframes orbFloat {
-        0%, 100% { transform: translate(0, 0) scale(1); }
-        33% { transform: translate(30px, -40px) scale(1.05); }
-        66% { transform: translate(-20px, 20px) scale(0.95); }
+      .orbs {
+        position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
+      }
+      .orb {
+        position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.15;
+      }
+      .orb-1 {
+        width: 700px; height: 700px; background: #7C3AED;
+        top: -300px; right: -200px;
+        animation: orbFloat1 18s ease-in-out infinite;
+      }
+      .orb-2 {
+        width: 550px; height: 550px; background: #06B6D4;
+        bottom: -250px; left: -150px;
+        animation: orbFloat2 22s ease-in-out infinite;
+      }
+      .orb-3 {
+        width: 400px; height: 400px; background: #8B5CF6;
+        top: 50%; left: 60%;
+        animation: orbFloat3 14s ease-in-out infinite;
       }
 
-      /* ─── Loading container ──────────────────────────────────── */
-      .loader {
-        position: relative;
-        z-index: 1;
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 40px;
+      @keyframes orbFloat1 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(60px, 80px); }
+      }
+      @keyframes orbFloat2 {
+        0%, 100% { transform: translate(0, 0); }
+        50% { transform: translate(-80px, -60px); }
+      }
+      @keyframes orbFloat3 {
+        0%, 100% { transform: translate(0, 0); }
+        33% { transform: translate(40px, -50px); }
+        66% { transform: translate(-30px, 30px); }
       }
 
-      /* ─── Logo mark ──────────────────────────────────────────── */
-      .logo-mark {
-        width: 72px;
-        height: 72px;
-        position: relative;
-        animation: logoPulse 2s ease-in-out infinite;
+      .splash {
+        position: relative; z-index: 1;
+        display: flex; flex-direction: column;
+        align-items: center; justify-content: center;
+        flex: 1; padding: 40px 24px;
       }
 
+      .logo-wrap {
+        position: relative; width: 88px; height: 88px; margin-bottom: 32px;
+      }
       .logo-ring {
-        position: absolute;
-        inset: 0;
+        position: absolute; inset: 0; border-radius: 50%;
         border: 3px solid transparent;
-        border-radius: 50%;
-        background: conic-gradient(from 0deg, #7C3AED, #06B6D4, #8B5CF6, #7C3AED) border-box;
+        background: conic-gradient(from 0deg, #7C3AED, #A78BFA, #06B6D4, #7C3AED) border-box;
         -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor;
-        mask-composite: exclude;
-        animation: ringSpin 2s linear infinite;
+        -webkit-mask-composite: xor; mask-composite: exclude;
+        animation: ringSpin 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
       }
+      @keyframes ringSpin { to { transform: rotate(360deg); } }
 
-      .logo-dot {
-        position: absolute;
-        top: 50%; left: 50%;
+      .logo-center {
+        position: absolute; top: 50%; left: 50%;
         transform: translate(-50%, -50%);
-        width: 24px; height: 24px;
-        background: linear-gradient(135deg, #7C3AED, #8B5CF6);
-        border-radius: 8px;
-        animation: dotMorph 2s ease-in-out infinite;
+        display: flex; align-items: center; justify-content: center;
+      }
+      .logo-icon {
+        width: 36px; height: 36px;
+        background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 50%, #06B6D4 100%);
+        border-radius: 10px;
+        animation: iconMorph 3s ease-in-out infinite;
+        position: relative;
+      }
+      .logo-icon::after {
+        content: ''; position: absolute; inset: -4px; border-radius: 14px;
+        background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2));
+        z-index: -1;
+        animation: glowPulse 3s ease-in-out infinite;
+      }
+      @keyframes iconMorph {
+        0%, 100% { border-radius: 10px; transform: scale(1) rotate(0deg); }
+        33% { border-radius: 14px; transform: scale(1.05) rotate(3deg); }
+        66% { border-radius: 8px; transform: scale(0.97) rotate(-2deg); }
+      }
+      @keyframes glowPulse {
+        0%, 100% { opacity: 0.5; transform: scale(1); }
+        50% { opacity: 1; transform: scale(1.15); }
       }
 
-      @keyframes ringSpin {
-        to { transform: rotate(360deg); }
-      }
-      @keyframes logoPulse {
-        0%, 100% { transform: scale(1); }
-        50% { transform: scale(1.05); }
-      }
-      @keyframes dotMorph {
-        0%, 100% { border-radius: 8px; transform: translate(-50%, -50%) rotate(0deg); }
-        50% { border-radius: 50%; transform: translate(-50%, -50%) rotate(45deg); }
-      }
-
-      /* ─── Brand text ─────────────────────────────────────────── */
-      .brand {
-        display: flex;
-        flex-direction: column;
-        align-items: center;
-        gap: 8px;
-      }
+      .brand-area { text-align: center; margin-bottom: 44px; }
       .brand-name {
-        font-size: 28px;
-        font-weight: 800;
-        letter-spacing: -0.5px;
-        background: linear-gradient(135deg, #E4E4E7, #A1A1AA);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        background-clip: text;
+        font-size: 36px; font-weight: 800; letter-spacing: -1px; line-height: 1.1;
+        background: linear-gradient(135deg, #FAFAFA 0%, #A1A1AA 100%);
+        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+        background-clip: text; margin-bottom: 10px;
       }
       .brand-tagline {
-        font-size: 13px;
-        font-weight: 400;
-        color: #71717A;
-        letter-spacing: 0.3px;
+        font-size: 15px; font-weight: 400; color: #71717A;
+        letter-spacing: 0.2px; line-height: 1.5;
       }
 
-      /* ─── Loading bar ────────────────────────────────────────── */
+      .load-section {
+        display: flex; flex-direction: column; align-items: center;
+        gap: 20px; width: 100%; max-width: 280px;
+      }
       .progress-track {
-        width: 200px;
-        height: 3px;
-        background: #27272A;
-        border-radius: 4px;
-        overflow: hidden;
+        width: 100%; height: 4px; background: #27272A;
+        border-radius: 99px; overflow: hidden;
       }
       .progress-bar {
-        height: 100%;
-        width: 0%;
-        background: linear-gradient(90deg, #7C3AED, #8B5CF6, #06B6D4);
-        border-radius: 4px;
-        animation: loader 2.4s cubic-bezier(0.4, 0.0, 0.2, 1) forwards infinite;
-        background-size: 200% 100%;
-        animation: loader 2.4s ease-in-out infinite;
+        height: 100%; width: 100%;
+        background: linear-gradient(90deg, #7C3AED, #A78BFA, #06B6D4, #7C3AED);
+        background-size: 300% 100%; border-radius: 99px;
+        animation: barSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+      }
+      @keyframes barSweep {
+        0% { transform: scaleX(0); transform-origin: left; }
+        25% { transform: scaleX(0.3); transform-origin: left; }
+        50% { transform: scaleX(0.6); transform-origin: left; }
+        65% { transform: scaleX(0.6); transform-origin: right; }
+        100% { transform: scaleX(0); transform-origin: right; }
       }
 
-      @keyframes loader {
-        0% { width: 0%; transform: translateX(-100%); }
-        50% { width: 60%; transform: translateX(0%); }
-        100% { width: 100%; transform: translateX(100%); }
+      .status {
+        display: flex; align-items: center; gap: 10px;
+        font-size: 13px; color: #52525B; font-weight: 450;
       }
-
-      /* ─── Status dots ────────────────────────────────────────── */
-      .status-row {
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 12px;
-        color: #52525B;
-        font-weight: 400;
-      }
+      .status-dots { display: flex; gap: 4px; }
       .status-dot {
-        width: 6px; height: 6px;
-        border-radius: 50%;
-        background: #7C3AED;
-        animation: dotBlink 1.4s ease-in-out infinite;
+        width: 5px; height: 5px; border-radius: 50%; background: #7C3AED;
+        animation: dotPulse 1.6s ease-in-out infinite;
       }
-      .status-dot:nth-child(2) { animation-delay: 0.2s; }
-      .status-dot:nth-child(3) { animation-delay: 0.4s; }
-
-      @keyframes dotBlink {
-        0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
+      .status-dot:nth-child(2) { animation-delay: 0.25s; }
+      .status-dot:nth-child(3) { animation-delay: 0.5s; }
+      @keyframes dotPulse {
+        0%, 80%, 100% { opacity: 0.25; transform: scale(0.75); }
         40% { opacity: 1; transform: scale(1); }
       }
 
-      /* ─── Footer ─────────────────────────────────────────────── */
+      .features {
+        display: flex; flex-wrap: wrap; justify-content: center;
+        gap: 8px; margin-top: 44px; max-width: 420px;
+      }
+      .feature-chip {
+        padding: 6px 14px; border-radius: 99px;
+        background: rgba(255,255,255,0.04);
+        border: 1px solid rgba(255,255,255,0.06);
+        font-size: 11px; font-weight: 500; color: #71717A;
+        letter-spacing: 0.2px;
+        animation: chipFade 0.8s ease-out both;
+        animation-delay: calc(var(--i, 0) * 80ms + 400ms);
+      }
+      @keyframes chipFade {
+        from { opacity: 0; transform: translateY(8px); }
+        to { opacity: 1; transform: translateY(0); }
+      }
+
       .footer {
-        position: fixed;
-        bottom: 24px;
-        left: 50%;
-        transform: translateX(-50%);
-        z-index: 1;
-        font-size: 11px;
-        color: #3F3F46;
-        letter-spacing: 0.5px;
-        text-transform: uppercase;
+        position: relative; z-index: 1;
+        text-align: center; padding: 20px 24px 28px;
+        font-size: 11px; color: #3F3F46;
+        letter-spacing: 0.6px; text-transform: uppercase;
       }
-      .footer a {
-        color: #52525B;
-        text-decoration: none;
-        transition: color 0.2s;
-      }
+      .footer a { color: #52525B; text-decoration: none; transition: color 0.2s; }
       .footer a:hover { color: #A1A1AA; }
+
+      #root:not(:empty) ~ .splash,
+      #root:not(:empty) ~ .footer,
+      #root:not(:empty) ~ .grid-bg,
+      #root:not(:empty) ~ .orbs {
+        display: none;
+      }
+      #root:not(:empty) { position: relative; z-index: 10; }
     </style>
   </head>
   <body>
-    <div class="bg-orbs"></div>
+    <div class="grid-bg"></div>
+    <div class="orbs">
+      <div class="orb orb-1"></div>
+      <div class="orb orb-2"></div>
+      <div class="orb orb-3"></div>
+    </div>
 
-    <div class="loader">
-      <div class="logo-mark">
+    <div class="splash">
+      <div class="logo-wrap">
         <div class="logo-ring"></div>
-        <div class="logo-dot"></div>
+        <div class="logo-center">
+          <div class="logo-icon"></div>
+        </div>
       </div>
 
-      <div class="brand">
-        <span class="brand-name">MotionAI</span>
-        <span class="brand-tagline">Local-First Intelligent Workspace</span>
+      <div class="brand-area">
+        <div class="brand-name">MotionAI</div>
+        <div class="brand-tagline">Local-First Intelligent Workspace</div>
       </div>
 
-      <div class="progress-track">
-        <div class="progress-bar"></div>
+      <div class="load-section">
+        <div class="progress-track">
+          <div class="progress-bar"></div>
+        </div>
+
+        <div class="status">
+          <div class="status-dots">
+            <span class="status-dot"></span>
+            <span class="status-dot"></span>
+            <span class="status-dot"></span>
+          </div>
+          <span>Initialising workspace…</span>
+        </div>
       </div>
 
-      <div class="status-row">
-        <span class="status-dot"></span>
-        <span class="status-dot"></span>
-        <span class="status-dot"></span>
-        <span>Loading workspace…</span>
+      <div class="features">
+        <span class="feature-chip" style="--i:0">Block Editor</span>
+        <span class="feature-chip" style="--i:1">Multi-Provider AI</span>
+        <span class="feature-chip" style="--i:2">Local-First</span>
+        <span class="feature-chip" style="--i:3">Offline Persistence</span>
+        <span class="feature-chip" style="--i:4">Backlinks</span>
+        <span class="feature-chip" style="--i:5">Canvas</span>
       </div>
     </div>
 
