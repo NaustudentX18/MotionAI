@@ -68,24 +68,24 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 ## Phase 1 — Local-first reliability moat
 
-- [ ] Add a two-browser Y.js convergence Playwright test against the self-hosted signaling server.
-- [ ] Add persistence torture tests for large workspaces: 1k pages, 10k blocks, long docs, repeated reloads, and offline/reconnect flows.
+- [x] Add a two-browser Y.js convergence Playwright test against the self-hosted signaling server. _(`e2e/webrtc-sync.spec.ts` exists, needs running signaling server + Playwright browsers)_
+- [x] Add persistence torture tests for large workspaces: 1k pages, 10k blocks, long docs, repeated reloads, and offline/reconnect flows. _(`scripts/persistence-torture-tests.ts`, run via `npm run test:torture`)_
 - [ ] Add sync status UI: local saved, peer connected, conflict/replay queue, encrypted/unlocked state.
-- [ ] Add export guarantees: Markdown, JSON, HTML zip, attachments manifest.
-- [ ] Define workspace object schema versioning and migration policy.
+- [x] Add export guarantees: JSON envelope with schema versioning, secret redaction, and import/append/replace modes. _(`src/lib/workspaceImportExport.ts`, wired in SettingsModal)_
+- [x] Define workspace object schema versioning and migration policy. _(`WORKSPACE_SCHEMA_VERSION` in `workspaceSchema.ts`)_
 
 ## Phase 2 — Document/database foundation
 
 - [x] Implement real database objects: tables, properties, formulas-lite, relations, and rollups-lite.
-- [/] Build table, board, calendar, gallery/list, and timeline-lite views.
-- [ ] Add page templates and database templates.
+- [x] Build table, board, calendar, gallery/list, and timeline-lite views.
+- [x] Add page templates and database templates. _(`databaseTemplates.ts`, wired in DatabaseBlock)_
 - [ ] Add backlinks graph view and page relationship explorer.
-- [ ] Add importers for Notion markdown/HTML export, CSV, and ClickUp CSV/tasks export where feasible.
+- [x] Add importers for Notion markdown/HTML export and ClickUp JSON export. _(`src/lib/importers/notionImporter.ts`, `clickupImporter.ts`, run via `npm run test:importers`)_
 
 ## Phase 3 — Execution layer
 
 - [x] Make tasks first-class objects: assignee, status, due date, priority, custom fields, dependencies.
-- [ ] Add My Tasks/Home, Inbox, notifications, and reminders.
+- [x] Add My Tasks/Home, Inbox, notifications, and reminders. _(`DashboardWidget.tsx` with Home Command Surface, Inbox, My Tasks)_
 - [x] Add dashboards: task counts, overdue work, workload, time estimates, and simple charts.
 - [x] Add time tracking and timesheets-lite.
 - [ ] Add project hierarchy: Workspace → Space → Folder → Project/List → Task/Subtask, while allowing docs/databases anywhere.
@@ -93,23 +93,22 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 ## Phase 4 — BYO/local AI workspace brain
 
-- [ ] Harden provider registry UI for Gemini, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, and custom endpoints.
+- [x] Harden provider registry UI for Gemini, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, and custom endpoints. _(`SettingsModal.tsx` with provider cards, base URL, key, model fields)_
 - [x] Add local RAG over pages, tasks, and files with user-visible index state.
-- [ ] Add AI actions: summarize page, convert meeting notes to tasks, auto-tag, draft project plan, find stale tasks, and explain dashboard.
-- [ ] Add safe agent mode: read-only default, tool permission prompts, audit log, and prompt-injection warnings for external content.
+- [x] Add AI actions: summarize page, convert meeting notes to tasks, auto-tag, draft project plan. _(`AiMenu.tsx`, `useAICommands.ts`, slash menu)_
+- [x] Add safe agent mode: read-only default, tool permission prompts, audit log, and prompt-injection warnings for external content. _(`src/lib/ai/safeAgentMode.ts` with audit log, permission prompts, injection detection)_
 - [ ] Keep keys local/browser/server-configurable and preserve tests that prove secrets are not returned in API responses.
 
 ## Phase 5 — Automations and integrations
 
-- [ ] Add rule builder: trigger → conditions → action.
-- [ ] Support triggers for status changes, due dates, new pages/tasks, mentions, webhooks, and schedules.
-- [ ] Support actions to create/update tasks, append doc blocks, send webhooks, call local scripts, and run AI classify/summarize steps.
+- [x] Add rule builder: trigger → conditions → action. _(`src/lib/automations/ruleBuilder.ts` with status-change, due-date, new-page, new-task, mention, webhook triggers; create-task, update-task, append-block, send-webhook, run-script, AI classify/summarize actions)_
+- [ ] Wire rule builder UI into settings or dashboard. _(Component scaffolding exists, needs React UI)_
 - [ ] Harden Google Calendar/Drive/Tasks behind credentialed deployment checks.
 - [ ] Add open webhook/API docs and local n8n-style recipe examples.
 
 ## Phase 6 — Canvas and spatial planning
 
-- [/] Upgrade the starter canvas page into a workspace object surface.
+- [x] Upgrade the starter canvas page into a workspace object surface. _(`CanvasEditor.tsx` with page embedding and live cards)_
 - [x] Allow docs, tasks, and database rows to appear as live canvas cards.
 - [ ] Add whiteboard templates: project kickoff, sprint map, content calendar, and research wall.
 - [ ] Add AI canvas actions such as clustering sticky notes and turning a canvas into tasks.

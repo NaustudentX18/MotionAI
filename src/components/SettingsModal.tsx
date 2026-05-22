@@ -9,6 +9,7 @@ import {
   ProviderConfig,
 } from '../lib/settings';
 import { loadWorkspace, saveWorkspace, isWorkspaceLocked, setWorkspaceKey } from '../lib/persistence';
+import { exportWorkspaceJson, importWorkspaceJson } from '../lib/workspaceImportExport';
 import { Page } from '../types';
 import { cn } from '../lib/utils';
 
@@ -485,11 +486,12 @@ function DataTab() {
 
   async function handleExport() {
     const snapshot = await loadWorkspace();
-    const blob = new Blob([JSON.stringify(snapshot, null, 2)], { type: 'application/json' });
+    const result = exportWorkspaceJson(snapshot);
+    const blob = new Blob([result.body], { type: result.mimeType });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = 'workspace.json';
+    a.download = result.filename;
     a.click();
     URL.revokeObjectURL(url);
   }
@@ -503,15 +505,13 @@ function DataTab() {
     if (!file) return;
     try {
       const text = await file.text();
-      const data = JSON.parse(text);
-      if (Array.isArray(data.pages)) {
-        await saveWorkspace({ pages: data.pages as Page[], currentPageId: data.currentPageId || null });
-        window.location.reload();
-      } else {
-        alert('Invalid workspace file');
-      }
-    } catch {
-      alert('Failed to parse workspace file');
+      const result = importWorkspaceJson(text, { mode: 'append' });
+      await saveWorkspace(result.snapshot);
+      const warningMsg = result.warnings.length > 0 ? '\n\nWarnings:\n' + result.warnings.slice(0, 3).join('\n') : '';
+      if (warningMsg) console.warn('Import warnings:', result.warnings);
+      window.location.reload();
+    } catch (e) {
+      alert('Failed to import workspace: ' + (e instanceof Error ? e.message : String(e)));
     }
   }
 
