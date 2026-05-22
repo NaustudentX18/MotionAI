@@ -12,7 +12,7 @@ Please do not open public issues that include secrets, exploit details, private 
 
 Preferred private report path:
 
-1. Open a GitHub security advisory for `NaustudentX18/OpenNotion` if available.
+1. Open a GitHub security advisory for `NaustudentX18/MotionAI` if available.
 2. If advisories are unavailable, open a minimal public issue that says a private security report is needed, without sensitive details.
 
 Include:

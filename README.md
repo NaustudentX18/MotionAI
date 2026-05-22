@@ -19,7 +19,7 @@
 ## Quick Start
 
 ```bash
-git clone https://github.com/NaustudentX18/OpenNotion.git
+git clone https://github.com/NaustudentX18/MotionAI.git
 cd OpenNotion
 npm install
 npm run dev

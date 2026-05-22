@@ -23,7 +23,7 @@ check('package exposes credential-free local verification scripts and contract t
   assert.equal(pkg.name, 'opennotion-motionai');
   assert.equal(pkg.license, 'Apache-2.0');
   assert.ok(pkg.description?.includes('Self-hostable local-first workspace'));
-  assert.ok(pkg.repository?.url?.includes('NaustudentX18/OpenNotion.git'));
+  assert.ok(pkg.repository?.url?.includes('NaustudentX18/MotionAI.git'));
   assert.equal(pkg.scripts['verify:static'], 'node scripts/static-verify.mjs');
   assert.ok(pkg.scripts.verify?.includes('verify:static'));
   assert.ok(pkg.scripts.verify?.includes('test:ai'), 'verify script should include test:ai');

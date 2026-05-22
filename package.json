@@ -93,10 +93,10 @@
   "license": "Apache-2.0",
   "repository": {
     "type": "git",
-    "url": "git+ssh://git@github.com/NaustudentX18/OpenNotion.git"
+    "url": "git+ssh://git@github.com/NaustudentX18/MotionAI.git"
   },
-  "homepage": "https://github.com/NaustudentX18/OpenNotion#readme",
+  "homepage": "https://github.com/NaustudentX18/MotionAI#readme",
   "bugs": {
-    "url": "https://github.com/NaustudentX18/OpenNotion/issues"
+    "url": "https://github.com/NaustudentX18/MotionAI/issues"
   }
 }

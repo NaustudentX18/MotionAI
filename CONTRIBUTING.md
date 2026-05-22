@@ -5,7 +5,7 @@ Thanks for helping build a free, open-source, self-hostable workspace for local-
 ## Local setup
 
 ```bash
-git clone git@github.com:NaustudentX18/OpenNotion.git
+git clone git@github.com:NaustudentX18/MotionAI.git
 cd OpenNotion
 npm install
 cp .env.example .env
