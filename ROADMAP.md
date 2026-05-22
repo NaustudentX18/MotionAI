@@ -39,7 +39,10 @@ npm run build               # Vite client + bundled Express server
 | Multi-provider BYO/local AI proxy | Implemented | `server.ts`, `src/lib/ai/providers.ts`, `scripts/ai-contract-tests.ts` |
 | Google Workspace helpers | Implemented behind auth | `src/lib/workspace.ts`, `scripts/workspace-mock-tests.ts` |
 | Backlinks | Implemented | `src/lib/backlinks.ts`, `src/lib/backlinksIndex.ts`, `src/components/BacklinksPanel.tsx` |
-| Canvas pages | Early prototype | `src/components/CanvasEditor.tsx`, `src/types.ts` |
+| Canvas pages | Implemented | `src/components/CanvasEditor.tsx`, `src/types.ts` |
+| Databases & formula engine | Implemented | `src/components/blocks/DatabaseBlock.tsx`, `src/components/database/`, `src/lib/ai/AiFormulaEngine.ts` |
+| Task properties & Dashboard | Implemented | `src/components/tasks/TaskPropertiesPanel.tsx`, `src/components/dashboard/DashboardWidget.tsx` |
+| Workspace Copilot (RAG) | Implemented | `src/components/copilot/WorkspaceCopilot.tsx` |
 | Tauri desktop app | Prototype | `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` |
 | Production multi-user security | Not claimed | `KNOWN_LIMITATIONS.md`, `SECURITY.md` |
 
@@ -73,25 +76,25 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 ## Phase 2 — Document/database foundation
 
-- [ ] Implement real database objects: tables, properties, formulas-lite, relations, and rollups-lite.
-- [ ] Build table, board, calendar, gallery/list, and timeline-lite views.
+- [x] Implement real database objects: tables, properties, formulas-lite, relations, and rollups-lite.
+- [/] Build table, board, calendar, gallery/list, and timeline-lite views.
 - [ ] Add page templates and database templates.
 - [ ] Add backlinks graph view and page relationship explorer.
 - [ ] Add importers for Notion markdown/HTML export, CSV, and ClickUp CSV/tasks export where feasible.
 
 ## Phase 3 — Execution layer
 
-- [ ] Make tasks first-class objects: assignee, status, due date, priority, custom fields, dependencies.
+- [x] Make tasks first-class objects: assignee, status, due date, priority, custom fields, dependencies.
 - [ ] Add My Tasks/Home, Inbox, notifications, and reminders.
-- [ ] Add dashboards: task counts, overdue work, workload, time estimates, and simple charts.
-- [ ] Add time tracking and timesheets-lite.
+- [x] Add dashboards: task counts, overdue work, workload, time estimates, and simple charts.
+- [x] Add time tracking and timesheets-lite.
 - [ ] Add project hierarchy: Workspace → Space → Folder → Project/List → Task/Subtask, while allowing docs/databases anywhere.
 - [ ] Add guest/collaborator permissions for self-hosted teams.
 
 ## Phase 4 — BYO/local AI workspace brain
 
 - [ ] Harden provider registry UI for Gemini, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, and custom endpoints.
-- [ ] Add local RAG over pages, tasks, and files with user-visible index state.
+- [x] Add local RAG over pages, tasks, and files with user-visible index state.
 - [ ] Add AI actions: summarize page, convert meeting notes to tasks, auto-tag, draft project plan, find stale tasks, and explain dashboard.
 - [ ] Add safe agent mode: read-only default, tool permission prompts, audit log, and prompt-injection warnings for external content.
 - [ ] Keep keys local/browser/server-configurable and preserve tests that prove secrets are not returned in API responses.
@@ -106,8 +109,8 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 ## Phase 6 — Canvas and spatial planning
 
-- [ ] Upgrade the starter canvas page into a workspace object surface.
-- [ ] Allow docs, tasks, and database rows to appear as live canvas cards.
+- [/] Upgrade the starter canvas page into a workspace object surface.
+- [x] Allow docs, tasks, and database rows to appear as live canvas cards.
 - [ ] Add whiteboard templates: project kickoff, sprint map, content calendar, and research wall.
 - [ ] Add AI canvas actions such as clustering sticky notes and turning a canvas into tasks.
 
