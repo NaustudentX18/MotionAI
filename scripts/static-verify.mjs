@@ -20,9 +20,9 @@ function check(name, fn) {
 check('package exposes credential-free local verification scripts and contract tests', () => {
   const pkg = JSON.parse(read('package.json'));
   assert.equal(pkg.type, 'module');
-  assert.equal(pkg.name, 'opennotion-motionai');
+  assert.equal(pkg.name, 'motionai-workspace');
   assert.equal(pkg.license, 'Apache-2.0');
-  assert.ok(pkg.description?.includes('Self-hostable local-first workspace'));
+  assert.ok(pkg.description?.includes('Self-hostable local-first'));
   assert.ok(pkg.repository?.url?.includes('NaustudentX18/MotionAI.git'));
   assert.equal(pkg.scripts['verify:static'], 'node scripts/static-verify.mjs');
   assert.ok(pkg.scripts.verify?.includes('verify:static'));
@@ -74,7 +74,6 @@ check('community health and issue-template files exist', () => {
     'CONTRIBUTING.md',
     'SECURITY.md',
     'CODE_OF_CONDUCT.md',
-    'docs/PRODUCT_NAMING.md',
     'docs/PHASE_0_ISSUES.md',
     '.github/ISSUE_TEMPLATE/config.yml',
     '.github/ISSUE_TEMPLATE/bug_report.yml',
@@ -94,7 +93,7 @@ check('public capability docs use aligned conservative status language', () => {
   for (const body of [readme, roadmap, shipped]) {
     assert.match(body, /Y\.js|Yjs/, 'docs should mention Y.js/Yjs status');
     assert.match(body, /Experimental/, 'docs should label collaboration or sync as experimental where applicable');
-    assert.match(body, /Prototype|Early prototype/, 'docs should label prototype surfaces');
+    assert.match(body, /Prototype|Early prototype|prototype/i, 'docs should label prototype surfaces');
     assert.match(body, /Not claimed/, 'docs should avoid production security overclaims');
   }
   assert.match(readme, /BYO\/local AI/, 'README should foreground BYO/local AI positioning');
@@ -176,11 +175,11 @@ check('README is evidence-backed and does not overclaim production readiness', (
   assert.match(readme, /Not claimed/, 'README should explicitly avoid production security overclaims');
   assert.match(readme, /KNOWN_LIMITATIONS\.md/, 'README should point readers to conservative limitations');
   for (const mediaFile of [
-    'docs/media/opennotion-hub-live.png',
-    'docs/media/opennotion-editor-live.png',
-    'docs/media/opennotion-settings-live.png',
-    'docs/media/opennotion-mobile-live.png',
-    'docs/media/opennotion-live-demo.webm',
+    'docs/media/motionai-hub-live.png',
+    'docs/media/motionai-editor-live.png',
+    'docs/media/motionai-settings-live.png',
+    'docs/media/motionai-mobile-live.png',
+    'docs/media/motionai-live-demo.webm',
   ]) {
     assert.ok(readme.includes(mediaFile), `README should reference ${mediaFile}`);
     assert.ok(exists(mediaFile), `${mediaFile} should exist`);

@@ -4,6 +4,34 @@
 
 > **Status:** Production-ready for single-user self-hosted use. Multi-user security and cloud sync are not yet claimed; see [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).
 
+
+## Current status by capability
+
+| Capability | Status | Evidence |
+|---|---|---|
+| Block editor (TipTap + Y.js) | Implemented | `src/components/BlockEditor.tsx`, `src/hooks/useBlockEditor.ts` |
+| Local persistence & migrations | Implemented, still hardening | `src/lib/persistence.ts`, `src/lib/yjs.ts`, `scripts/migration-tests.ts` |
+| Multi-provider BYO/local AI proxy | Implemented | `server.ts`, `src/lib/ai/providers.ts`, `scripts/ai-contract-tests.ts` |
+| WebRTC document sync | Experimental | `src/App.tsx`, `signaling-server.js` |
+| Peer presence | Implemented | `src/lib/presence.ts`, `src/components/PresenceIndicator.tsx` |
+| Encryption at rest | Implemented, with caveats | `src/lib/crypto.ts`, `src/lib/persistence.ts`, `KNOWN_LIMITATIONS.md` |
+| Backlinks / wiki-links | Implemented | `src/lib/backlinks.ts`, `src/components/BacklinksPanel.tsx` |
+| Canvas pages | Early prototype | `src/components/CanvasEditor.tsx`, `src/types.ts` |
+| Tauri desktop app | Prototype | `src-tauri/Cargo.toml`, `src-tauri/tauri.conf.json` |
+| Google Workspace helpers | Implemented behind auth | `src/lib/workspace.ts`, `scripts/workspace-mock-tests.ts` |
+| Production multi-user security | Not claimed | `KNOWN_LIMITATIONS.md`, `SECURITY.md` |
+
+
+## Screenshots
+
+| | |
+|---|---|
+| ![MotionAI hub](docs/media/motionai-hub-live.png) | ![MotionAI editor](docs/media/motionai-editor-live.png) |
+| ![MotionAI settings](docs/media/motionai-settings-live.png) | ![MotionAI mobile](docs/media/motionai-mobile-live.png) |
+
+[▶ Short live app walkthrough](docs/media/motionai-live-demo.webm)
+
+
 ---
 
 - [Quick Start](#quick-start)
