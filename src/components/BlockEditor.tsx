@@ -98,6 +98,7 @@ export function BlockEditor({
       callout: 'calloutNode', quote: 'quoteNode',
       'ai-summary': 'aiSummaryNode', 'ai-draft': 'aiDraftNode', 'ai-rewrite': 'aiRewriteNode',
       code: 'codeNode',
+      database: 'databaseNode',
     };
     return map[type] || null;
   };

@@ -6,6 +6,10 @@
 import { Node, mergeAttributes } from '@tiptap/core';
 import CodeBlockLowlight from '@tiptap/extension-code-block-lowlight';
 import { createLowlight, common } from 'lowlight';
+import React from 'react';
+import { ReactNodeViewRenderer, NodeViewWrapper } from '@tiptap/react';
+import { DatabaseBlock } from '../components/blocks/DatabaseBlock';
+import { runAiFormula } from './ai/AiFormulaEngine';
 
 // Create lowlight instance with common languages for syntax highlighting
 const lowlight = createLowlight(common);
@@ -320,6 +324,60 @@ export const codeNode = CodeBlockLowlight.extend({
   defaultLanguage: 'javascript',
 });
 
+// ─── Database Node View Wrapper ───────────────────────────────────────────────
+
+export function DatabaseNodeView(props: any) {
+  const { node, updateAttributes } = props;
+  const blockWithContent = {
+    id: node.attrs.id,
+    type: 'database' as const,
+    content: typeof node.attrs.content === 'string' ? node.attrs.content : '',
+  };
+
+  const handleContentChange = (updatedContent: string) => {
+    updateAttributes({ content: updatedContent });
+  };
+
+  return (
+    <NodeViewWrapper className="database-node-wrapper w-full select-none pdf-exclude">
+      <DatabaseBlock
+        block={blockWithContent}
+        onChange={handleContentChange}
+        onRunAi={async (db, propertyId, rowId) => {
+          const prop = db.properties.find(p => p.id === propertyId);
+          const row = db.rows.find(r => r.id === rowId);
+          if (!prop || !row) return '';
+          return runAiFormula(db, prop, row);
+        }}
+      />
+    </NodeViewWrapper>
+  );
+}
+
+// ─── Database Node ────────────────────────────────────────────────────────────
+
+export const databaseNode = Node.create({
+  name: 'databaseNode',
+  group: 'block',
+  atom: true,
+  draggable: true,
+  addAttributes() {
+    return {
+      ...baseBlockAttrs(),
+      content: { default: '' },
+    };
+  },
+  parseHTML() {
+    return [{ tag: 'div[data-type="databaseNode"]' }];
+  },
+  renderHTML({ HTMLAttributes }) {
+    return renderBlock('databaseNode', HTMLAttributes);
+  },
+  addNodeView() {
+    return ReactNodeViewRenderer(DatabaseNodeView);
+  },
+});
+
 // ─── Export all nodes as a schema array ───────────────────────────────────────
 
 export const blockSchema = [
@@ -337,4 +395,5 @@ export const blockSchema = [
   aiRewriteNode,
   codeNode,
   imageNode,
+  databaseNode,
 ];

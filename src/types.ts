@@ -1,4 +1,4 @@
-export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite' | 'code' | 'image';
+export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite' | 'code' | 'image' | 'database';
 
 export interface BlockComment {
   id: string;
@@ -35,7 +35,7 @@ export interface PageVersion {
   blocks: Block[];
 }
 
-export type PageType = 'block' | 'canvas';
+export type PageType = 'block' | 'canvas' | 'database' | 'dashboard';
 
 export interface Page {
   id: string;
@@ -47,4 +47,13 @@ export interface Page {
   updatedAt: number;
   versions?: PageVersion[];
   pageType?: PageType;
+  parentId?: string | null; // for nested spaces/folders/docs structure
+  priority?: 'Urgent' | 'High' | 'Normal' | 'Low';
+  dueDate?: string;
+  assignee?: string;
+  estimatedTime?: number; // estimated time in minutes
+  actualTime?: number; // tracked time in minutes
+  isTimerRunning?: boolean;
+  timerStartTime?: number;
 }
+

@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Page, PageVersion } from '../types';
-import { History, RotateCcw, Users, Link2 } from 'lucide-react';
+import { Page, PageVersion, PageType } from '../types';
+import { History, RotateCcw, Users, Link2, Sparkles } from 'lucide-react';
 import { BacklinksPanel } from './BacklinksPanel';
+import { WorkspaceCopilot } from './copilot/WorkspaceCopilot';
 
 function stringToColor(str: string): string {
   const PALETTE = ['#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#EC4899', '#14B8A6', '#F97316'];
@@ -24,6 +25,7 @@ interface PageAddonsProps {
   pages: Page[];
   backlinks: string[];
   onNavigateToPage: (pageId: string) => void;
+  onAddPage?: (pageType?: PageType, parentId?: string | null) => void;
 }
 
 export function PageAddons({
@@ -35,9 +37,10 @@ export function PageAddons({
   presencePeers,
   pages,
   backlinks,
-  onNavigateToPage
+  onNavigateToPage,
+  onAddPage
 }: PageAddonsProps) {
-  const [activeTab, setActiveTab] = useState<'history' | 'collab' | 'links'>('history');
+  const [activeTab, setActiveTab] = useState<'history' | 'collab' | 'links' | 'brain'>('history');
 
   if (!currentPage) return null;
 
@@ -79,6 +82,17 @@ export function PageAddons({
         >
           <Link2 size={14} />
           Links
+        </button>
+        <button
+          onClick={() => setActiveTab('brain')}
+          className={`flex-1 py-3 text-xs font-semibold flex items-center justify-center gap-1.5 border-b-2 transition-all ${
+            activeTab === 'brain'
+              ? 'border-purple-600 text-purple-600 dark:text-purple-400 font-bold'
+              : 'border-transparent text-gray-500 hover:text-gray-800 dark:hover:text-gray-200'
+          }`}
+        >
+          <Sparkles size={14} />
+          Brain
         </button>
       </div>
 
@@ -209,6 +223,15 @@ export function PageAddons({
               onNavigateToPage={onNavigateToPage}
             />
           </div>
+        )}
+
+        {activeTab === 'brain' && (
+          <WorkspaceCopilot
+            pages={pages}
+            currentPageId={currentPage.id}
+            onSelectPage={onNavigateToPage}
+            onAddPage={onAddPage || (() => {})}
+          />
         )}
       </div>
     </div>

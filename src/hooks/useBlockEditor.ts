@@ -38,6 +38,9 @@ function blockToTipTapNode(block: Block): Record<string, unknown> {
   if (block.type === 'code' && block.language) {
     (attrs as Record<string, unknown>).language = block.language;
   }
+  if (block.type === 'database') {
+    attrs.content = block.content;
+  }
   if (
     (block.type === 'ai-summary' ||
       block.type === 'ai-draft' ||
@@ -48,7 +51,7 @@ function blockToTipTapNode(block: Block): Record<string, unknown> {
     (attrs as Record<string, unknown>).aiContext = block.aiContext ?? '';
   }
 
-  const textContent = stripHtml(block.content);
+  const textContent = block.type === 'database' ? '' : stripHtml(block.content);
   const content =
     textContent.length > 0 ? [{ type: 'text', text: textContent }] : [];
 
@@ -81,7 +84,7 @@ function tipTapToBlocks(json: Record<string, unknown>): Block[] {
     const block: Block = {
       id: (attrs.id as string) || uuidv4(),
       type: blockType,
-      content: firstText?.text ?? '',
+      content: blockType === 'database' ? (attrs.content as string ?? '') : (firstText?.text ?? ''),
       indentLevel: (attrs.indentLevel as number) ?? 0,
     };
 

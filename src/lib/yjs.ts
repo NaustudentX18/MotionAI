@@ -104,6 +104,15 @@ function yMapToPage(id: string, ymap: Y.Map<unknown>): Page {
     createdAt: (ymap.get('createdAt') as number) ?? Date.now(),
     updatedAt: (ymap.get('updatedAt') as number) ?? Date.now(),
     versions: (ymap.get('versions') as Page['versions']) ?? undefined,
+    pageType: ymap.get('pageType') as Page['pageType'] | undefined,
+    parentId: ymap.get('parentId') as string | null | undefined,
+    priority: ymap.get('priority') as Page['priority'] | undefined,
+    dueDate: ymap.get('dueDate') as string | undefined,
+    assignee: ymap.get('assignee') as string | undefined,
+    estimatedTime: ymap.get('estimatedTime') as number | undefined,
+    actualTime: ymap.get('actualTime') as number | undefined,
+    isTimerRunning: ymap.get('isTimerRunning') as boolean | undefined,
+    timerStartTime: ymap.get('timerStartTime') as number | undefined,
   };
 }
 
@@ -163,6 +172,19 @@ function pageToYMap(doc: Y.Doc, page: Page): Y.Map<unknown> {
   if (page.versions) {
     ymap.set('versions', page.versions);
   }
+  if (page.pageType) {
+    ymap.set('pageType', page.pageType);
+  }
+  if (page.parentId) {
+    ymap.set('parentId', page.parentId);
+  }
+  if (page.priority !== undefined) ymap.set('priority', page.priority);
+  if (page.dueDate !== undefined) ymap.set('dueDate', page.dueDate);
+  if (page.assignee !== undefined) ymap.set('assignee', page.assignee);
+  if (page.estimatedTime !== undefined) ymap.set('estimatedTime', page.estimatedTime);
+  if (page.actualTime !== undefined) ymap.set('actualTime', page.actualTime);
+  if (page.isTimerRunning !== undefined) ymap.set('isTimerRunning', page.isTimerRunning);
+  if (page.timerStartTime !== undefined) ymap.set('timerStartTime', page.timerStartTime);
 
   // Blocks as Y.Array of Y.Maps
   const blocksYArray = new Y.Array<Y.Map<unknown>>();

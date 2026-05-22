@@ -1,6 +1,6 @@
 import React from 'react';
 import { cn } from '../../lib/utils';
-import { Type, Hash, CheckSquare, List, Minus, Quote, Sparkles, Wand2, Code, Lightbulb, Edit, Image } from 'lucide-react';
+import { Type, Hash, CheckSquare, List, Minus, Quote, Sparkles, Wand2, Code, Lightbulb, Edit, Image, Table } from 'lucide-react';
 import { BlockType } from '../../types';
 
 export interface SlashMenuAction {
@@ -23,6 +23,7 @@ export const slashMenuActions: SlashMenuAction[] = [
   { label: 'Callout', icon: Lightbulb, type: 'callout', description: 'Lightbulb highlighted box', category: 'Basic Blocks' },
   { label: 'Code Block', icon: Code, type: 'code', description: 'Code with syntax highlighting', category: 'Basic Blocks' },
   { label: 'Image', icon: Image, type: 'image', description: 'Upload an image', category: 'Basic Blocks' },
+  { label: 'Database', icon: Table, type: 'database', description: 'Table, board, and calendar views', category: 'Basic Blocks' },
   { label: 'Draft with AI...', icon: Wand2, type: 'ai-custom', description: 'Ask AI to write or edit', category: 'AI Magic' },
   { label: 'AI Summary Block', icon: Sparkles, type: 'ai-summary', description: 'Prompt AI to summarize text', category: 'AI Magic' },
   { label: 'AI Draft Block', icon: Wand2, type: 'ai-draft', description: 'Draft text from prompts', category: 'AI Magic' },

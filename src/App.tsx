@@ -9,6 +9,8 @@ import { Page, Block, PageType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { BlockEditor } from './components/BlockEditor';
 import { CanvasEditor } from './components/CanvasEditor';
+import { DatabaseBlock } from './components/blocks/DatabaseBlock';
+import { runAiFormula } from './lib/ai/AiFormulaEngine';
 import { CommandPalette } from './components/CommandPalette';
 import { DriveModal } from './components/DriveModal';
 import { TasksModal } from './components/TasksModal';
@@ -16,6 +18,8 @@ import { PageAddons } from './components/PageAddons';
 import { MobileWorkspaceApp } from './components/MobileWorkspaceApp';
 import { MotionAIHub } from './components/MotionAIHub';
 import { SettingsModal } from './components/SettingsModal';
+import { TaskPropertiesPanel } from './components/tasks/TaskPropertiesPanel';
+import { DashboardWidget } from './components/dashboard/DashboardWidget';
 import { SettingsProvider } from './hooks/useSettings';
 import { initAuth, googleSignIn, logout } from './lib/firebase';
 import { User } from 'firebase/auth';
@@ -359,16 +363,17 @@ export default function App() {
     }
   };
 
-  const addPage = (pageType: PageType = 'block') => {
+  const addPage = (pageType: PageType = 'block', parentId: string | null = null) => {
     const newPage: Page = {
       id: uuidv4(),
-      title: pageType === 'canvas' ? 'Untitled Canvas' : '',
-      icon: pageType === 'canvas' ? '🎨' : null,
+      title: pageType === 'canvas' ? 'Untitled Canvas' : pageType === 'database' ? 'Untitled Database' : '',
+      icon: pageType === 'canvas' ? '🎨' : pageType === 'database' ? '📊' : null,
       cover: null,
       createdAt: Date.now(),
       updatedAt: Date.now(),
-      blocks: pageType === 'canvas' ? [] : [{ id: uuidv4(), type: 'p', content: '' }],
+      blocks: pageType === 'canvas' ? [] : pageType === 'database' ? [{ id: uuidv4(), type: 'database', content: '' }] : [{ id: uuidv4(), type: 'p', content: '' }],
       pageType,
+      parentId,
     };
     // Update React state and Y.Doc
     setPages([...pages, newPage]);
@@ -392,10 +397,22 @@ export default function App() {
   };
 
   const deletePageById = (id: string) => {
-    const updated = pages.filter(p => p.id !== id);
+    const getDescendants = (parentId: string): string[] => {
+      const children = pages.filter(p => p.parentId === parentId);
+      return children.reduce<string[]>((acc, child) => {
+        return [...acc, child.id, ...getDescendants(child.id)];
+      }, []);
+    };
+    const toDelete = [id, ...getDescendants(id)];
+
+    const updated = pages.filter(p => !toDelete.includes(p.id));
     setPages(updated);
-    deletePageFromStore(id);
-    if (currentPageId === id) {
+    
+    toDelete.forEach(pageId => {
+      deletePageFromStore(pageId);
+    });
+
+    if (toDelete.includes(currentPageId || '')) {
       const nextId = updated.length > 0 ? updated[0].id : null;
       setCurrentPageId(nextId);
       setCurrentPageIdInStore(nextId);
@@ -787,6 +804,7 @@ export default function App() {
              if (window.innerWidth < 768) setSidebarOpen(false);
            }}
            onAddPage={addPage}
+           onDeletePage={deletePageById}
            userEmail={user?.email || null}
            onLogin={handleLogin}
            onLogout={logout}
@@ -811,7 +829,6 @@ export default function App() {
              <span className="hidden sm:inline">/</span>
              <span className="text-[#37352F] dark:text-[#E3E3E3] font-medium truncate max-w-[125px] mr-2">{currentPage?.title || 'Untitled'}</span>
              
-             {/* Segment platform selector controller */}
              <div className="flex items-center bg-gray-100 dark:bg-stone-800 p-0.5 rounded-lg border border-gray-150 dark:border-stone-700 select-none">
                <button 
                  onClick={() => setViewMode('hub')}
@@ -953,19 +970,68 @@ export default function App() {
             />
           ) : currentPage ? (
              currentPage.pageType === 'canvas' ? (
-               <CanvasEditor key={currentPage.id} pageId={currentPage.id} />
-             ) : (
-               <BlockEditor
-                 key={currentPage.id}
-                 title={currentPage.title}
-                 onTitleChange={t => updateCurrentPage({ title: t })}
-                 initialBlocks={currentPage.blocks}
-                 onChange={b => updateCurrentPage({ blocks: b })}
-                 onActiveBlockChange={setActiveBlockId}
-                 focusAfterInsert={focusAfterInsert}
-                 onFocusAfterInsertUsed={() => setFocusAfterInsert(null)}
-                 onLockWorkspace={handleLockWorkspace}
+               <CanvasEditor 
+                 key={currentPage.id} 
+                 pageId={currentPage.id} 
+                 pages={pages}
+                 onSelectPage={setCurrentPageId}
                />
+             ) : currentPage.pageType === 'dashboard' ? (
+               <div className="w-full px-6 sm:px-12 py-12 pb-48 font-sans max-w-5xl mx-auto overflow-y-auto h-full">
+                 <DashboardWidget pages={pages} onSelectPage={setCurrentPageId} />
+               </div>
+             ) : currentPage.pageType === 'database' ? (
+                <div className="w-full px-6 sm:px-12 py-12 pb-48 font-sans max-w-5xl mx-auto overflow-y-auto h-full">
+                  <div className="mb-6">
+                    <TaskPropertiesPanel page={currentPage} onUpdatePage={updatePageById} />
+                  </div>
+                  {/* Full Page Database Header */}
+                  <div className="flex items-center gap-3 mb-6 pb-4 border-b border-gray-150 dark:border-gray-800">
+                    <span className="text-3xl select-none">{currentPage.icon || '📊'}</span>
+                    <input
+                      type="text"
+                      value={currentPage.title}
+                      onChange={(e) => updateCurrentPage({ title: e.target.value })}
+                      className="text-3xl font-bold text-gray-800 dark:text-gray-100 bg-transparent border-0 outline-none w-full"
+                      placeholder="Untitled Database"
+                    />
+                  </div>
+                  {currentPage.blocks?.[0] ? (
+                    <DatabaseBlock
+                      block={currentPage.blocks[0]}
+                      onChange={(updatedContent) => {
+                        const updatedBlocks = [...currentPage.blocks];
+                        updatedBlocks[0] = { ...updatedBlocks[0], content: updatedContent };
+                        updateCurrentPage({ blocks: updatedBlocks });
+                      }}
+                      onRunAi={async (db, propertyId, rowId) => {
+                        const prop = db.properties.find(p => p.id === propertyId);
+                        const row = db.rows.find(r => r.id === rowId);
+                        if (!prop || !row) return '';
+                        return runAiFormula(db, prop, row);
+                      }}
+                    />
+                  ) : (
+                    <div className="text-gray-400 text-sm">Initializing Database...</div>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <div className="max-w-3xl mx-auto w-full px-6 sm:px-12 pt-8">
+                    <TaskPropertiesPanel page={currentPage} onUpdatePage={updatePageById} />
+                  </div>
+                  <BlockEditor
+                    key={currentPage.id}
+                    title={currentPage.title}
+                    onTitleChange={t => updateCurrentPage({ title: t })}
+                    initialBlocks={currentPage.blocks}
+                    onChange={b => updateCurrentPage({ blocks: b })}
+                    onActiveBlockChange={setActiveBlockId}
+                    focusAfterInsert={focusAfterInsert}
+                    onFocusAfterInsertUsed={() => setFocusAfterInsert(null)}
+                    onLockWorkspace={handleLockWorkspace}
+                  />
+                </>
              )
           ) : (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-stone-500 dark:text-stone-400">
@@ -1000,6 +1066,7 @@ export default function App() {
                   setCurrentPageId(pageId);
                   setAddonsOpen(false);
                 }}
+                onAddPage={addPage}
               />
             </div>
           </>
