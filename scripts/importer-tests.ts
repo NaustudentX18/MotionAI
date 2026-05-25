@@ -4,6 +4,7 @@ import { strict as assert } from 'node:assert/strict';
 import { parseNotionMarkdownBlocks, notionMarkdownToPage, notionExportToWorkspace } from '../src/lib/importers/notionImporter';
 import { clickupExportToWorkspace } from '../src/lib/importers/clickupImporter';
 import type { ClickUpSpace, ClickUpList, ClickUpTask } from '../src/lib/importers/clickupImporter';
+import { csvExportToWorkspace } from '../src/lib/importers/csvImporter';
 
 function testNotionHeadingParsing() {
   const blocks = parseNotionMarkdownBlocks('# Heading 1\n## Heading 2\n### Heading 3\nPlain text', 'Test');
@@ -90,6 +91,22 @@ function testClickupTaskWithPriorityAndDueDate() {
   console.log('  ✓ ClickUp priority + due date mapping');
 }
 
+function testCsvExportToWorkspace() {
+  const csvContent = `Title,Description,Status,Priority,Assignee,Due Date\n` +
+    `"Task Alpha","Setup cluster nodes","in-progress","high","Alex","2026-05-25"\n` +
+    `"Task Beta","Clean container volumes","todo","normal","Jake",""`;
+
+  const result = csvExportToWorkspace(csvContent);
+  assert.equal(result.snapshot.pages.length, 2, 'Should import 2 pages');
+  const taskAlpha = result.snapshot.pages.find(p => p.title === 'Task Alpha');
+  assert(taskAlpha, 'Task Alpha should exist');
+  assert.equal((taskAlpha as any).status, 'in-progress');
+  assert.equal((taskAlpha as any).priority, 'high');
+  assert.equal(taskAlpha.assignee, 'Alex');
+  assert.equal(taskAlpha.dueDate, '2026-05-25');
+  console.log('  ✓ CSV task to page mapping');
+}
+
 async function main() {
   console.log('Importer Tests\n');
 
@@ -102,6 +119,7 @@ async function main() {
     testNotionExportToWorkspace,
     testClickupTaskToPage,
     testClickupTaskWithPriorityAndDueDate,
+    testCsvExportToWorkspace,
   ];
 
   let passed = 0;
