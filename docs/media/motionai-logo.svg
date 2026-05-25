@@ -1,0 +1,123 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 240" width="100%" height="100%">
+  <!-- Definitions for Gradients and Filters -->
+  <defs>
+    <!-- Kinetic Line Gradients -->
+    <linearGradient id="gradLeft" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#ff2e93"/>
+      <stop offset="100%" stop-color="#9a33ff"/>
+    </linearGradient>
+    
+    <linearGradient id="gradMiddle" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#9a33ff"/>
+      <stop offset="100%" stop-color="#00f0ff"/>
+    </linearGradient>
+
+    <linearGradient id="gradRight" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#00f0ff"/>
+      <stop offset="100%" stop-color="#38ef7d"/>
+    </linearGradient>
+    
+    <!-- Accent Spark/AI Gradient -->
+    <linearGradient id="sparkGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#00f0ff"/>
+    </linearGradient>
+
+    <!-- Glow Filter -->
+    <filter id="glow" x="-20%" y="-20%" width="140%" height="140%">
+      <feGaussianBlur stdDeviation="6" result="blur" />
+      <feMerge>
+        <feMergeNode in="blur" />
+        <feMergeNode in="SourceGraphic" />
+      </feMerge>
+    </filter>
+  </defs>
+
+  <!-- Transparent background by default, perfectly blending into GitHub Dark/Light modes -->
+  <g transform="translate(10, -20)">
+    <!-- Dynamic 'Motion' Waves forming a stylized 'M' -->
+    <!-- Left Leg -->
+    <path d="M 90 200 Q 90 110 135 65 T 180 110 Q 180 170 157 200" 
+          fill="none" 
+          stroke="url(#gradLeft)" 
+          stroke-width="15" 
+          stroke-linecap="round"
+          filter="url(#glow)"/>
+    
+    <!-- Right Leg / Motion Arc -->
+    <path d="M 150 200 Q 180 170 180 110 T 225 65 Q 270 110 270 200" 
+          fill="none" 
+          stroke="url(#gradMiddle)" 
+          stroke-width="15" 
+          stroke-linecap="round"
+          filter="url(#glow)"/>
+
+    <!-- Kinetic AI loop overlapping -->
+    <path d="M 240 185 Q 270 125 315 110 T 360 155 Q 360 200 322 200" 
+          fill="none" 
+          stroke="url(#gradRight)" 
+          stroke-width="15" 
+          stroke-linecap="round"
+          filter="url(#glow)"/>
+
+    <!-- Sparkling AI nodes (Connecting Neural Sparks) -->
+    <!-- Node 1 -->
+    <circle cx="135" cy="65" r="7" fill="#ffffff" filter="url(#glow)"/>
+    <circle cx="135" cy="65" r="4" fill="#ff2e93"/>
+    
+    <!-- Node 2 -->
+    <circle cx="225" cy="65" r="7" fill="#ffffff" filter="url(#glow)"/>
+    <circle cx="225" cy="65" r="4" fill="#00f0ff"/>
+    
+    <!-- Node 3 (Action Spark) -->
+    <circle cx="360" cy="155" r="8" fill="#ffffff" filter="url(#glow)"/>
+    <circle cx="360" cy="155" r="5" fill="#38ef7d"/>
+    
+    <!-- Dotted connection paths -->
+    <path d="M 135 65 L 225 65" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6" />
+    <path d="M 225 65 L 360 155" stroke="#ffffff" stroke-width="1.5" stroke-dasharray="4,4" opacity="0.6" />
+
+    <!-- AI Sparkles (Four point stars) -->
+    <path d="M 360 50 L 364 61 L 375 65 L 364 69 L 360 80 L 356 69 L 345 65 L 356 61 Z" fill="url(#sparkGrad)" filter="url(#glow)"/>
+    <path d="M 172 35 L 174 42 L 182 45 L 174 48 L 172 55 L 170 48 L 162 45 L 170 42 Z" fill="url(#sparkGrad)" filter="url(#glow)" opacity="0.8"/>
+  </g>
+
+  <!-- Typography: "MotionAI" -->
+  <!-- We use CSS media queries to automatically change the text color depending on light/dark mode! -->
+  <style>
+    .brand-title {
+      fill: #111827; /* Dark text for light mode */
+    }
+    .brand-subtitle {
+      fill: #4b5563; /* Gray text for light mode */
+    }
+    @media (prefers-color-scheme: dark) {
+      .brand-title {
+        fill: #ffffff; /* White text for dark mode */
+      }
+      .brand-subtitle {
+        fill: #9ca3af; /* Gray text for dark mode */
+      }
+    }
+  </style>
+
+  <text x="400" y="125" 
+        class="brand-title"
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="56" 
+        font-weight="900" 
+        letter-spacing="1">
+        Motion<tspan fill="#9a33ff">AI</tspan>
+  </text>
+  
+  <!-- Subtitle -->
+  <text x="402" y="160" 
+        class="brand-subtitle"
+        font-family="system-ui, -apple-system, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" 
+        font-size="14" 
+        font-weight="700" 
+        letter-spacing="3"
+        opacity="0.9">
+        LOCAL-FIRST WORKSPACE
+  </text>
+</svg>
