@@ -27,13 +27,13 @@ const baseBlockAttrs = () => ({
 function renderBlock(
   dataType: string,
   HTMLAttributes: Record<string, unknown>
-): [string, Record<string, unknown>, [string, Record<string, unknown>, string], 0] {
+): any {
   const comments = HTMLAttributes['comments'] as string ?? '[]';
   return [
     'div',
     mergeAttributes(HTMLAttributes, { 'data-type': dataType, 'data-comments': comments }),
     ['span', { class: 'drag-handle', draggable: 'true', contenteditable: 'false' }, '⠿'],
-    0,
+    ['span', { class: 'block-content' }, 0],
   ];
 }
 

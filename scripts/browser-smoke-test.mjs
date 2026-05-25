@@ -108,7 +108,7 @@ async function main() {
     test('Spellcheck guards when AI unconfigured (503)', spellRes.status === 503);
       if (spellRes.status === 503) {
         const body = JSON.parse(spellRes.body);
-        test('Spellcheck error is not-configured message', body.error && body.error.includes('not configured'));
+        test('Spellcheck error is safe provider-unavailable message', body.error && /not configured|disabled/i.test(body.error));
       }
 
     // Check chat endpoint
@@ -116,7 +116,7 @@ async function main() {
     test('Chat guards when AI unconfigured (503)', chatRes.status === 503);
       if (chatRes.status === 503) {
         const body = JSON.parse(chatRes.body);
-        test('Chat error is not-configured message', body.error && body.error.includes('not configured'));
+        test('Chat error is safe provider-unavailable message', body.error && /not configured|disabled/i.test(body.error));
       }
   } catch (err) {
     console.error(`\n  ✗ Smoke test error: ${err.message}`);

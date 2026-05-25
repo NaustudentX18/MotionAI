@@ -84,8 +84,12 @@ export function BlockEditor({
   const ai = useAICommands(editor, blocksRef, comments.updateNodeAttrs);
 
   const getBlockElement = (id: string): HTMLElement | null => {
-    if (!editor) return null;
-    return editor.view.dom.querySelector(`[data-id="${id}"]`);
+    if (!editor || editor.isDestroyed) return null;
+    try {
+      return editor.view.dom.querySelector(`[data-id="${id}"]`);
+    } catch {
+      return null;
+    }
   };
 
   const spellcheck = useSpellcheck(editor, blocksRef, getBlockElement, ai.findNodePosAndSize);
@@ -292,8 +296,11 @@ export function BlockEditor({
 
   // ─── TipTap paste handler for multi-line split ───────────────────────────────
   useEffect(() => {
-    if (!editor) return;
-    (editor as any).core.view.props.handlePaste = (view: any, event: ClipboardEvent) => {
+    if (!editor || editor.isDestroyed) return;
+    let view: typeof editor.view;
+    try { view = editor.view; } catch { return; }
+    view.setProps({
+      handlePaste: (_view, event) => {
       const text = event.clipboardData?.getData('text/plain') || '';
       if (!text.includes('\n')) return false;
       event.preventDefault();
@@ -318,6 +325,10 @@ export function BlockEditor({
       const { from } = editor.state.selection;
       editor.chain().focus().deleteRange({ from, to: from }).insertContent(nodes).run();
       return true;
+      },
+    });
+    return () => {
+      try { view.setProps({ handlePaste: undefined }); } catch { /* editor already unmounted */ }
     };
   }, [editor]);
 
@@ -370,7 +381,8 @@ export function BlockEditor({
         else if (event.key === 'Backspace') { setSlashMenuOpen(false); setSlashQuery(''); }
       }
     };
-    const dom = editor.view.dom;
+    let dom: HTMLElement;
+    try { dom = editor.view.dom; } catch { return; }
     dom.addEventListener('keydown', handleKeyDown);
     return () => dom.removeEventListener('keydown', handleKeyDown);
   }, [editor, slashMenuOpen, filteredSlashActions, slashSelectedIndex, comments]);

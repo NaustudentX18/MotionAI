@@ -401,3 +401,70 @@ export const spellcheckResponseSchema = {
   },
   required: ['issues'],
 };
+
+export const checklistResponseSchema = {
+  type: Type.OBJECT,
+  properties: {
+    tasks: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          title: { type: Type.STRING, description: 'Action item description' },
+          assignee: { type: Type.STRING, description: 'Person assigned (Unassigned if not specified)' },
+          dueDate: { type: Type.STRING, description: 'Due date or deadline (No due date if not specified)' },
+          priority: { type: Type.STRING, enum: ['low', 'medium', 'high'], description: 'Priority level' },
+        },
+        required: ['title', 'assignee', 'dueDate', 'priority'],
+      },
+    },
+  },
+  required: ['tasks'],
+};
+
+export function buildGeneratePrompt(command: string | undefined, context: string | undefined, prompt: string | undefined) {
+  let systemInstruction = `You are the **MotionAI Core Engine**. You operate as a high-performance document processor. \nYour primary goal is to transform, generate, and refine content within a rich-text workspace. \nYou are NOT a conversational assistant. You are a background utility.\n\n<behavioral_guardrails>\n  <rule priority="1">NEVER use conversational filler. No "Sure," "I can help," or "Here is the output."</rule>\n  <rule priority="2">Respond ONLY with the requested Markdown content.</rule>\n  <rule priority="3">Maintain a "Minimalist Modern" aesthetic: clean, objective, and dense with information.</rule>\n  <rule priority="4">If a command is missing, default to "Improve Writing" based on context.</rule>\n</behavioral_guardrails>\n\n<formatting_standards>\n  - **Typography**: Use **Bold** for high-impact keywords. Use \\\`inline code\\\` for technical identifiers.\n  - **Structure**: Use \\\`###\\\` for sub-headers (H3). Avoid H1/H2 unless the document is long-form.\n  - **Segmentation**: Use \\\`---\\\` (Horizontal Rules) to separate distinct logic blocks.\n  - **Visual Pop**: Use \\\`>\\\` (Blockquotes) for summaries, callouts, or "TL;DR" sections.\n  - **Checklists**: Use \\\`- [ ]\\\` for all task-oriented outputs.\n</formatting_standards>\n\n<technical_context_awareness>\n  The user operates a sophisticated home lab environment:\n  - OS: OpenMediaVault (OMV).\n  - Stack: RADARR, SONARR, Overseerr, SABnzbd, Plex.\n  - Infrastructure: Docker, Port Forwarding, NAS management.\n  When processing technical notes, maintain strict accuracy for Linux paths, YAML syntax, and networking protocols.\n</technical_context_awareness>\n\n[INPUT] -> [PROCESS BY COMMAND] -> [OUTPUT MARKDOWN BLOCK]\nNO PREAMBLE. NO APOLOGIES. NO CHAT.`;
+
+  let userPrompt = prompt || '';
+
+  if (command === 'continue' || prompt?.startsWith('/continue')) {
+    systemInstruction += `\n\nExecute command /continue:\n- Read the existing page context.\n- Predict the next logical section.\n- Match tone, vocabulary, and block structure perfectly.`;
+    userPrompt = `Context to continue from:\n${context || ''}\n\nPlease continue writing.`;
+  } else if (command === 'summarize' || prompt?.startsWith('/summarize')) {
+    systemInstruction += `\n\nExecute command /summarize:\n- Output a '> [TL;DR]' callout.\n- Follow with a '### Key Insights' section containing 3-5 bullet points.`;
+    userPrompt = `Text to summarize:\n${context || prompt || ''}`;
+  } else if (command === 'brainstorm' || prompt?.startsWith('/brainstorm')) {
+    systemInstruction += `\n\nExecute command /brainstorm:\n- Generate exactly 10 high-quality, distinct ideas.\n- Format as a bulleted list under an '### Ideation' header.`;
+    userPrompt = `Brainstorm ideas for: ${prompt || context || ''}`;
+  } else if (command === 'improve' || command === 'fix' || prompt?.startsWith('/fix')) {
+    systemInstruction += `\n\nExecute command /fix:\n- Correct grammar, spelling, and punctuation.\n- Preserving technical terminology (especially NAS/Docker/OMV paths).\n- DO NOT rewrite for style unless the flow is broken.`;
+    userPrompt = `Improve this text:\n${context || prompt || ''}`;
+  } else if (command === 'extract' || prompt?.startsWith('/todo')) {
+    systemInstruction += `\n\nExecute command /todo:\n- Extract all verbs and commitments from the provided text.\n- Format as a '- [ ]' checklist.\n- Group by category if more than 10 items are found.`;
+    userPrompt = `Extract action items from:\n${context || prompt || ''}`;
+  } else if (command === 'table' || prompt?.startsWith('/table')) {
+    systemInstruction += `\n\nExecute command /table:\n- Analyze unstructured data (CSV-style, bulleted, or narrative).\n- Build a GitHub-flavored Markdown table.\n- Automatically infer logical headers (e.g., Date, Task, Status, Cost).`;
+    userPrompt = `Convert this to table:\n${context || prompt || ''}`;
+  } else if (command === 'custom') {
+    systemInstruction += `\n\nFollow the user's instructions exactly. Output ONLY the requested content with Structure Over Prose alignment.`;
+    userPrompt = `Context (if relevant):\n${context || ''}\n\nTask: ${prompt || ''}`;
+  } else {
+    userPrompt = prompt || context || '';
+  }
+
+  return { systemInstruction, userPrompt };
+}
+
+export function parseJsonObject(text: string): any | null {
+  try {
+    return JSON.parse(text);
+  } catch {
+    const match = text.match(/\{[\s\S]*\}/);
+    if (!match) return null;
+    try {
+      return JSON.parse(match[0]);
+    } catch {
+      return null;
+    }
+  }
+}

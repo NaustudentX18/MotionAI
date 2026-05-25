@@ -13,6 +13,9 @@ import {
   providerUnavailableMessage,
   safeErrorMessage,
   spellcheckResponseSchema,
+  checklistResponseSchema,
+  buildGeneratePrompt,
+  parseJsonObject,
   type ChatMessage,
 } from './src/lib/ai/providers';
 import { rateLimitMiddleware, shutdownRateLimitStore } from './src/lib/rateLimit';
@@ -81,80 +84,6 @@ function requireWebhookAuth(req: Request, res: Response, next: NextFunction): vo
   requireAuth(req, res, next);
 }
 
-function buildGeneratePrompt(command: string | undefined, context: string | undefined, prompt: string | undefined) {
-  let systemInstruction = `You are the **MotionAI Core Engine**. You operate as a high-performance document processor. 
-Your primary goal is to transform, generate, and refine content within a rich-text workspace. 
-You are NOT a conversational assistant. You are a background utility.
-
-<behavioral_guardrails>
-  <rule priority="1">NEVER use conversational filler. No "Sure," "I can help," or "Here is the output."</rule>
-  <rule priority="2">Respond ONLY with the requested Markdown content.</rule>
-  <rule priority="3">Maintain a "Minimalist Modern" aesthetic: clean, objective, and dense with information.</rule>
-  <rule priority="4">If a command is missing, default to "Improve Writing" based on context.</rule>
-</behavioral_guardrails>
-
-<formatting_standards>
-  - **Typography**: Use **Bold** for high-impact keywords. Use \`inline code\` for technical identifiers.
-  - **Structure**: Use \`###\` for sub-headers (H3). Avoid H1/H2 unless the document is long-form.
-  - **Segmentation**: Use \`---\` (Horizontal Rules) to separate distinct logic blocks.
-  - **Visual Pop**: Use \`>\` (Blockquotes) for summaries, callouts, or "TL;DR" sections.
-  - **Checklists**: Use \`- [ ]\` for all task-oriented outputs.
-</formatting_standards>
-
-<technical_context_awareness>
-  The user operates a sophisticated home lab environment:
-  - OS: OpenMediaVault (OMV).
-  - Stack: RADARR, SONARR, Overseerr, SABnzbd, Plex.
-  - Infrastructure: Docker, Port Forwarding, NAS management.
-  When processing technical notes, maintain strict accuracy for Linux paths, YAML syntax, and networking protocols.
-</technical_context_awareness>
-
-[INPUT] -> [PROCESS BY COMMAND] -> [OUTPUT MARKDOWN BLOCK]
-NO PREAMBLE. NO APOLOGIES. NO CHAT.`;
-
-  let userPrompt = prompt || '';
-
-  if (command === 'continue' || prompt?.startsWith('/continue')) {
-    systemInstruction += `\n\nExecute command /continue:\n- Read the existing page context.\n- Predict the next logical section.\n- Match tone, vocabulary, and block structure perfectly.`;
-    userPrompt = `Context to continue from:\n${context || ''}\n\nPlease continue writing.`;
-  } else if (command === 'summarize' || prompt?.startsWith('/summarize')) {
-    systemInstruction += `\n\nExecute command /summarize:\n- Output a '> [TL;DR]' callout.\n- Follow with a '### Key Insights' section containing 3-5 bullet points.`;
-    userPrompt = `Text to summarize:\n${context || prompt || ''}`;
-  } else if (command === 'brainstorm' || prompt?.startsWith('/brainstorm')) {
-    systemInstruction += `\n\nExecute command /brainstorm:\n- Generate exactly 10 high-quality, distinct ideas.\n- Format as a bulleted list under an '### Ideation' header.`;
-    userPrompt = `Brainstorm ideas for: ${prompt || context || ''}`;
-  } else if (command === 'improve' || command === 'fix' || prompt?.startsWith('/fix')) {
-    systemInstruction += `\n\nExecute command /fix:\n- Correct grammar, spelling, and punctuation.\n- Preserving technical terminology (especially NAS/Docker/OMV paths).\n- DO NOT rewrite for style unless the flow is broken.`;
-    userPrompt = `Improve this text:\n${context || prompt || ''}`;
-  } else if (command === 'extract' || prompt?.startsWith('/todo')) {
-    systemInstruction += `\n\nExecute command /todo:\n- Extract all verbs and commitments from the provided text.\n- Format as a '- [ ]' checklist.\n- Group by category if more than 10 items are found.`;
-    userPrompt = `Extract action items from:\n${context || prompt || ''}`;
-  } else if (command === 'table' || prompt?.startsWith('/table')) {
-    systemInstruction += `\n\nExecute command /table:\n- Analyze unstructured data (CSV-style, bulleted, or narrative).\n- Build a GitHub-flavored Markdown table.\n- Automatically infer logical headers (e.g., Date, Task, Status, Cost).`;
-    userPrompt = `Convert this to table:\n${context || prompt || ''}`;
-  } else if (command === 'custom') {
-    systemInstruction += `\n\nFollow the user's instructions exactly. Output ONLY the requested content with Structure Over Prose alignment.`;
-    userPrompt = `Context (if relevant):\n${context || ''}\n\nTask: ${prompt || ''}`;
-  } else {
-    userPrompt = prompt || context || '';
-  }
-
-  return { systemInstruction, userPrompt };
-}
-
-function parseJsonObject(text: string): any | null {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
-    }
-  }
-}
 
 async function startServer() {
   const app = express();
@@ -241,6 +170,100 @@ async function startServer() {
     } catch (err) {
       console.error('Spellcheck API error:', safeErrorMessage(err, [settings.apiKey]));
       res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), provider: client.info, keysReturned: false });
+    }
+  });
+
+  app.post('/api/ai/checklist', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const settings = extractAiSettings(req.body || {});
+    const client = createAiClient(settings);
+
+    const { transcript } = req.body || {};
+    if (!transcript || typeof transcript !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid transcript parameter', keysReturned: false });
+    }
+
+    // Helper for deterministic parser fallback
+    const deterministicChecklistFallback = (text: string) => {
+      const lines = text.split('\n');
+      const tasks: Array<{ title: string; assignee: string; dueDate: string; priority: 'low' | 'medium' | 'high' }> = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        const isTaskLine =
+          trimmed.startsWith('-') ||
+          trimmed.startsWith('*') ||
+          /^\d+\./.test(trimmed) ||
+          /todo/i.test(trimmed) ||
+          /action item/i.test(trimmed) ||
+          /need to/i.test(trimmed);
+
+        if (isTaskLine) {
+          let title = trimmed
+            .replace(/^[-*\d.]+\s*(\[[\sX]\])?\s*/i, '')
+            .replace(/^(todo|action item):\s*/i, '')
+            .trim();
+
+          if (title.length < 5) continue;
+
+          let assignee = 'Unassigned';
+          const assigneeMatch = title.match(/(?:assignee|owner|assigned to|for|by):\s*([A-Za-z0-9]+)/i)
+            || title.match(/([A-Za-z0-9]+)\s+will\s+/i)
+            || title.match(/^([A-Za-z0-9]+):\s+/i);
+
+          if (assigneeMatch) {
+            assignee = assigneeMatch[1];
+            title = title.replace(new RegExp(`^${assignee}:\\s*`, 'i'), '');
+          }
+
+          let priority: 'low' | 'medium' | 'high' = 'medium';
+          if (/urgent|high|asap|critical/i.test(title)) {
+            priority = 'high';
+          } else if (/low|minor|backlog/i.test(title)) {
+            priority = 'low';
+          }
+
+          let dueDate = 'No due date';
+          const dateMatch = title.match(/(?:due|by|deadline):\s*([0-9/\-A-Za-z\s]+?)(?:\.|$|\))/i);
+          if (dateMatch) {
+            dueDate = dateMatch[1].trim();
+          }
+
+          tasks.push({ title, assignee, dueDate, priority });
+        }
+      }
+
+      if (tasks.length === 0 && text.trim().length > 0) {
+        tasks.push({
+          title: 'Review transcript for action items: ' + (text.length > 50 ? text.slice(0, 50) + '...' : text),
+          assignee: 'Unassigned',
+          dueDate: 'No due date',
+          priority: 'medium'
+        });
+      }
+
+      return { tasks };
+    };
+
+    if (!client.info.enabled || !client.info.configured) {
+      // If AI is disabled/unconfigured, fall back to deterministic parsing
+      const fallbackResult = deterministicChecklistFallback(transcript);
+      return res.json({ ...fallbackResult, provider: client.info, keysReturned: false });
+    }
+
+    try {
+      const resultText = await client.generateText(transcript, {
+        systemInstruction: 'You are a meeting assistant. Analyze the meeting transcript or notes and convert them into a JSON checklist of tasks. For each task, extract: title (action item description), assignee (default to "Unassigned"), dueDate (default to "No due date"), and priority ("low", "medium", or "high"). Respond ONLY with a valid JSON document matching the specified schema.',
+        jsonSchema: checklistResponseSchema,
+      });
+
+      const parsed = parseJsonObject(resultText) || { tasks: [] };
+      res.json({ tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [], provider: client.info, keysReturned: false });
+    } catch (err) {
+      console.warn('AI checklist generation failed, falling back to deterministic parser:', safeErrorMessage(err, [settings.apiKey]));
+      const fallbackResult = deterministicChecklistFallback(transcript);
+      res.json({ ...fallbackResult, provider: client.info, keysReturned: false });
     }
   });
 

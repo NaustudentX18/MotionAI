@@ -23,3 +23,35 @@ async fn delete_key(app: tauri::AppHandle, workspace_id: String) -> Result<(), S
     store.save().map_err(|e| e.to_string())?;
     Ok(())
 }
+
+#[cfg_attr(mobile, tauri::mobile_entry_point)]
+pub fn run() {
+    tauri::Builder::default()
+        .plugin(tauri_plugin_shell::init())
+        .plugin(tauri_plugin_store::Builder::default().build())
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_deep_link::init())
+        .invoke_handler(tauri::generate_handler![store_key, retrieve_key, delete_key])
+        .setup(|app| {
+            // Handle deep links on desktop during development
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                app.deep_link().register_all().map_err(|e| {
+                    eprintln!("Failed to register deep link scheme: {}", e);
+                }).ok();
+            }
+
+            // Register handler for when app is opened via deep link
+            #[cfg(desktop)]
+            {
+                use tauri_plugin_deep_link::DeepLinkExt;
+                app.deep_link().on_open_url(|event| {
+                    println!("Deep link URLs: {:?}", event.urls());
+                });
+            }
+            Ok(())
+        })
+        .run(tauri::generate_context!())
+        .expect("error while running tauri application");
+}

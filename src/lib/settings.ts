@@ -88,8 +88,41 @@ export function loadSettings(): MotionAiSettings {
   }
 }
 
+import { keychain } from './keychain';
+
+function isTauri(): boolean {
+  return typeof window !== 'undefined' && '__TAURI__' in window;
+}
+
 export function saveSettings(settings: MotionAiSettings): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(settings));
+  let settingsToSave = settings;
+  if (isTauri()) {
+    const providersCopy = { ...settings.providers };
+    let changed = false;
+    for (const [id, config] of Object.entries(providersCopy) as [AiProviderId, ProviderConfig][]) {
+      if (config.apiKey && config.apiKey !== '[securely-stored]') {
+        changed = true;
+        const key = config.apiKey;
+        providersCopy[id] = {
+          ...config,
+          apiKey: '[securely-stored]',
+        };
+        keychain.storeKey(`ai-key-${id}`, key).catch(err => {
+          console.error(`Failed to securely save API key for ${id}:`, err);
+        });
+      } else if (config.apiKey === '') {
+        // Delete key from keychain if user explicitly cleared it
+        keychain.deleteKey(`ai-key-${id}`).catch(() => {});
+      }
+    }
+    if (changed) {
+      settingsToSave = {
+        ...settings,
+        providers: providersCopy,
+      };
+    }
+  }
+  localStorage.setItem(STORAGE_KEY, JSON.stringify(settingsToSave));
 }
 
 export function isLocalMode(settings: MotionAiSettings): boolean {

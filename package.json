@@ -13,8 +13,8 @@
     "signaling": "node signaling-server.js",
     "dev:all": "npm-run-all --parallel signaling dev",
     "verify:static": "node scripts/static-verify.mjs",
-    "verify": "npm run verify:static && npm run lint && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:smoke && npm run test:migration && npm run test:reliability && npm run test:torture && npm run test:importers",
-    "test": "npm run verify:static && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:import-export && npm run test:migration && npm run test:reliability",
+    "verify": "npm run verify:static && npm run lint && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:smoke && npm run test:migration && npm run test:reliability && npm run test:torture && npm run test:importers && npm run test:webrtc-resilience",
+    "test": "npm run verify:static && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:import-export && npm run test:migration && npm run test:reliability && npm run test:webrtc-resilience",
     "test:ai": "npx tsx scripts/ai-contract-tests.ts",
     "test:spellcheck": "npx tsx scripts/spellcheck-schema-tests.ts",
     "test:workspace": "npx tsx scripts/workspace-mock-tests.ts",
@@ -25,7 +25,9 @@
     "test:migration": "npx tsx scripts/migration-tests.ts",
     "test:reliability": "npx tsx scripts/reliability-tests.ts",
     "test:torture": "npx tsx scripts/persistence-torture-tests.ts",
-    "test:importers": "npx tsx scripts/importer-tests.ts"
+    "test:importers": "npx tsx scripts/importer-tests.ts",
+    "test:webrtc-resilience": "npx tsx scripts/webrtc-resilience-tests.ts",
+    "test:secret-redaction": "npm run build && npx tsx scripts/secret-redaction-tests.ts --start-server --port 3313 --secret motionai-secret-redaction-test"
   },
   "dependencies": {
     "@google/genai": "^1.29.0",
