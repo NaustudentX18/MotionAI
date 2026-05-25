@@ -114,6 +114,22 @@ export function MobileWorkspaceApp({
   const [addingBlockType, setAddingBlockType] = useState<string | null>(null);
   const [mobileNewBlockText, setMobileNewBlockText] = useState("");
 
+  // Installation helper dialog state for iOS Safari Standalone detection
+  const [showIOSInstallDialog, setShowIOSInstallDialog] = useState(false);
+
+  useEffect(() => {
+    // Check if the user agent is iOS Safari and not standalone
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const isStandalone = ('standalone' in window.navigator && (window.navigator as any).standalone) || 
+      window.matchMedia('(display-mode: standalone)').matches;
+
+    if (isIOS && isSafari && !isStandalone) {
+      setShowIOSInstallDialog(true);
+    }
+  }, []);
+
   // --- GESTURE & RESPONSE OPTIMIZATION STATES & LOGIC ---
   const [swipedBlockId, setSwipedBlockId] = useState<string | null>(null);
   const [blockSwipeStartX, setBlockSwipeStartX] = useState<number | null>(null);
@@ -129,6 +145,23 @@ export function MobileWorkspaceApp({
     if (touchStartX === null || touchStartY === null) return;
     const diffX = e.changedTouches[0].clientX - touchStartX;
     const diffY = e.changedTouches[0].clientY - touchStartY;
+
+    // Edge Swipe hooks to toggle sidebar (open from left edge, close from anywhere)
+    if (isWorkspaceMenuOpen) {
+      if (diffX < -50 && Math.abs(diffY) < 65) {
+        setIsWorkspaceMenuOpen(false);
+        setTouchStartX(null);
+        setTouchStartY(null);
+        return;
+      }
+    } else {
+      if (diffX > 60 && Math.abs(diffY) < 65 && touchStartX < 50) {
+        setIsWorkspaceMenuOpen(true);
+        setTouchStartX(null);
+        setTouchStartY(null);
+        return;
+      }
+    }
 
     // Horizontally dominant gesture
     if (Math.abs(diffX) > 80 && Math.abs(diffY) < 60) {
@@ -568,7 +601,10 @@ export function MobileWorkspaceApp({
             >
               
               {/* Top Navigation Headers row (exactly like image) */}
-              <div className="pt-3 pb-2 px-4 border-b border-stone-800 flex items-center gap-1 select-none overflow-x-auto no-scrollbar shrink-0">
+              <div 
+                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
+                className="pb-2 px-4 border-b border-stone-800 flex items-center gap-1 select-none overflow-x-auto no-scrollbar shrink-0 pt-safe"
+              >
                 {/* J Profile circle */}
                 <button
                   onClick={() => setIsWorkspaceMenuOpen(true)}
@@ -853,7 +889,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Dynamic Sleek Floating Bottom bar/dock exactly as shown */}
-              <div className="pb-8 pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-[#191919] select-none shrink-0 relative z-30">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-[#191919] select-none shrink-0 relative z-30 pb-safe"
+              >
                 {/* Search button (Image 1, Left) */}
                 <button 
                   onClick={() => setIsSearchOverlayOpen(true)}
@@ -899,7 +938,10 @@ export function MobileWorkspaceApp({
             >
               
               {/* Back & Title Header Row */}
-              <div className="pt-3 pb-2 px-4 border-b border-stone-850 flex items-center justify-between shrink-0 select-none bg-stone-900/50">
+              <div 
+                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
+                className="pb-2 px-4 border-b border-stone-850 flex items-center justify-between shrink-0 select-none bg-stone-900/50 pt-safe"
+              >
                 <button 
                   onClick={() => { setMobileEditingPageId(null); setAddingBlockType(null); }}
                   className="flex items-center gap-1.5 px-2 py-1.5 bg-stone-850 hover:bg-stone-800 text-stone-300 font-bold text-xs rounded-lg transition-colors cursor-pointer"
@@ -1468,7 +1510,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Dedicated mobile back menu bar */}
-              <div className="pb-8 pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-stone-900/80 shrink-0">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-stone-900/80 shrink-0 pb-safe"
+              >
                 <button 
                   onClick={() => { setMobileEditingPageId(null); setAddingBlockType(null); }}
                   className="px-4 py-2 bg-stone-800 hover:bg-stone-750 font-bold text-xs text-stone-300 rounded-lg flex items-center gap-1.5 cursor-pointer"
@@ -1590,7 +1635,10 @@ export function MobileWorkspaceApp({
             <div className="absolute inset-0 bg-[#191919] z-50 flex flex-col justify-between select-none animate-in fade-in zoom-in-95 duration-200">
               
               {/* Header block with Clock icon & Create new logs */}
-              <div className="pt-3 pb-2.5 px-4 bg-stone-900 border-b border-stone-850 flex items-center justify-between shrink-0 select-none">
+              <div 
+                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
+                className="pb-2.5 px-4 bg-stone-900 border-b border-stone-850 flex items-center justify-between shrink-0 select-none pt-safe"
+              >
                 <button 
                   onClick={() => {
                     setChatMessages([
@@ -1724,7 +1772,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Bottom Custom Prompt Box (exactly like Image 7) */}
-              <div className="bg-[#1A1A1A] p-4 border-t border-stone-850 space-y-3 select-none">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="bg-[#1A1A1A] p-4 border-t border-stone-850 space-y-3 select-none pb-safe"
+              >
                 <div className="bg-[#242424] rounded-2xl border border-stone-800 p-2 flex items-center gap-2">
                   <button 
                     onClick={() => alert("Shortcut additions sync successfully.")}
@@ -1832,7 +1883,10 @@ export function MobileWorkspaceApp({
           {isSearchOverlayOpen && (
             <div className="absolute inset-0 bg-[#191919] z-50 flex flex-col justify-between select-none animate-in fade-in zoom-in-95 duration-200">
               
-              <div className="flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+              <div 
+                style={{ paddingTop: 'calc(16px + env(safe-area-inset-top))' }}
+                className="flex-1 flex flex-col overflow-hidden px-4 pb-4 space-y-4 pt-safe"
+              >
                 {/* Custom search head (Image 6) */}
                 <div className="flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-1.5 select-none text-left">
@@ -1924,7 +1978,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Close Search Button bottom */}
-              <div className="p-4 border-t border-stone-850 bg-stone-900/30 shrink-0">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="p-4 border-t border-stone-850 bg-stone-900/30 shrink-0 pb-safe"
+              >
                 <button 
                   onClick={() => setIsSearchOverlayOpen(false)}
                   className="w-full py-2 bg-stone-850 hover:bg-stone-800 rounded-xl text-stone-300 font-bold text-xs cursor-pointer select-none"
@@ -2091,6 +2148,44 @@ export function MobileWorkspaceApp({
           )}
 
         </div>
+
+        {/* iOS standalone PWA installer instructions dialog overlay */}
+        {showIOSInstallDialog && (
+          <div className="absolute bottom-4 left-4 right-4 bg-stone-900 border border-stone-850 rounded-2xl p-4 shadow-2xl z-50 text-left space-y-3 animate-in slide-in-from-bottom-5 duration-300">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-black font-sans font-extrabold text-[15px] select-none">
+                  O
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-stone-200">Install OpenNotion App</h4>
+                  <p className="text-[10px] text-stone-500">Run standalone on your iOS device</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowIOSInstallDialog(false)}
+                className="text-stone-500 hover:text-stone-300 p-0.5 cursor-pointer text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="text-[11px] text-stone-350 space-y-2 leading-relaxed font-sans">
+              <p>Add to your home screen for native fullscreen view and notch optimization:</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-stone-400 font-medium">
+                <li>
+                  Tap the iOS Share button <span className="inline-block align-middle font-bold text-stone-200 px-1 bg-stone-850 rounded">⎙</span> (square with arrow up).
+                </li>
+                <li>
+                  Scroll down the options list and select <span className="text-stone-200 font-bold">Add to Home Screen</span>.
+                </li>
+                <li>
+                  Tap <span className="text-purple-400 font-bold">Add</span> in the top right corner.
+                </li>
+              </ol>
+            </div>
+          </div>
+        )}
 
       </div>
 

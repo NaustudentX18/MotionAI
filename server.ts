@@ -51,16 +51,34 @@ setInterval(() => {
   }
 }, CLEANUP_INTERVAL_MS);
 
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env.MOTIONAI_API_SECRET;
-  if (!secret) { return next(); }
+function getHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
 
-  const provided = req.headers['x-motionai-secret'];
-  if (provided !== secret) {
-    res.status(401).json({ error: 'Unauthorized' });
+function matchesMotionAiSecret(provided: string): boolean {
+  const secret = process.env.MOTIONAI_API_SECRET;
+  if (!secret) return true;
+
+  const providedDigest = crypto.createHash('sha256').update(provided).digest();
+  const secretDigest = crypto.createHash('sha256').update(secret).digest();
+  return provided.length === secret.length && crypto.timingSafeEqual(providedDigest, secretDigest);
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!matchesMotionAiSecret(getHeaderValue(req.headers['x-motionai-secret']))) {
+    res.status(401).json({ error: 'Unauthorized', keysReturned: false });
     return;
   }
   next();
+}
+
+function requireWebhookAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!process.env.MOTIONAI_API_SECRET) {
+    res.status(503).json({ error: 'Webhook authentication is not configured.', keysReturned: false });
+    return;
+  }
+  requireAuth(req, res, next);
 }
 
 function buildGeneratePrompt(command: string | undefined, context: string | undefined, prompt: string | undefined) {
@@ -157,6 +175,13 @@ async function startServer() {
 
   app.get('/api/ai/providers', (_req, res) => {
     res.json({ providers: getConfiguredProviders(), keysReturned: false });
+  });
+
+  app.get('/api/ai/status', (_req, res) => {
+    res.json({
+      configuredProviders: getConfiguredProviders(),
+      keysReturned: false,
+    });
   });
 
   app.post('/api/ai/probe', rateLimitMiddleware, requireAuth, async (req, res) => {
@@ -276,6 +301,138 @@ async function startServer() {
       console.error('MotionAI Chat endpoint error:', safeErrorMessage(err, [settings.apiKey]));
       res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), provider: client.info, keysReturned: false });
     }
+  });
+
+  app.post('/api/ai/tts', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const { text, provider, voice, speed, localEndpointUrl, model } = req.body || {};
+    const settings = extractAiSettings(req.body || {});
+
+    if (!text) {
+      res.status(400).json({ error: 'Text is required', keysReturned: false });
+      return;
+    }
+
+    try {
+      if (provider === 'openai') {
+        const apiKey = settings.apiKey || process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          res.status(500).json({ error: 'OpenAI API key is not configured on the server', keysReturned: false });
+          return;
+        }
+
+        const response = await fetch('https://api.openai.com/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model || 'tts-1',
+            input: text,
+            voice: voice || 'alloy',
+            speed: speed || 1.0,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          res.status(response.status).json({ error: `OpenAI TTS failed: ${errorText}`, keysReturned: false });
+          return;
+        }
+
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Cache-Control', 'no-cache');
+
+        if (response.body) {
+          const reader = response.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        } else {
+          res.end();
+        }
+        return;
+      }
+
+      if (provider === 'local') {
+        const endpoint = localEndpointUrl || process.env.LOCAL_TTS_URL || 'http://127.0.0.1:8888/v1/audio/speech';
+        const isOpenAiCompatible = endpoint.includes('/audio/speech');
+
+        let localResponse: globalThis.Response;
+        if (isOpenAiCompatible) {
+          localResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: model || 'kokoro',
+              input: text,
+              voice: voice || 'af_bella',
+              speed: speed || 1.0,
+            }),
+          });
+        } else {
+          localResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text,
+              voice: voice || 'en-us',
+              speed: speed || 1.0,
+            }),
+          });
+        }
+
+        if (!localResponse.ok) {
+          const errorText = await localResponse.text();
+          res.status(localResponse.status).json({ error: `Local TTS endpoint failed: ${errorText}`, keysReturned: false });
+          return;
+        }
+
+        const contentType = localResponse.headers.get('content-type') || 'audio/wav';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'no-cache');
+
+        if (localResponse.body) {
+          const reader = localResponse.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        } else {
+          res.end();
+        }
+        return;
+      }
+
+      res.status(400).json({ error: `Unsupported provider: ${provider}`, keysReturned: false });
+    } catch (err) {
+      console.error('TTS endpoint error:', safeErrorMessage(err, [settings.apiKey]));
+      res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), keysReturned: false });
+    }
+  });
+
+  app.post('/api/webhooks/:path', requireWebhookAuth, (req, res) => {
+    const webhookPath = String(req.params.path || '').trim();
+    if (!webhookPath) {
+      res.status(400).json({ error: 'Missing webhook path', keysReturned: false });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      webhook: webhookPath,
+      received: true,
+      keysReturned: false,
+    });
   });
 
   // ─── Presence Signaling Endpoints ──────────────────────────────────────────────
