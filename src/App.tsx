@@ -15,6 +15,9 @@ import { CommandPalette } from './components/CommandPalette';
 import { DriveModal } from './components/DriveModal';
 import { TasksModal } from './components/TasksModal';
 import { PageAddons } from './components/PageAddons';
+import { SpaceFolderPicker } from './components/SpaceFolderPicker';
+import { WorkspaceTemplate, instantiateTemplate } from './lib/workspaceTemplates';
+import { useSyncStatus, setLastSaveNow } from './hooks/useSyncStatus';
 import { MobileWorkspaceApp } from './components/MobileWorkspaceApp';
 import { MotionAIHub } from './components/MotionAIHub';
 import { SettingsModal } from './components/SettingsModal';
@@ -247,9 +250,16 @@ export default function App() {
         document.documentElement.classList.remove('reduced-motion');
       }
     };
-    handleChange(mediaQuery);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
+  }, []);
+
+  // Mobile device auto-detection to set default viewMode
+  useEffect(() => {
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobileDevice) {
+      setViewMode('mobile');
+    }
   }, []);
 
   // AI Provider Status
@@ -272,6 +282,8 @@ export default function App() {
 
   // WebRTC presence state
   const [presencePeers, setPresencePeers] = useState<Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>>([]);
+  const syncStatus = useSyncStatus();
+  const [movePageId, setMovePageId] = useState<string | null>(null);
   const [presenceAvailable, setPresenceAvailable] = useState(false);
   const presenceManagerRef = useRef<PresenceManager | null>(null);
 
@@ -451,6 +463,7 @@ export default function App() {
     if (workspaceLoaded && pages.length > 0) {
       const snapshot = yDocToSnapshot(getYDoc());
       await saveWorkspace(snapshot);
+      setLastSaveNow();
     }
 
     // Destroy current Y.Doc and reload with new workspace
@@ -509,6 +522,27 @@ export default function App() {
   };
 
   const handleSaveSnapshot = () => {
+    setLastSaveNow();
+
+  // Move page to new parent
+  const handleMovePage = (pageId: string) => {
+    setMovePageId(pageId);
+  };
+
+  const handleMoveConfirm = (pageId: string, newParentId: string | null) => {
+    setPages(prev => prev.map(p =>
+      p.id === pageId ? { ...p, parentId: newParentId, updatedAt: Date.now() } : p
+    ));
+    setMovePageId(null);
+  };
+
+  const handleInstantiateTemplate = (template: WorkspaceTemplate) => {
+    const newPages = instantiateTemplate(template);
+    setPages(prev => [...prev, ...newPages]);
+    if (newPages.length > 0) {
+      setCurrentPageId(newPages[0].id);
+    }
+  };
     if (!currentPageId) return;
     const targetPage = pages.find(p => p.id === currentPageId);
     if (!targetPage) return;
@@ -1073,6 +1107,9 @@ export default function App() {
                   setAddonsOpen(false);
                 }}
                 onAddPage={addPage}
+                encryptionLocked={syncStatus.encryptionLocked}
+                encryptionKeySet={syncStatus.encryptionKeySet}
+                lastSavedAt={syncStatus.lastSavedAt}
               />
             </div>
           </>

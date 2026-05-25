@@ -1,0 +1,19 @@
+{
+  "name": "MotionAI Workspace",
+  "short_name": "MotionAI",
+  "description": "Local-First Intelligent Workspace",
+  "start_url": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "background_color": "#09090b",
+  "theme_color": "#7c3aed",
+  "categories": ["productivity", "utilities"],
+  "icons": [
+    {
+      "src": "/docs/media/motionai-logo.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
