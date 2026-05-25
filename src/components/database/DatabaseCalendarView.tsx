@@ -1,26 +1,26 @@
 import React, { useState } from 'react';
-import { Database, DatabaseRow, DatabaseProperty } from '../../types/database';
-import { ChevronLeft, ChevronRight, Plus, Calendar as CalendarIcon, Trash2 } from 'lucide-react';
+import { Database, DatabaseRow, DatabaseView } from '../../types/database';
+import { ChevronLeft, ChevronRight, Plus, Trash2 } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { toDateKey } from './databaseViewUtils';
 
 interface DatabaseCalendarViewProps {
   database: Database;
   onChange: (updatedDb: Database) => void;
-  datePropertyId?: string;
+  view: DatabaseView;
+  onViewChange: (updatedView: DatabaseView) => void;
 }
 
-export function DatabaseCalendarView({ database, onChange, datePropertyId }: DatabaseCalendarViewProps) {
+export function DatabaseCalendarView({ database, onChange, view, onViewChange }: DatabaseCalendarViewProps) {
   const { properties, rows } = database;
 
   // Find date property
-  const activeDateProp = datePropertyId
-    ? properties.find(p => p.id === datePropertyId)
+  const activeDateProp = view.datePropertyId
+    ? properties.find(p => p.id === view.datePropertyId)
     : properties.find(p => p.type === 'date');
-
-  const [selectedDatePropId, setSelectedDatePropId] = useState<string>(activeDateProp?.id || '');
   const [currentDate, setCurrentDate] = useState(new Date());
 
-  const targetDateProp = properties.find(p => p.id === selectedDatePropId);
+  const targetDateProp = activeDateProp;
 
   // If no date property exists, show configuration prompt
   if (!targetDateProp || targetDateProp.type !== 'date') {
@@ -33,8 +33,8 @@ export function DatabaseCalendarView({ database, onChange, datePropertyId }: Dat
         </p>
         {dateProperties.length > 0 ? (
           <select
-            value={selectedDatePropId}
-            onChange={(e) => setSelectedDatePropId(e.target.value)}
+            value={view.datePropertyId || ''}
+            onChange={(e) => onViewChange({ ...view, datePropertyId: e.target.value || undefined })}
             className="px-2.5 py-1 text-xs border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-[#1E1E1E]"
           >
             <option value="">Select a date column...</option>
@@ -77,9 +77,8 @@ export function DatabaseCalendarView({ database, onChange, datePropertyId }: Dat
   // Row items grouped by ISO date string (YYYY-MM-DD)
   const itemsByDate: Record<string, DatabaseRow[]> = {};
   rows.forEach(row => {
-    const rawVal = row.values[targetDateProp.id];
-    if (rawVal) {
-      const dateStr = new Date(rawVal).toISOString().split('T')[0];
+    const dateStr = toDateKey(row.values[targetDateProp.id]);
+    if (dateStr) {
       if (!itemsByDate[dateStr]) {
         itemsByDate[dateStr] = [];
       }
@@ -145,8 +144,8 @@ export function DatabaseCalendarView({ database, onChange, datePropertyId }: Dat
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Date property:</span>
           <select
-            value={selectedDatePropId}
-            onChange={(e) => setSelectedDatePropId(e.target.value)}
+            value={view.datePropertyId || ''}
+            onChange={(e) => onViewChange({ ...view, datePropertyId: e.target.value || undefined })}
             className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-800 rounded bg-white dark:bg-[#1E1E1E] font-medium"
           >
             {properties

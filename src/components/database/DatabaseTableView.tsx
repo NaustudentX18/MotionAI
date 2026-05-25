@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
-import { Database, DatabaseProperty, DatabaseRow, SelectOption } from '../../types/database';
+import { Database, DatabaseProperty, DatabaseRow, DatabaseView, SelectOption } from '../../types/database';
 import { Plus, Trash2, Settings2, Sparkles, PlusCircle, Calendar as CalendarIcon, Type, Hash, CheckSquare, ListPlus, ChevronDown, Check } from 'lucide-react';
 import { cn } from '../../lib/utils';
+import { getVisibleProperties } from './databaseViewUtils';
 
 interface DatabaseTableViewProps {
   database: Database;
   onChange: (updatedDb: Database) => void;
+  view?: DatabaseView;
   onRunAiProperty?: (propertyId: string, rowId: string) => Promise<void>;
   aiRunningRows?: Record<string, boolean>; // propertyId-rowId -> boolean
 }
 
-export function DatabaseTableView({ database, onChange, onRunAiProperty, aiRunningRows = {} }: DatabaseTableViewProps) {
+export function DatabaseTableView({ database, onChange, view, onRunAiProperty, aiRunningRows = {} }: DatabaseTableViewProps) {
   const [editingCell, setEditingCell] = useState<{ rowId: string; propertyId: string } | null>(null);
   const [editingProperty, setEditingProperty] = useState<string | null>(null); // propertyId for editing config
   const [newPropName, setNewPropName] = useState('');
@@ -18,6 +20,7 @@ export function DatabaseTableView({ database, onChange, onRunAiProperty, aiRunni
   const [showAddProp, setShowAddProp] = useState(false);
 
   const { properties, rows } = database;
+  const renderedProperties = getVisibleProperties(database, view);
 
   // Handler for cell updates
   const handleCellChange = (rowId: string, propertyId: string, value: any) => {
@@ -81,7 +84,21 @@ export function DatabaseTableView({ database, onChange, onRunAiProperty, aiRunni
       delete newValues[propertyId];
       return { ...row, values: newValues };
     });
-    onChange({ ...database, properties: updatedProperties, rows: updatedRows });
+    onChange({
+      ...database,
+      properties: updatedProperties,
+      rows: updatedRows,
+      views: database.views.map(viewConfig => ({
+        ...viewConfig,
+        visibleProperties: viewConfig.visibleProperties.filter(id => id !== propertyId),
+        groupByPropertyId: viewConfig.groupByPropertyId === propertyId ? undefined : viewConfig.groupByPropertyId,
+        datePropertyId: viewConfig.datePropertyId === propertyId ? undefined : viewConfig.datePropertyId,
+        titlePropertyId: viewConfig.titlePropertyId === propertyId ? undefined : viewConfig.titlePropertyId,
+        coverPropertyId: viewConfig.coverPropertyId === propertyId ? undefined : viewConfig.coverPropertyId,
+        timelineStartPropertyId: viewConfig.timelineStartPropertyId === propertyId ? undefined : viewConfig.timelineStartPropertyId,
+        timelineEndPropertyId: viewConfig.timelineEndPropertyId === propertyId ? undefined : viewConfig.timelineEndPropertyId,
+      })),
+    });
   };
 
   // Get Property Icon
@@ -329,7 +346,7 @@ export function DatabaseTableView({ database, onChange, onRunAiProperty, aiRunni
           <thead>
             <tr className="border-b border-gray-200 dark:border-gray-800 bg-gray-50/50 dark:bg-gray-900/30">
               <th className="w-10 px-3 py-2 text-center text-xs font-bold text-gray-400 uppercase">#</th>
-              {properties.map(prop => (
+              {renderedProperties.map(prop => (
                 <th key={prop.id} className="px-4 py-2.5 text-xs font-bold text-gray-600 dark:text-gray-400 group">
                   <div className="flex items-center justify-between gap-1.5">
                     <div className="flex items-center gap-1.5">
@@ -356,7 +373,7 @@ export function DatabaseTableView({ database, onChange, onRunAiProperty, aiRunni
                 className="border-b border-gray-100 dark:border-gray-800 hover:bg-gray-50/40 dark:hover:bg-gray-900/10 group transition"
               >
                 <td className="px-3 py-2 text-center text-xs text-gray-400 font-medium">{idx + 1}</td>
-                {properties.map(prop => (
+                {renderedProperties.map(prop => (
                   <td
                     key={prop.id}
                     className="px-4 py-2 text-xs relative cursor-text min-h-[32px] group/cell"

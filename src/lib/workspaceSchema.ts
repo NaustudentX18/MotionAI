@@ -1,4 +1,4 @@
-import type { Block, BlockType, Page } from '../types';
+import { BLOCK_TYPES, PAGE_TYPES, type Block, type BlockType, type Page, type PageType, type PageVersion } from '../types';
 import type { WorkspaceSnapshot } from './persistence';
 
 export const WORKSPACE_SCHEMA_VERSION = 1 as const;
@@ -17,22 +17,8 @@ export interface WorkspaceValidationResult {
   errors: string[];
 }
 
-const VALID_BLOCK_TYPES = new Set<BlockType>([
-  'p',
-  'h1',
-  'h2',
-  'h3',
-  'todo',
-  'bullet',
-  'divider',
-  'callout',
-  'quote',
-  'ai-summary',
-  'ai-draft',
-  'ai-rewrite',
-  'code',
-  'image',
-]);
+const VALID_BLOCK_TYPES = new Set<BlockType>(BLOCK_TYPES);
+const VALID_PAGE_TYPES = new Set<PageType>(PAGE_TYPES);
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -91,6 +77,36 @@ function validateBlock(block: unknown, path: string, errors: string[]): block is
   return errors.length === 0;
 }
 
+
+function validatePageVersion(version: unknown, path: string, errors: string[]): version is PageVersion {
+  if (!isRecord(version)) {
+    errors.push(`${path} must be an object`);
+    return false;
+  }
+
+  if (typeof version.id !== 'string' || version.id.length === 0) errors.push(`${path}.id must be a non-empty string`);
+  if (!isFiniteNumber(version.timestamp)) errors.push(`${path}.timestamp must be a finite number`);
+  if (typeof version.title !== 'string') errors.push(`${path}.title must be a string`);
+
+  if (!Array.isArray(version.blocks)) {
+    errors.push(`${path}.blocks must be an array`);
+    return false;
+  }
+
+  const versionBlockIds = new Set<string>();
+  version.blocks.forEach((block, index) => {
+    const before = errors.length;
+    validateBlock(block, `${path}.blocks[${index}]`, errors);
+    if (errors.length === before && isRecord(block)) {
+      const blockId = block.id as string;
+      if (versionBlockIds.has(blockId)) errors.push(`${path}.blocks[${index}].id duplicates another block in the same version`);
+      versionBlockIds.add(blockId);
+    }
+  });
+
+  return errors.length === 0;
+}
+
 function validatePage(page: unknown, path: string, errors: string[]): page is Page {
   if (!isRecord(page)) {
     errors.push(`${path} must be an object`);
@@ -104,8 +120,24 @@ function validatePage(page: unknown, path: string, errors: string[]): page is Pa
   if (!isFiniteNumber(page.createdAt)) errors.push(`${path}.createdAt must be a finite number`);
   if (!isFiniteNumber(page.updatedAt)) errors.push(`${path}.updatedAt must be a finite number`);
 
-  if ('pageType' in page && page.pageType !== undefined && page.pageType !== 'block' && page.pageType !== 'canvas') {
-    errors.push(`${path}.pageType must be block or canvas when present`);
+  if ('pageType' in page && page.pageType !== undefined) {
+    if (typeof page.pageType !== 'string' || !VALID_PAGE_TYPES.has(page.pageType as PageType)) {
+      errors.push(`${path}.pageType must be a supported page type`);
+    }
+  }
+
+  if ('reminderDate' in page && page.reminderDate !== undefined) {
+    if (typeof page.reminderDate !== 'string' || Number.isNaN(new Date(page.reminderDate).getTime())) {
+      errors.push(`${path}.reminderDate must be a valid date string when present`);
+    }
+  }
+
+  if ('versions' in page && page.versions !== undefined) {
+    if (!Array.isArray(page.versions)) {
+      errors.push(`${path}.versions must be an array when present`);
+    } else {
+      page.versions.forEach((version, index) => validatePageVersion(version, `${path}.versions[${index}]`, errors));
+    }
   }
 
   if (!Array.isArray(page.blocks)) {

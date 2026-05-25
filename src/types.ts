@@ -1,4 +1,22 @@
-export type BlockType = 'p' | 'h1' | 'h2' | 'h3' | 'todo' | 'bullet' | 'divider' | 'callout' | 'quote' | 'ai-summary' | 'ai-draft' | 'ai-rewrite' | 'code' | 'image' | 'database';
+export const BLOCK_TYPES = [
+  'p',
+  'h1',
+  'h2',
+  'h3',
+  'todo',
+  'bullet',
+  'divider',
+  'callout',
+  'quote',
+  'ai-summary',
+  'ai-draft',
+  'ai-rewrite',
+  'code',
+  'image',
+  'database',
+] as const;
+
+export type BlockType = typeof BLOCK_TYPES[number];
 
 export interface BlockComment {
   id: string;
@@ -35,7 +53,9 @@ export interface PageVersion {
   blocks: Block[];
 }
 
-export type PageType = 'block' | 'canvas' | 'database' | 'dashboard';
+export const PAGE_TYPES = ['block', 'canvas', 'database', 'dashboard', 'space', 'folder'] as const;
+
+export type PageType = typeof PAGE_TYPES[number];
 
 export interface Page {
   id: string;
@@ -55,5 +75,6 @@ export interface Page {
   actualTime?: number; // tracked time in minutes
   isTimerRunning?: boolean;
   timerStartTime?: number;
+  reminderDate?: string; // ISO date string (YYYY-MM-DD) or datetime
 }
 

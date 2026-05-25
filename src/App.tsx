@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Page, Block, PageType } from './types';
 import { Sidebar } from './components/Sidebar';
@@ -14,11 +14,16 @@ import { runAiFormula } from './lib/ai/AiFormulaEngine';
 import { CommandPalette } from './components/CommandPalette';
 import { DriveModal } from './components/DriveModal';
 import { TasksModal } from './components/TasksModal';
+import { MeetingParserModal } from './components/MeetingParserModal';
 import { PageAddons } from './components/PageAddons';
+import { SpaceFolderPicker } from './components/SpaceFolderPicker';
+import { WorkspaceTemplate, instantiateTemplate } from './lib/workspaceTemplates';
+import { useSyncStatus, setLastSaveNow } from './hooks/useSyncStatus';
 import { MobileWorkspaceApp } from './components/MobileWorkspaceApp';
 import { MotionAIHub } from './components/MotionAIHub';
 import { SettingsModal } from './components/SettingsModal';
 import { TaskPropertiesPanel } from './components/tasks/TaskPropertiesPanel';
+import { ReminderActionToast } from './components/tasks/ReminderActionToast';
 import { DashboardWidget } from './components/dashboard/DashboardWidget';
 import { SettingsProvider } from './hooks/useSettings';
 import { initAuth, googleSignIn, logout } from './lib/firebase';
@@ -29,9 +34,12 @@ import { loadWorkspace, saveWorkspace, isWorkspaceLocked, setWorkspaceKey, clear
 import { getYDoc, yDocToSnapshot, destroyYjs } from './lib/yjs';
 import { loadSettings } from './lib/settings';
 import { backlinksIndex } from './lib/backlinksIndex';
-import { PresenceManager } from './lib/presence';
+import { PresenceManager, type PresenceDiagnostics } from './lib/presence';
 import { PresenceIndicator } from './components/PresenceIndicator';
 import { keychain } from './lib/keychain';
+import { DEFAULT_REMINDER_SNOOZE_MINUTES, snoozeReminderDate, useReminders, type ReminderEvent } from './hooks/useReminders';
+import { hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
+import { LockScreen } from './components/LockScreen';
 
 function createDefaultPage(): Page {
   return {
@@ -56,6 +64,7 @@ export default function App() {
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [workspaceLocked, setWorkspaceLocked] = useState(false);
+  const [localAppLocked, setLocalAppLocked] = useState(() => isLocalAuthLocked());
   const [passphraseInput, setPassphraseInput] = useState('');
   const [passphraseError, setPassphraseError] = useState('');
   // Workspace state
@@ -65,6 +74,7 @@ export default function App() {
   // E2EE keychain state
   const [savedKeyAvailable, setSavedKeyAvailable] = useState(false);
   const [showSaveKeyPrompt, setShowSaveKeyPrompt] = useState(false);
+  const [activeReminder, setActiveReminder] = useState<ReminderEvent | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -123,6 +133,16 @@ export default function App() {
     };
   }, []);
 
+  useEffect(() => {
+    const handleLocalLock = () => {
+      if (!hasPin()) return;
+      lockLocalAuth();
+      setLocalAppLocked(true);
+    };
+    window.addEventListener('motionai-local-lock', handleLocalLock);
+    return () => window.removeEventListener('motionai-local-lock', handleLocalLock);
+  }, []);
+
   // y-webrtc: real-time cross-device CRDT sync
   useEffect(() => {
     if (!workspaceLoaded) return;
@@ -164,9 +184,9 @@ export default function App() {
       setCurrentPageId(exists ? snapshot.currentPageId : snapshot.pages[0]?.id ?? null);
     };
 
-    pagesMap.observe(observer);
+    doc.on('update', observer);
     return () => {
-      pagesMap.unobserve(observer);
+      doc.off('update', observer);
     };
   }, [workspaceLoaded]);
 
@@ -212,6 +232,7 @@ export default function App() {
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [driveModalOpen, setDriveModalOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
+  const [meetingParserOpen, setMeetingParserOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
   const [viewMode, setViewMode] = useState<'desktop' | 'mobile' | 'hub'>('hub');
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
@@ -247,10 +268,27 @@ export default function App() {
         document.documentElement.classList.remove('reduced-motion');
       }
     };
-    handleChange(mediaQuery);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
+
+  // Mobile device auto-detection to set default viewMode
+  useEffect(() => {
+    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
+    if (isMobileDevice) {
+      setViewMode('mobile');
+    }
+  }, []);
+
+  const handleReminderFired = useCallback((reminder: ReminderEvent) => {
+    console.info('[reminder]', reminder.title, reminder.body);
+    setActiveReminder(reminder);
+  }, []);
+
+  useReminders({
+    snapshot: workspaceLoaded ? { pages, currentPageId } : null,
+    onReminder: handleReminderFired,
+  });
 
   // AI Provider Status
   const aiProviderStatus = useMemo(() => {
@@ -272,7 +310,10 @@ export default function App() {
 
   // WebRTC presence state
   const [presencePeers, setPresencePeers] = useState<Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>>([]);
+  const syncStatus = useSyncStatus();
+  const [movePageId, setMovePageId] = useState<string | null>(null);
   const [presenceAvailable, setPresenceAvailable] = useState(false);
+  const [presenceDiagnostics, setPresenceDiagnostics] = useState<PresenceDiagnostics | null>(null);
   const presenceManagerRef = useRef<PresenceManager | null>(null);
 
   // Initialize Auth
@@ -315,16 +356,19 @@ export default function App() {
           console.warn('[Presence]', msg);
           setPresenceAvailable(false);
         },
+        onDiagnosticsChange: (diagnostics) => setPresenceDiagnostics(diagnostics),
       }
     );
 
     presenceManagerRef.current = manager;
     setPresenceAvailable(manager.isWebRtcAvailable());
     manager.start(currentPageId);
+    setPresenceDiagnostics(manager.getDiagnostics());
 
     return () => {
       manager.stop();
       presenceManagerRef.current = null;
+      setPresenceDiagnostics(null);
     };
   }, [workspaceLoaded, currentPageId, user]);
 
@@ -380,6 +424,9 @@ export default function App() {
     addPageToStore(newPage);
     setCurrentPageIdInStore(newPage.id);
     setCurrentPageId(newPage.id);
+    if (viewMode === 'hub') {
+      setViewMode('desktop');
+    }
   };
 
   const updateCurrentPage = (updates: Partial<Page>) => {
@@ -394,6 +441,26 @@ export default function App() {
     setPages(updated);
     const changedPage = updated.find(p => p.id === id);
     if (changedPage) savePage(changedPage);
+  };
+
+  const clearActiveReminder = (reminder: ReminderEvent) => {
+    setActiveReminder(current => current?.key === reminder.key ? null : current);
+  };
+
+  const handleDismissReminder = (reminder: ReminderEvent) => {
+    updatePageById(reminder.pageId, { reminderDate: undefined });
+    clearActiveReminder(reminder);
+  };
+
+  const handleSnoozeReminder = (reminder: ReminderEvent) => {
+    updatePageById(reminder.pageId, { reminderDate: snoozeReminderDate(DEFAULT_REMINDER_SNOOZE_MINUTES) });
+    clearActiveReminder(reminder);
+  };
+
+  const handleOpenReminderPage = (pageId: string) => {
+    setCurrentPageId(pageId);
+    setCurrentPageIdInStore(pageId);
+    if (viewMode === 'hub') setViewMode('desktop');
   };
 
   const deletePageById = (id: string) => {
@@ -442,12 +509,38 @@ export default function App() {
     setCurrentPageIdInStore(newPage.id);
   };
 
+  const handleAppendMeetingBlocks = (blocks: Block[]) => {
+    if (!currentPage) return;
+    const nextBlocks = [...currentPage.blocks, ...blocks];
+    updateCurrentPage({ blocks: nextBlocks });
+    setFocusAfterInsert(blocks[0]?.id ?? null);
+    if (viewMode === 'hub') setViewMode('desktop');
+  };
+
+  const handleCreateMeetingTaskPage = (title: string, blocks: Block[]) => {
+    const newPage: Page = {
+      id: uuidv4(),
+      title,
+      icon: '✅',
+      cover: null,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+      blocks,
+    };
+    setPages(prev => [...prev, newPage]);
+    addPageToStore(newPage);
+    setCurrentPageId(newPage.id);
+    setCurrentPageIdInStore(newPage.id);
+    setViewMode('desktop');
+  };
+
   // Workspace management handlers
   const handleSwitchWorkspace = async (workspace: WorkspaceMeta) => {
     // Save current workspace state before switching
     if (workspaceLoaded && pages.length > 0) {
       const snapshot = yDocToSnapshot(getYDoc());
       await saveWorkspace(snapshot);
+      setLastSaveNow();
     }
 
     // Destroy current Y.Doc and reload with new workspace
@@ -506,6 +599,27 @@ export default function App() {
   };
 
   const handleSaveSnapshot = () => {
+    setLastSaveNow();
+
+  // Move page to new parent
+  const handleMovePage = (pageId: string) => {
+    setMovePageId(pageId);
+  };
+
+  const handleMoveConfirm = (pageId: string, newParentId: string | null) => {
+    setPages(prev => prev.map(p =>
+      p.id === pageId ? { ...p, parentId: newParentId, updatedAt: Date.now() } : p
+    ));
+    setMovePageId(null);
+  };
+
+  const handleInstantiateTemplate = (template: WorkspaceTemplate) => {
+    const newPages = instantiateTemplate(template);
+    setPages(prev => [...prev, ...newPages]);
+    if (newPages.length > 0) {
+      setCurrentPageId(newPages[0].id);
+    }
+  };
     if (!currentPageId) return;
     const targetPage = pages.find(p => p.id === currentPageId);
     if (!targetPage) return;
@@ -739,6 +853,10 @@ export default function App() {
     );
   }
 
+  if (localAppLocked) {
+    return <LockScreen onUnlocked={() => setLocalAppLocked(false)} />;
+  }
+
   return (
     <SettingsProvider>
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
@@ -801,6 +919,9 @@ export default function App() {
            onSelectPage={(id) => {
              setCurrentPageIdInStore(id);
              setCurrentPageId(id);
+             if (viewMode === 'hub') {
+               setViewMode('desktop');
+             }
              if (window.innerWidth < 768) setSidebarOpen(false);
            }}
            onAddPage={addPage}
@@ -886,6 +1007,14 @@ export default function App() {
              >
                <CheckSquare size={12} className="mr-1" />
                Tasks
+             </button>
+             <button
+               onClick={() => setMeetingParserOpen(open => !open)}
+               className="flex items-center gap-1 text-xs bg-emerald-50 dark:bg-emerald-950/20 text-emerald-700 dark:text-emerald-400 border border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100/60 dark:hover:bg-emerald-900/10 px-2.5 py-1.5 rounded font-medium transition-colors"
+               title="Parse meeting notes into selectable tasks"
+             >
+               <Sparkles size={12} className="mr-1" />
+               Meeting AI
              </button>
              <button aria-label="Search" onClick={() => setPaletteOpen(true)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded text-[#37352f8c]">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
@@ -975,6 +1104,7 @@ export default function App() {
                  pageId={currentPage.id} 
                  pages={pages}
                  onSelectPage={setCurrentPageId}
+                 onAddPage={handleAddNewPageObj}
                />
              ) : currentPage.pageType === 'dashboard' ? (
                <div className="w-full px-6 sm:px-12 py-12 pb-48 font-sans max-w-5xl mx-auto overflow-y-auto h-full">
@@ -1060,6 +1190,7 @@ export default function App() {
                 collaborationActive={collaborationActive}
                 onToggleCollaboration={setCollaborationActive}
                 presencePeers={presencePeers}
+                presenceDiagnostics={presenceDiagnostics}
                 pages={pages}
                 backlinks={currentBacklinks}
                 onNavigateToPage={(pageId: string) => {
@@ -1067,11 +1198,24 @@ export default function App() {
                   setAddonsOpen(false);
                 }}
                 onAddPage={addPage}
+                encryptionLocked={syncStatus.encryptionLocked}
+                encryptionKeySet={syncStatus.encryptionKeySet}
+                lastSavedAt={syncStatus.lastSavedAt}
               />
             </div>
           </>
         )}
       </div>
+
+      {activeReminder && (
+        <ReminderActionToast
+          reminder={activeReminder}
+          snoozeMinutes={DEFAULT_REMINDER_SNOOZE_MINUTES}
+          onDismiss={handleDismissReminder}
+          onSnooze={handleSnoozeReminder}
+          onOpenPage={handleOpenReminderPage}
+        />
+      )}
 
       <DriveModal 
         isOpen={driveModalOpen} 
@@ -1083,6 +1227,15 @@ export default function App() {
         isOpen={tasksModalOpen}
         onClose={() => setTasksModalOpen(false)}
         currentPageContent={currentPage?.blocks.map(b => b.content).join('\n')}
+      />
+      <MeetingParserModal
+        isOpen={meetingParserOpen}
+        onClose={() => setMeetingParserOpen(false)}
+        currentPageTitle={currentPage?.title || undefined}
+        currentPageContent={currentPage?.blocks.map(b => b.content).join('\n')}
+        canAppendToCurrentPage={Boolean(currentPage)}
+        onAppendBlocks={handleAppendMeetingBlocks}
+        onCreateTaskPage={handleCreateMeetingTaskPage}
       />
       <SettingsModal
         isOpen={settingsModalOpen}

@@ -10,8 +10,13 @@ import {
   extractAiSettings,
   getConfiguredProviders,
   probeAi,
+  providerUnavailableMessage,
   safeErrorMessage,
   spellcheckResponseSchema,
+  checklistResponseSchema,
+  meetingParserResponseSchema,
+  buildGeneratePrompt,
+  parseJsonObject,
   type ChatMessage,
 } from './src/lib/ai/providers';
 import { rateLimitMiddleware, shutdownRateLimitStore } from './src/lib/rateLimit';
@@ -36,9 +41,89 @@ interface SignalStoreEntry {
   expiresAt: number;
 }
 
+
+interface MeetingTask {
+  title: string;
+  assignee: string;
+  dueDate: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+interface MeetingParserResult {
+  summary: string[];
+  tasks: MeetingTask[];
+}
+
+function normalizeMeetingPriority(value: unknown): MeetingTask['priority'] {
+  return value === 'high' || value === 'low' || value === 'medium' ? value : 'medium';
+}
+
+function sanitizeMeetingTask(input: unknown, index: number): MeetingTask | null {
+  if (!input || typeof input !== 'object') return null;
+  const record = input as Record<string, unknown>;
+  const rawTitle = typeof record.title === 'string' ? record.title : '';
+  const title = rawTitle.replace(/[\r\n]+/g, ' ').trim().slice(0, 180);
+  if (title.length < 3) return null;
+  const assignee = (typeof record.assignee === 'string' && record.assignee.trim())
+    ? record.assignee.trim().slice(0, 80)
+    : 'Unassigned';
+  const dueDate = (typeof record.dueDate === 'string' && record.dueDate.trim())
+    ? record.dueDate.trim().slice(0, 80)
+    : 'No due date';
+  return { title: title || `Action item ${index + 1}`, assignee, dueDate, priority: normalizeMeetingPriority(record.priority) };
+}
+
+function deterministicMeetingParser(transcript: string): MeetingParserResult {
+  const lines = transcript.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const tasks: MeetingTask[] = [];
+  const summary: string[] = [];
+
+  for (const line of lines) {
+    const cleaned = line.replace(/^[-*\d.)\s]+/, '').trim();
+    if (summary.length < 3 && cleaned.length > 8) summary.push(cleaned.slice(0, 180));
+    const isTaskLine = /\b(todo|action item|need to|will|follow up|deadline|due|assign|owner)\b/i.test(cleaned);
+    if (!isTaskLine) continue;
+    let title = cleaned.replace(/^(todo|action item):\s*/i, '').trim();
+    let assignee = 'Unassigned';
+    const assigneeMatch = title.match(/(?:owner|assignee|assigned to|by):\s*([A-Za-z0-9 _.-]+)/i)
+      || title.match(/^([A-Z][A-Za-z0-9_-]+):\s+/)
+      || title.match(/\b([A-Z][A-Za-z0-9_-]+)\s+will\s+/);
+    if (assigneeMatch) assignee = assigneeMatch[1].trim().slice(0, 80);
+    let priority: MeetingTask['priority'] = 'medium';
+    if (/\b(urgent|critical|asap|high priority)\b/i.test(title)) priority = 'high';
+    if (/\b(low priority|backlog|minor)\b/i.test(title)) priority = 'low';
+    let dueDate = 'No due date';
+    const dueMatch = title.match(/\b(?:due|by|deadline):?\s*([A-Za-z0-9, /-]+?)(?:[.;]|$)/i);
+    if (dueMatch) dueDate = dueMatch[1].trim().slice(0, 80);
+    const task = sanitizeMeetingTask({ title, assignee, dueDate, priority }, tasks.length);
+    if (task) tasks.push(task);
+  }
+
+  if (summary.length === 0) summary.push('Meeting transcript captured for review.');
+  if (tasks.length === 0 && transcript.trim()) {
+    tasks.push({ title: `Review transcript for action items: ${transcript.trim().slice(0, 80)}`, assignee: 'Unassigned', dueDate: 'No due date', priority: 'medium' });
+  }
+  return { summary, tasks };
+}
+
+function normalizeMeetingParserResult(input: unknown, transcript: string): MeetingParserResult {
+  const fallback = deterministicMeetingParser(transcript);
+  if (!input || typeof input !== 'object') return fallback;
+  const record = input as Record<string, unknown>;
+  const summary = Array.isArray(record.summary)
+    ? record.summary.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean).slice(0, 6)
+    : fallback.summary;
+  const tasks = Array.isArray(record.tasks)
+    ? record.tasks.map(sanitizeMeetingTask).filter((task): task is MeetingTask => task !== null).slice(0, 25)
+    : fallback.tasks;
+  return { summary: summary.length ? summary : fallback.summary, tasks: tasks.length ? tasks : fallback.tasks };
+}
+
 const signalStore = new Map<string, SignalStoreEntry>();
+const webhookReplayStore = new Map<string, number>();
 const SIGNAL_TTL_MS = 30_000;
 const CLEANUP_INTERVAL_MS = 10_000;
+const WEBHOOK_REPLAY_TTL_MS = 5 * 60_000;
 
 // Non-blocking cleanup of expired signal entries
 setInterval(() => {
@@ -48,94 +133,60 @@ setInterval(() => {
       signalStore.delete(peerId);
     }
   }
+  for (const [key, expiresAt] of webhookReplayStore) {
+    if (expiresAt <= now) webhookReplayStore.delete(key);
+  }
 }, CLEANUP_INTERVAL_MS);
 
-function requireAuth(req: Request, res: Response, next: NextFunction): void {
-  const secret = process.env.MOTIONAI_API_SECRET;
-  if (!secret) { return next(); }
+function getHeaderValue(value: string | string[] | undefined): string {
+  if (Array.isArray(value)) return value[0] || '';
+  return value || '';
+}
 
-  const provided = req.headers['x-motionai-secret'];
-  if (provided !== secret) {
-    res.status(401).json({ error: 'Unauthorized' });
+function matchesMotionAiSecret(provided: string): boolean {
+  const secret = process.env.MOTIONAI_API_SECRET;
+  if (!secret) return true;
+
+  const providedDigest = crypto.createHash('sha256').update(provided).digest();
+  const secretDigest = crypto.createHash('sha256').update(secret).digest();
+  return provided.length === secret.length && crypto.timingSafeEqual(providedDigest, secretDigest);
+}
+
+function requireAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!matchesMotionAiSecret(getHeaderValue(req.headers['x-motionai-secret']))) {
+    res.status(401).json({ error: 'Unauthorized', keysReturned: false });
     return;
   }
   next();
 }
 
-function buildGeneratePrompt(command: string | undefined, context: string | undefined, prompt: string | undefined) {
-  let systemInstruction = `You are the **MotionAI Core Engine**. You operate as a high-performance document processor. 
-Your primary goal is to transform, generate, and refine content within a rich-text workspace. 
-You are NOT a conversational assistant. You are a background utility.
-
-<behavioral_guardrails>
-  <rule priority="1">NEVER use conversational filler. No "Sure," "I can help," or "Here is the output."</rule>
-  <rule priority="2">Respond ONLY with the requested Markdown content.</rule>
-  <rule priority="3">Maintain a "Minimalist Modern" aesthetic: clean, objective, and dense with information.</rule>
-  <rule priority="4">If a command is missing, default to "Improve Writing" based on context.</rule>
-</behavioral_guardrails>
-
-<formatting_standards>
-  - **Typography**: Use **Bold** for high-impact keywords. Use \`inline code\` for technical identifiers.
-  - **Structure**: Use \`###\` for sub-headers (H3). Avoid H1/H2 unless the document is long-form.
-  - **Segmentation**: Use \`---\` (Horizontal Rules) to separate distinct logic blocks.
-  - **Visual Pop**: Use \`>\` (Blockquotes) for summaries, callouts, or "TL;DR" sections.
-  - **Checklists**: Use \`- [ ]\` for all task-oriented outputs.
-</formatting_standards>
-
-<technical_context_awareness>
-  The user operates a sophisticated home lab environment:
-  - OS: OpenMediaVault (OMV).
-  - Stack: RADARR, SONARR, Overseerr, SABnzbd, Plex.
-  - Infrastructure: Docker, Port Forwarding, NAS management.
-  When processing technical notes, maintain strict accuracy for Linux paths, YAML syntax, and networking protocols.
-</technical_context_awareness>
-
-[INPUT] -> [PROCESS BY COMMAND] -> [OUTPUT MARKDOWN BLOCK]
-NO PREAMBLE. NO APOLOGIES. NO CHAT.`;
-
-  let userPrompt = prompt || '';
-
-  if (command === 'continue' || prompt?.startsWith('/continue')) {
-    systemInstruction += `\n\nExecute command /continue:\n- Read the existing page context.\n- Predict the next logical section.\n- Match tone, vocabulary, and block structure perfectly.`;
-    userPrompt = `Context to continue from:\n${context || ''}\n\nPlease continue writing.`;
-  } else if (command === 'summarize' || prompt?.startsWith('/summarize')) {
-    systemInstruction += `\n\nExecute command /summarize:\n- Output a '> [TL;DR]' callout.\n- Follow with a '### Key Insights' section containing 3-5 bullet points.`;
-    userPrompt = `Text to summarize:\n${context || prompt || ''}`;
-  } else if (command === 'brainstorm' || prompt?.startsWith('/brainstorm')) {
-    systemInstruction += `\n\nExecute command /brainstorm:\n- Generate exactly 10 high-quality, distinct ideas.\n- Format as a bulleted list under an '### Ideation' header.`;
-    userPrompt = `Brainstorm ideas for: ${prompt || context || ''}`;
-  } else if (command === 'improve' || command === 'fix' || prompt?.startsWith('/fix')) {
-    systemInstruction += `\n\nExecute command /fix:\n- Correct grammar, spelling, and punctuation.\n- Preserving technical terminology (especially NAS/Docker/OMV paths).\n- DO NOT rewrite for style unless the flow is broken.`;
-    userPrompt = `Improve this text:\n${context || prompt || ''}`;
-  } else if (command === 'extract' || prompt?.startsWith('/todo')) {
-    systemInstruction += `\n\nExecute command /todo:\n- Extract all verbs and commitments from the provided text.\n- Format as a '- [ ]' checklist.\n- Group by category if more than 10 items are found.`;
-    userPrompt = `Extract action items from:\n${context || prompt || ''}`;
-  } else if (command === 'table' || prompt?.startsWith('/table')) {
-    systemInstruction += `\n\nExecute command /table:\n- Analyze unstructured data (CSV-style, bulleted, or narrative).\n- Build a GitHub-flavored Markdown table.\n- Automatically infer logical headers (e.g., Date, Task, Status, Cost).`;
-    userPrompt = `Convert this to table:\n${context || prompt || ''}`;
-  } else if (command === 'custom') {
-    systemInstruction += `\n\nFollow the user's instructions exactly. Output ONLY the requested content with Structure Over Prose alignment.`;
-    userPrompt = `Context (if relevant):\n${context || ''}\n\nTask: ${prompt || ''}`;
-  } else {
-    userPrompt = prompt || context || '';
+function requireWebhookAuth(req: Request, res: Response, next: NextFunction): void {
+  if (!process.env.MOTIONAI_API_SECRET) {
+    res.status(503).json({ error: 'Webhook authentication is not configured.', keysReturned: false });
+    return;
   }
-
-  return { systemInstruction, userPrompt };
+  requireAuth(req, res, next);
 }
 
-function parseJsonObject(text: string): any | null {
-  try {
-    return JSON.parse(text);
-  } catch {
-    const match = text.match(/\{[\s\S]*\}/);
-    if (!match) return null;
-    try {
-      return JSON.parse(match[0]);
-    } catch {
-      return null;
-    }
-  }
+function validateWebhookPath(pathValue: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$/.test(pathValue) && !pathValue.includes('..');
 }
+
+function requireWebhookReplayProtection(req: Request, res: Response, next: NextFunction): void {
+  const replayId = getHeaderValue(req.headers['x-motionai-delivery']);
+  if (!replayId) {
+    next();
+    return;
+  }
+  const key = `${req.params.path}:${replayId}`;
+  if (webhookReplayStore.has(key)) {
+    res.status(409).json({ error: 'Duplicate webhook delivery rejected.', keysReturned: false });
+    return;
+  }
+  webhookReplayStore.set(key, Date.now() + WEBHOOK_REPLAY_TTL_MS);
+  next();
+}
+
 
 async function startServer() {
   const app = express();
@@ -158,6 +209,13 @@ async function startServer() {
     res.json({ providers: getConfiguredProviders(), keysReturned: false });
   });
 
+  app.get('/api/ai/status', (_req, res) => {
+    res.json({
+      configuredProviders: getConfiguredProviders(),
+      keysReturned: false,
+    });
+  });
+
   app.post('/api/ai/probe', rateLimitMiddleware, requireAuth, async (req, res) => {
     const settings = extractAiSettings(req.body || {});
     const result = await probeAi(settings);
@@ -170,7 +228,7 @@ async function startServer() {
     const client = createAiClient(settings);
 
     if (!client.info.enabled || !client.info.configured) {
-      return res.status(503).json({ error: `${client.info.label} is not configured.`, provider: client.info, keysReturned: false });
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
     }
 
     try {
@@ -187,7 +245,7 @@ async function startServer() {
     const settings = extractAiSettings(req.body || {});
     const client = createAiClient(settings);
     if (!client.info.enabled || !client.info.configured) {
-      return res.status(503).json({ error: `${client.info.label} is not configured.`, provider: client.info, keysReturned: false });
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
     }
 
     const { blocks } = req.body || {};
@@ -215,6 +273,125 @@ async function startServer() {
     } catch (err) {
       console.error('Spellcheck API error:', safeErrorMessage(err, [settings.apiKey]));
       res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), provider: client.info, keysReturned: false });
+    }
+  });
+
+  app.post('/api/ai/meeting-parser', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const settings = extractAiSettings(req.body || {});
+    const client = createAiClient(settings);
+    const { transcript } = req.body || {};
+    if (!transcript || typeof transcript !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid transcript parameter', keysReturned: false });
+    }
+
+    if (!client.info.enabled || !client.info.configured) {
+      return res.json({ ...deterministicMeetingParser(transcript), provider: client.info, source: 'deterministic', keysReturned: false });
+    }
+
+    try {
+      const resultText = await client.generateText(transcript, {
+        systemInstruction: 'You are a meeting-to-tasks parser for MotionAI. Extract concise summary bullets and concrete task objects from the transcript. Return ONLY valid JSON matching: { "summary": ["string"], "tasks": [{ "title": "string", "assignee": "string", "dueDate": "string", "priority": "low|medium|high" }] }. Do not include markdown or explanations.',
+        jsonSchema: meetingParserResponseSchema,
+      });
+      const parsed = parseJsonObject(resultText);
+      res.json({ ...normalizeMeetingParserResult(parsed, transcript), provider: client.info, source: 'ai', keysReturned: false });
+    } catch (err) {
+      console.warn('AI meeting parser failed, falling back to deterministic parser:', safeErrorMessage(err, [settings.apiKey]));
+      res.json({ ...deterministicMeetingParser(transcript), provider: client.info, source: 'deterministic-fallback', keysReturned: false });
+    }
+  });
+
+  app.post('/api/ai/checklist', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const settings = extractAiSettings(req.body || {});
+    const client = createAiClient(settings);
+
+    const { transcript } = req.body || {};
+    if (!transcript || typeof transcript !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid transcript parameter', keysReturned: false });
+    }
+
+    // Helper for deterministic parser fallback
+    const deterministicChecklistFallback = (text: string) => {
+      const lines = text.split('\n');
+      const tasks: Array<{ title: string; assignee: string; dueDate: string; priority: 'low' | 'medium' | 'high' }> = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!trimmed) continue;
+
+        const isTaskLine =
+          trimmed.startsWith('-') ||
+          trimmed.startsWith('*') ||
+          /^\d+\./.test(trimmed) ||
+          /todo/i.test(trimmed) ||
+          /action item/i.test(trimmed) ||
+          /need to/i.test(trimmed);
+
+        if (isTaskLine) {
+          let title = trimmed
+            .replace(/^[-*\d.]+\s*(\[[\sX]\])?\s*/i, '')
+            .replace(/^(todo|action item):\s*/i, '')
+            .trim();
+
+          if (title.length < 5) continue;
+
+          let assignee = 'Unassigned';
+          const assigneeMatch = title.match(/(?:assignee|owner|assigned to|for|by):\s*([A-Za-z0-9]+)/i)
+            || title.match(/([A-Za-z0-9]+)\s+will\s+/i)
+            || title.match(/^([A-Za-z0-9]+):\s+/i);
+
+          if (assigneeMatch) {
+            assignee = assigneeMatch[1];
+            title = title.replace(new RegExp(`^${assignee}:\\s*`, 'i'), '');
+          }
+
+          let priority: 'low' | 'medium' | 'high' = 'medium';
+          if (/urgent|high|asap|critical/i.test(title)) {
+            priority = 'high';
+          } else if (/low|minor|backlog/i.test(title)) {
+            priority = 'low';
+          }
+
+          let dueDate = 'No due date';
+          const dateMatch = title.match(/(?:due|by|deadline):\s*([0-9/\-A-Za-z\s]+?)(?:\.|$|\))/i);
+          if (dateMatch) {
+            dueDate = dateMatch[1].trim();
+          }
+
+          tasks.push({ title, assignee, dueDate, priority });
+        }
+      }
+
+      if (tasks.length === 0 && text.trim().length > 0) {
+        tasks.push({
+          title: 'Review transcript for action items: ' + (text.length > 50 ? text.slice(0, 50) + '...' : text),
+          assignee: 'Unassigned',
+          dueDate: 'No due date',
+          priority: 'medium'
+        });
+      }
+
+      return { tasks };
+    };
+
+    if (!client.info.enabled || !client.info.configured) {
+      // If AI is disabled/unconfigured, fall back to deterministic parsing
+      const fallbackResult = deterministicChecklistFallback(transcript);
+      return res.json({ ...fallbackResult, provider: client.info, keysReturned: false });
+    }
+
+    try {
+      const resultText = await client.generateText(transcript, {
+        systemInstruction: 'You are a meeting assistant. Analyze the meeting transcript or notes and convert them into a JSON checklist of tasks. For each task, extract: title (action item description), assignee (default to "Unassigned"), dueDate (default to "No due date"), and priority ("low", "medium", or "high"). Respond ONLY with a valid JSON document matching the specified schema.',
+        jsonSchema: checklistResponseSchema,
+      });
+
+      const parsed = parseJsonObject(resultText) || { tasks: [] };
+      res.json({ tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [], provider: client.info, keysReturned: false });
+    } catch (err) {
+      console.warn('AI checklist generation failed, falling back to deterministic parser:', safeErrorMessage(err, [settings.apiKey]));
+      const fallbackResult = deterministicChecklistFallback(transcript);
+      res.json({ ...fallbackResult, provider: client.info, keysReturned: false });
     }
   });
 
@@ -247,7 +424,7 @@ async function startServer() {
     const settings = extractAiSettings(req.body || {});
     const client = createAiClient(settings);
     if (!client.info.enabled || !client.info.configured) {
-      return res.status(503).json({ error: `${client.info.label} is not configured.`, provider: client.info, keysReturned: false });
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
     }
 
     const { history, message } = req.body || {};
@@ -275,6 +452,139 @@ async function startServer() {
       console.error('MotionAI Chat endpoint error:', safeErrorMessage(err, [settings.apiKey]));
       res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), provider: client.info, keysReturned: false });
     }
+  });
+
+  app.post('/api/ai/tts', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const { text, provider, voice, speed, localEndpointUrl, model } = req.body || {};
+    const settings = extractAiSettings(req.body || {});
+
+    if (!text) {
+      res.status(400).json({ error: 'Text is required', keysReturned: false });
+      return;
+    }
+
+    try {
+      if (provider === 'openai') {
+        const apiKey = settings.apiKey || process.env.OPENAI_API_KEY;
+        if (!apiKey) {
+          res.status(500).json({ error: 'OpenAI API key is not configured on the server', keysReturned: false });
+          return;
+        }
+
+        const response = await fetch('https://api.openai.com/v1/audio/speech', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${apiKey}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: model || 'tts-1',
+            input: text,
+            voice: voice || 'alloy',
+            speed: speed || 1.0,
+          }),
+        });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          res.status(response.status).json({ error: `OpenAI TTS failed: ${errorText}`, keysReturned: false });
+          return;
+        }
+
+        res.setHeader('Content-Type', 'audio/mpeg');
+        res.setHeader('Cache-Control', 'no-cache');
+
+        if (response.body) {
+          const reader = response.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        } else {
+          res.end();
+        }
+        return;
+      }
+
+      if (provider === 'local') {
+        const endpoint = localEndpointUrl || process.env.LOCAL_TTS_URL || 'http://127.0.0.1:8888/v1/audio/speech';
+        const isOpenAiCompatible = endpoint.includes('/audio/speech');
+
+        let localResponse: globalThis.Response;
+        if (isOpenAiCompatible) {
+          localResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: model || 'kokoro',
+              input: text,
+              voice: voice || 'af_bella',
+              speed: speed || 1.0,
+            }),
+          });
+        } else {
+          localResponse = await fetch(endpoint, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              text,
+              voice: voice || 'en-us',
+              speed: speed || 1.0,
+            }),
+          });
+        }
+
+        if (!localResponse.ok) {
+          const errorText = await localResponse.text();
+          res.status(localResponse.status).json({ error: `Local TTS endpoint failed: ${errorText}`, keysReturned: false });
+          return;
+        }
+
+        const contentType = localResponse.headers.get('content-type') || 'audio/wav';
+        res.setHeader('Content-Type', contentType);
+        res.setHeader('Cache-Control', 'no-cache');
+
+        if (localResponse.body) {
+          const reader = localResponse.body.getReader();
+          while (true) {
+            const { done, value } = await reader.read();
+            if (done) break;
+            res.write(value);
+          }
+          res.end();
+        } else {
+          res.end();
+        }
+        return;
+      }
+
+      res.status(400).json({ error: `Unsupported provider: ${provider}`, keysReturned: false });
+    } catch (err) {
+      console.error('TTS endpoint error:', safeErrorMessage(err, [settings.apiKey]));
+      res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), keysReturned: false });
+    }
+  });
+
+  app.post('/api/webhooks/:path', requireWebhookAuth, requireWebhookReplayProtection, (req, res) => {
+    const webhookPath = String(req.params.path || '').trim();
+    if (!webhookPath || !validateWebhookPath(webhookPath)) {
+      res.status(400).json({ error: 'Missing or invalid webhook path', keysReturned: false });
+      return;
+    }
+
+    res.json({
+      ok: true,
+      webhook: webhookPath,
+      received: true,
+      deliveryId: getHeaderValue(req.headers['x-motionai-delivery']) || null,
+      keysReturned: false,
+    });
   });
 
   // ─── Presence Signaling Endpoints ──────────────────────────────────────────────

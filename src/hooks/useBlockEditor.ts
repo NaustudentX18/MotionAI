@@ -4,16 +4,17 @@
 
 import { useEffect, useState, useCallback, useRef } from 'react';
 import { Editor } from '@tiptap/core';
+import Document from '@tiptap/extension-document';
+import Text from '@tiptap/extension-text';
 import * as Y from 'yjs';
 import { Block, BlockType } from '../types';
 import { blockSchema } from '../lib/tiptap-schema';
 import { inlineMarks } from '../lib/tiptap-marks';
 import { createInputRules } from '../lib/tiptap-input-rules';
 import { Extension } from '@tiptap/core';
-import { CollaborationCursor } from '@tiptap/extension-collaboration-cursor';
 import { YjsBlockExtension, setYDocGetter } from '../lib/extensions/YjsBlockExtension';
 import { DragHandleExtension } from '../lib/extensions/DragHandleExtension';
-import { getYDoc, getWebrtcProvider } from '../lib/yjs';
+import { getYDoc } from '../lib/yjs';
 import { v4 as uuidv4 } from 'uuid';
 
 const JSON_MAP_PREFIX = 'blocks-json-';
@@ -170,17 +171,10 @@ export function useBlockEditor({
     if (typeof window !== 'undefined' && !storedUserName) {
       localStorage.setItem('motionai-username', userName);
     }
-    const userColor = '#' + Math.floor(Math.random() * 16777215).toString(16);
-
-    // Set up WebrtcProvider for peer collaboration
-    const provider = getWebrtcProvider(`motionai-${pageId}`);
-    provider.awareness.setLocalStateField('user', {
-      name: userName,
-      color: userColor,
-    });
-
     const editorInstance = new Editor({
       extensions: [
+        Document,
+        Text,
         ...blockSchema,
         ...inlineMarks,
         DragHandleExtension,
@@ -189,13 +183,6 @@ export function useBlockEditor({
           pageId,
           ydoc,
           jsonMap,
-        }),
-        CollaborationCursor.configure({
-          provider,
-          user: {
-            name: userName,
-            color: userColor,
-          },
         }),
       ],
       content: json,

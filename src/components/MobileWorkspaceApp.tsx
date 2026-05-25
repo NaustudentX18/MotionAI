@@ -90,6 +90,7 @@ export function MobileWorkspaceApp({
 
   // Meeting notes screen state
   const [isRecordingMeeting, setIsRecordingMeeting] = useState(false);
+  const [isProcessingMeeting, setIsProcessingMeeting] = useState(false);
   const [meetingTimer, setMeetingTimer] = useState(0);
   const [meetingTranscript, setMeetingTranscript] = useState<string[]>([]);
   const meetingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -114,11 +115,39 @@ export function MobileWorkspaceApp({
   const [addingBlockType, setAddingBlockType] = useState<string | null>(null);
   const [mobileNewBlockText, setMobileNewBlockText] = useState("");
 
+  // Installation helper dialog state for iOS Safari Standalone detection
+  const [showIOSInstallDialog, setShowIOSInstallDialog] = useState(false);
+
+  useEffect(() => {
+    // Check if the user agent is iOS Safari and not standalone
+    const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || 
+      (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+    const isSafari = /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    const isStandalone = ('standalone' in window.navigator && (window.navigator as any).standalone) || 
+      window.matchMedia('(display-mode: standalone)').matches;
+
+    if (isIOS && isSafari && !isStandalone) {
+      setShowIOSInstallDialog(true);
+    }
+  }, []);
+
   // --- GESTURE & RESPONSE OPTIMIZATION STATES & LOGIC ---
   const [swipedBlockId, setSwipedBlockId] = useState<string | null>(null);
   const [blockSwipeStartX, setBlockSwipeStartX] = useState<number | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [swipedPageId, setSwipedPageId] = useState<string | null>(null);
+  const [pageSwipeStartX, setPageSwipeStartX] = useState<number | null>(null);
+
+  const triggerHaptic = (duration = 50) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate(duration);
+      } catch (e) {
+        console.warn('Vibration not supported or blocked:', e);
+      }
+    }
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
@@ -129,6 +158,25 @@ export function MobileWorkspaceApp({
     if (touchStartX === null || touchStartY === null) return;
     const diffX = e.changedTouches[0].clientX - touchStartX;
     const diffY = e.changedTouches[0].clientY - touchStartY;
+
+    // Edge Swipe hooks to toggle sidebar (open from left edge, close from anywhere)
+    if (isWorkspaceMenuOpen) {
+      if (diffX < -50 && Math.abs(diffY) < 65) {
+        triggerHaptic(50);
+        setIsWorkspaceMenuOpen(false);
+        setTouchStartX(null);
+        setTouchStartY(null);
+        return;
+      }
+    } else {
+      if (diffX > 60 && Math.abs(diffY) < 65 && touchStartX < 50) {
+        triggerHaptic(50);
+        setIsWorkspaceMenuOpen(true);
+        setTouchStartX(null);
+        setTouchStartY(null);
+        return;
+      }
+    }
 
     // Horizontally dominant gesture
     if (Math.abs(diffX) > 80 && Math.abs(diffY) < 60) {
@@ -160,17 +208,40 @@ export function MobileWorkspaceApp({
     setBlockSwipeStartX(e.touches[0].clientX);
   };
 
-  const handleBlockTouchEnd = (e: React.TouchEvent, blockId: string) => {
+  const handleBlockTouchEnd = (e: React.TouchEvent, block: Block) => {
     if (blockSwipeStartX === null) return;
     const diffX = e.changedTouches[0].clientX - blockSwipeStartX;
-    if (diffX < -50) {
+    if (block.type === 'todo' && diffX < -120) {
+      triggerHaptic(50);
+      if (activeMobilePage) {
+        onUpdatePage(activeMobilePage.id, {
+          blocks: activeMobilePage.blocks.filter(b => b.id !== block.id)
+        });
+      }
+      setSwipedBlockId(null);
+    } else if (diffX < -50) {
       // Swipe Left reveals formatting/delete tray
-      setSwipedBlockId(blockId);
+      setSwipedBlockId(block.id);
     } else if (diffX > 50) {
       // Swipe Right closes tray
       setSwipedBlockId(null);
     }
     setBlockSwipeStartX(null);
+  };
+
+  const handlePageTouchStart = (e: React.TouchEvent, pageId: string) => {
+    setPageSwipeStartX(e.touches[0].clientX);
+  };
+
+  const handlePageTouchEnd = (e: React.TouchEvent, pageId: string) => {
+    if (pageSwipeStartX === null) return;
+    const diffX = e.changedTouches[0].clientX - pageSwipeStartX;
+    if (diffX < -60) {
+      setSwipedPageId(pageId);
+    } else if (diffX > 60) {
+      setSwipedPageId(null);
+    }
+    setPageSwipeStartX(null);
   };
 
   // Real-time dynamic current clock
@@ -271,6 +342,7 @@ export function MobileWorkspaceApp({
 
   // Start/Stop chat voice dictation input
   const handleChatVoiceDictate = () => {
+    triggerHaptic(50);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Speech recognition isn't supported inside this browser context. Please use Safari on iOS or Google Chrome.");
@@ -323,6 +395,7 @@ export function MobileWorkspaceApp({
 
   // Start/Stop block editor voice input
   const handleEditorVoiceDictate = () => {
+    triggerHaptic(50);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Speech recognition isn't supported inside this browser context. Please use Safari on iOS or Google Chrome.");
@@ -436,11 +509,52 @@ export function MobileWorkspaceApp({
   // Convert meeting to page after recording
   const finishMeetingRecording = async () => {
     setIsRecordingMeeting(false);
+    setIsProcessingMeeting(true);
     
     // Generate page title and structured blocks using transcript or defaults
     const finalTranscriptText = meetingTranscript.length > 0 
       ? meetingTranscript.join('\n') 
       : "No transcript recorded. User started a blank meeting session.";
+
+    let summaryPoints: string[] = ['No summary points extracted.'];
+    let actionItems: string[] = ['Review meeting notes for action items.'];
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'custom',
+          context: finalTranscriptText,
+          prompt: `You are a meeting assistant. Summarize this transcript. Extract 3 key discussion bullet points and a list of concrete task action items. Return ONLY a JSON object matching this schema, without any markdown enclosing tags or surrounding explanations:
+{
+  "summary": ["point 1", "point 2", "point 3"],
+  "tasks": ["task 1", "task 2"]
+}`
+        })
+      });
+      const data = await res.json();
+      if (!data.error && data.text) {
+        let cleanText = data.text.trim();
+        if (cleanText.startsWith('```json')) {
+          cleanText = cleanText.substring(7);
+        }
+        if (cleanText.endsWith('```')) {
+          cleanText = cleanText.substring(0, cleanText.length - 3);
+        }
+        const parsed = JSON.parse(cleanText.trim());
+        if (Array.isArray(parsed.summary)) summaryPoints = parsed.summary;
+        if (Array.isArray(parsed.tasks)) actionItems = parsed.tasks;
+      }
+    } catch (err) {
+      console.warn('AI meeting summarization failed, falling back to defaults:', err);
+      summaryPoints = meetingTranscript.length > 0 ? meetingTranscript.slice(0, 3) : ['Discussion was blank.'];
+      actionItems = [
+        'Review dock container volume metrics with Alex',
+        'Confirm OMV backup pools synchronization'
+      ];
+    }
 
     const dateStr = new Date().toLocaleDateString();
     
@@ -455,14 +569,18 @@ export function MobileWorkspaceApp({
         { id: uuidv4(), type: 'h1', content: `🎙️ AI Sync: Meeting Summary` },
         { id: uuidv4(), type: 'callout', content: `This structured meeting documentation was auto-captured live using state-of-the-art AI transcripts inside the Workspace client.` },
         { id: uuidv4(), type: 'h3', content: 'Discussion points & Key takeaways' },
-        ...meetingTranscript.map(line => ({
+        ...summaryPoints.map(line => ({
           id: uuidv4(),
           type: 'bullet' as const,
           content: line
         })),
         { id: uuidv4(), type: 'h3', content: 'Action Checklist' },
-        { id: uuidv4(), type: 'todo', content: 'Review dock container volume metrics with Alex', checked: false },
-        { id: uuidv4(), type: 'todo', content: 'Confirm OMV backup pools synchronization', checked: false }
+        ...actionItems.map(line => ({
+          id: uuidv4(),
+          type: 'todo' as const,
+          content: line,
+          checked: false
+        }))
       ]
     };
 
@@ -470,6 +588,7 @@ export function MobileWorkspaceApp({
     setMobileEditingPageId(meetingPage.id);
     setActiveTab('home');
     setMeetingTranscript([]);
+    setIsProcessingMeeting(false);
   };
 
   // Compose shortcuts
@@ -568,10 +687,13 @@ export function MobileWorkspaceApp({
             >
               
               {/* Top Navigation Headers row (exactly like image) */}
-              <div className="pt-3 pb-2 px-4 border-b border-stone-800 flex items-center gap-1 select-none overflow-x-auto no-scrollbar shrink-0">
+              <div 
+                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
+                className="pb-2 px-4 border-b border-stone-800 flex items-center gap-1 select-none overflow-x-auto no-scrollbar shrink-0 pt-safe"
+              >
                 {/* J Profile circle */}
                 <button
-                  onClick={() => setIsWorkspaceMenuOpen(true)}
+                  onClick={() => { triggerHaptic(50); setIsWorkspaceMenuOpen(true); }}
                   className="w-11 h-11 min-w-11 rounded-full bg-stone-800 border border-stone-700 font-bold font-mono text-stone-300 text-sm flex items-center justify-center hover:bg-stone-700 transition-colors shrink-0 mr-1.5 cursor-pointer relative"
                 >
                   J
@@ -580,7 +702,7 @@ export function MobileWorkspaceApp({
 
                 {/* Home tab button */}
                 <button
-                  onClick={() => { setActiveTab('home'); setMobileEditingPageId(null); }}
+                  onClick={() => { triggerHaptic(50); setActiveTab('home'); setMobileEditingPageId(null); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'home'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -593,7 +715,7 @@ export function MobileWorkspaceApp({
 
                 {/* Chats tab button */}
                 <button
-                  onClick={() => setActiveTab('chats')}
+                  onClick={() => { triggerHaptic(50); setActiveTab('chats'); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'chats'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -606,7 +728,7 @@ export function MobileWorkspaceApp({
 
                 {/* Meeting tab button */}
                 <button
-                  onClick={() => setActiveTab('meeting')}
+                  onClick={() => { triggerHaptic(50); setActiveTab('meeting'); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'meeting'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -619,7 +741,7 @@ export function MobileWorkspaceApp({
 
                 {/* Inbox tab button */}
                 <button
-                  onClick={() => setActiveTab('inbox')}
+                  onClick={() => { triggerHaptic(50); setActiveTab('inbox'); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'inbox'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -648,21 +770,52 @@ export function MobileWorkspaceApp({
                     </div>
 
                     <div className="space-y-1.5 mt-2">
-                      {pages.map(page => (
-                        <button
-                          key={page.id}
-                          onClick={() => setMobileEditingPageId(page.id)}
-                          className="w-full flex items-center px-3 py-3 rounded-lg hover:bg-stone-850 text-left font-medium text-[15px] text-stone-200 transition-all hover:scale-101 border border-transparent hover:border-stone-800 group"
-                        >
-                          <span className="mr-3 text-lg flex-shrink-0 origin-center group-hover:scale-115 transition-transform">
-                            {page.icon || '📄'}
-                          </span>
-                          <span className="truncate flex-1 font-sans pr-4">
-                            {page.title || 'Untitled page'}
-                          </span>
-                          <ChevronRight size={14} className="text-stone-600 group-hover:text-stone-400 transition-colors" />
-                        </button>
-                      ))}
+                      {pages.map(page => {
+                        const isSwiped = swipedPageId === page.id;
+                        return (
+                          <div 
+                            key={page.id} 
+                            className="relative overflow-hidden rounded-lg w-full flex items-center transition-all duration-200"
+                            onTouchStart={(e) => handlePageTouchStart(e, page.id)}
+                            onTouchEnd={(e) => handlePageTouchEnd(e, page.id)}
+                          >
+                            <div 
+                              className={`w-full flex items-center px-3 py-3 hover:bg-stone-850 text-left font-medium text-[15px] text-stone-200 transition-transform duration-200 hover:scale-101 border border-transparent hover:border-stone-800 group cursor-pointer ${
+                                isSwiped ? '-translate-x-20' : 'translate-x-0'
+                              }`}
+                              onClick={() => {
+                                if (isSwiped) {
+                                  setSwipedPageId(null);
+                                } else {
+                                  setMobileEditingPageId(page.id);
+                                }
+                              }}
+                            >
+                              <span className="mr-3 text-lg flex-shrink-0 origin-center group-hover:scale-115 transition-transform">
+                                {page.icon || '📄'}
+                              </span>
+                              <span className="truncate flex-1 font-sans pr-4">
+                                {page.title || 'Untitled page'}
+                              </span>
+                              {!isSwiped && <ChevronRight size={14} className="text-stone-600 group-hover:text-stone-400 transition-colors" />}
+                            </div>
+                            
+                            {isSwiped && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  triggerHaptic(50);
+                                  onDeletePage(page.id);
+                                  setSwipedPageId(null);
+                                }}
+                                className="absolute right-0 top-0 bottom-0 w-20 bg-red-600 hover:bg-red-700 text-white flex items-center justify-center font-bold text-xs uppercase tracking-wider transition-colors z-10 cursor-pointer"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Creative additions: Hot tip banners */}
@@ -743,7 +896,19 @@ export function MobileWorkspaceApp({
                 {/* View C: MEETING PAGE (Image 4) */}
                 {activeTab === 'meeting' && (
                   <div className="flex-1 flex flex-col justify-center h-full min-h-[400px] animate-in fade-in duration-200">
-                    {!isRecordingMeeting ? (
+                    {isProcessingMeeting ? (
+                      <div className="flex flex-col items-center justify-center text-center py-10 space-y-4">
+                        <div className="w-12 h-12 rounded-xl bg-stone-900 border border-stone-850 flex items-center justify-center text-stone-400 shadow-lg">
+                          <span className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                        <div className="space-y-1.5 px-6">
+                          <h3 className="text-[15px] font-bold text-stone-200 font-sans">Processing transcript...</h3>
+                          <p className="text-[12px] text-stone-500 leading-relaxed font-sans px-2">
+                            Creating key summaries and extracting action tasks with AI.
+                          </p>
+                        </div>
+                      </div>
+                    ) : !isRecordingMeeting ? (
                       <div className="flex flex-col items-center justify-center text-center py-10 space-y-4">
                         <div className="w-16 h-16 rounded-2xl bg-stone-900/80 border border-stone-800 flex flex-col items-center justify-center text-stone-400 shadow-lg relative glow-effect">
                           <Mic size={24} className="text-purple-400" />
@@ -759,6 +924,7 @@ export function MobileWorkspaceApp({
 
                         <button 
                           onClick={() => {
+                            triggerHaptic(50);
                             setIsRecordingMeeting(true);
                             setMeetingTranscript([
                               "[Init]: Audio synchronization active... Ready to transcribe."
@@ -805,14 +971,20 @@ export function MobileWorkspaceApp({
 
                         <div className="flex justify-center items-center gap-4">
                           <button 
-                            onClick={() => setIsRecordingMeeting(false)}
+                            onClick={() => {
+                              triggerHaptic(50);
+                              setIsRecordingMeeting(false);
+                            }}
                             className="px-4 py-2 bg-stone-800 hover:bg-stone-750 text-stone-300 font-medium text-xs rounded-lg cursor-pointer transition-colors"
                           >
                             Cancel
                           </button>
                           
                           <button 
-                            onClick={finishMeetingRecording}
+                            onClick={() => {
+                              triggerHaptic(50);
+                              finishMeetingRecording();
+                            }}
                             className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors flex items-center gap-1.5 shadow-md shadow-purple-950/40"
                           >
                             <Check size={14} /> Output notes page
@@ -853,7 +1025,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Dynamic Sleek Floating Bottom bar/dock exactly as shown */}
-              <div className="pb-8 pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-[#191919] select-none shrink-0 relative z-30">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-[#191919] select-none shrink-0 relative z-30 pb-safe"
+              >
                 {/* Search button (Image 1, Left) */}
                 <button 
                   onClick={() => setIsSearchOverlayOpen(true)}
@@ -899,7 +1074,10 @@ export function MobileWorkspaceApp({
             >
               
               {/* Back & Title Header Row */}
-              <div className="pt-3 pb-2 px-4 border-b border-stone-850 flex items-center justify-between shrink-0 select-none bg-stone-900/50">
+              <div 
+                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
+                className="pb-2 px-4 border-b border-stone-850 flex items-center justify-between shrink-0 select-none bg-stone-900/50 pt-safe"
+              >
                 <button 
                   onClick={() => { setMobileEditingPageId(null); setAddingBlockType(null); }}
                   className="flex items-center gap-1.5 px-2 py-1.5 bg-stone-850 hover:bg-stone-800 text-stone-300 font-bold text-xs rounded-lg transition-colors cursor-pointer"
@@ -967,7 +1145,7 @@ export function MobileWorkspaceApp({
                     <div 
                       key={block.id} 
                       onTouchStart={(e) => handleBlockTouchStart(e, block.id)}
-                      onTouchEnd={(e) => handleBlockTouchEnd(e, block.id)}
+                      onTouchEnd={(e) => handleBlockTouchEnd(e, block)}
                       className={`relative group border border-transparent hover:border-[#2F2F2F] focus-within:border-[#2F2F2F] rounded-lg p-1.5 transition-all w-full ${
                         swipedBlockId === block.id ? 'bg-stone-900/40 border-stone-805 pr-24' : ''
                       }`}
@@ -1137,6 +1315,7 @@ export function MobileWorkspaceApp({
                         <div className="flex items-start gap-2.5 w-full">
                           <button 
                             onClick={() => {
+                              triggerHaptic(50);
                               if (activeMobilePage) {
                                 onUpdatePage(activeMobilePage.id, {
                                   blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, checked: !b.checked } : b)
@@ -1468,7 +1647,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Dedicated mobile back menu bar */}
-              <div className="pb-8 pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-stone-900/80 shrink-0">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-stone-900/80 shrink-0 pb-safe"
+              >
                 <button 
                   onClick={() => { setMobileEditingPageId(null); setAddingBlockType(null); }}
                   className="px-4 py-2 bg-stone-800 hover:bg-stone-750 font-bold text-xs text-stone-300 rounded-lg flex items-center gap-1.5 cursor-pointer"
@@ -1590,7 +1772,10 @@ export function MobileWorkspaceApp({
             <div className="absolute inset-0 bg-[#191919] z-50 flex flex-col justify-between select-none animate-in fade-in zoom-in-95 duration-200">
               
               {/* Header block with Clock icon & Create new logs */}
-              <div className="pt-3 pb-2.5 px-4 bg-stone-900 border-b border-stone-850 flex items-center justify-between shrink-0 select-none">
+              <div 
+                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
+                className="pb-2.5 px-4 bg-stone-900 border-b border-stone-850 flex items-center justify-between shrink-0 select-none pt-safe"
+              >
                 <button 
                   onClick={() => {
                     setChatMessages([
@@ -1724,7 +1909,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Bottom Custom Prompt Box (exactly like Image 7) */}
-              <div className="bg-[#1A1A1A] p-4 border-t border-stone-850 space-y-3 select-none">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="bg-[#1A1A1A] p-4 border-t border-stone-850 space-y-3 select-none pb-safe"
+              >
                 <div className="bg-[#242424] rounded-2xl border border-stone-800 p-2 flex items-center gap-2">
                   <button 
                     onClick={() => alert("Shortcut additions sync successfully.")}
@@ -1832,7 +2020,10 @@ export function MobileWorkspaceApp({
           {isSearchOverlayOpen && (
             <div className="absolute inset-0 bg-[#191919] z-50 flex flex-col justify-between select-none animate-in fade-in zoom-in-95 duration-200">
               
-              <div className="flex-1 flex flex-col overflow-hidden p-4 space-y-4">
+              <div 
+                style={{ paddingTop: 'calc(16px + env(safe-area-inset-top))' }}
+                className="flex-1 flex flex-col overflow-hidden px-4 pb-4 space-y-4 pt-safe"
+              >
                 {/* Custom search head (Image 6) */}
                 <div className="flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-1.5 select-none text-left">
@@ -1924,7 +2115,10 @@ export function MobileWorkspaceApp({
               </div>
 
               {/* Close Search Button bottom */}
-              <div className="p-4 border-t border-stone-850 bg-stone-900/30 shrink-0">
+              <div 
+                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
+                className="p-4 border-t border-stone-850 bg-stone-900/30 shrink-0 pb-safe"
+              >
                 <button 
                   onClick={() => setIsSearchOverlayOpen(false)}
                   className="w-full py-2 bg-stone-850 hover:bg-stone-800 rounded-xl text-stone-300 font-bold text-xs cursor-pointer select-none"
@@ -2091,6 +2285,44 @@ export function MobileWorkspaceApp({
           )}
 
         </div>
+
+        {/* iOS standalone PWA installer instructions dialog overlay */}
+        {showIOSInstallDialog && (
+          <div className="absolute bottom-4 left-4 right-4 bg-stone-900 border border-stone-850 rounded-2xl p-4 shadow-2xl z-50 text-left space-y-3 animate-in slide-in-from-bottom-5 duration-300">
+            <div className="flex justify-between items-start">
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-black font-sans font-extrabold text-[15px] select-none">
+                  O
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-stone-200">Install OpenNotion App</h4>
+                  <p className="text-[10px] text-stone-500">Run standalone on your iOS device</p>
+                </div>
+              </div>
+              <button 
+                onClick={() => setShowIOSInstallDialog(false)}
+                className="text-stone-500 hover:text-stone-300 p-0.5 cursor-pointer text-sm font-bold"
+              >
+                ✕
+              </button>
+            </div>
+            
+            <div className="text-[11px] text-stone-350 space-y-2 leading-relaxed font-sans">
+              <p>Add to your home screen for native fullscreen view and notch optimization:</p>
+              <ol className="list-decimal list-inside space-y-1.5 text-stone-400 font-medium">
+                <li>
+                  Tap the iOS Share button <span className="inline-block align-middle font-bold text-stone-200 px-1 bg-stone-850 rounded">⎙</span> (square with arrow up).
+                </li>
+                <li>
+                  Scroll down the options list and select <span className="text-stone-200 font-bold">Add to Home Screen</span>.
+                </li>
+                <li>
+                  Tap <span className="text-purple-400 font-bold">Add</span> in the top right corner.
+                </li>
+              </ol>
+            </div>
+          </div>
+        )}
 
       </div>
 

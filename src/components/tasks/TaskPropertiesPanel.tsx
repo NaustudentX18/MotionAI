@@ -55,6 +55,10 @@ export function TaskPropertiesPanel({ page, onUpdatePage }: TaskPropertiesPanelP
     onUpdatePage(page.id, { dueDate: e.target.value });
   };
 
+  const handleReminderChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    onUpdatePage(page.id, { reminderDate: e.target.value || undefined });
+  };
+
   const handleAssigneeSelect = (name: string) => {
     onUpdatePage(page.id, { assignee: name });
     setAssigneeOpen(false);
@@ -192,6 +196,17 @@ export function TaskPropertiesPanel({ page, onUpdatePage }: TaskPropertiesPanelP
             type="date"
             value={page.dueDate || ''}
             onChange={handleDateChange}
+            className="bg-transparent border-0 outline-none p-0 cursor-pointer text-stone-800 dark:text-stone-200"
+          />
+        </div>
+
+        <div className="flex items-center gap-1.5 px-2.5 py-1.5 bg-white dark:bg-[#252525] border border-stone-200 dark:border-stone-800 rounded-lg text-stone-650 dark:text-stone-400 shadow-2xs">
+          <Clock size={13} className="opacity-70" />
+          <span className="mr-0.5">Reminder:</span>
+          <input
+            type="datetime-local"
+            value={page.reminderDate || ''}
+            onChange={handleReminderChange}
             className="bg-transparent border-0 outline-none p-0 cursor-pointer text-stone-800 dark:text-stone-200"
           />
         </div>

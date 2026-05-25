@@ -1,7 +1,7 @@
 #!/usr/bin/env npx tsx
 
 import { strict as assert } from 'node:assert/strict';
-import type { Block, Page } from '../src/types';
+import { BLOCK_TYPES, PAGE_TYPES, type Block, type Page } from '../src/types';
 import {
   WORKSPACE_APP_ID,
   WORKSPACE_SCHEMA_VERSION,
@@ -9,6 +9,7 @@ import {
   createVersionedWorkspaceSnapshot,
   validateWorkspaceSnapshot,
 } from '../src/lib/workspaceSchema';
+import { createWorkspaceEnvelope, WORKSPACE_EXPORT_SCHEMA } from '../src/lib/workspaceImportExport';
 
 let passed = 0;
 let failed = 0;
@@ -77,11 +78,41 @@ test('rejects duplicate block ids on a page', () => {
   assert.match(result.errors.join('\n'), /duplicates another block/);
 });
 
-test('rejects unsupported block types', () => {
-  const badBlock = { id: 'b1', type: 'database', content: '' };
-  const result = validateWorkspaceSnapshot({ pages: [page('p1', [badBlock as Block])], currentPageId: 'p1' });
+test('accepts every runtime-supported block type, including database', () => {
+  const blocks = BLOCK_TYPES.map((type, index) => block(`b-${index}`, { type }));
+  const result = validateWorkspaceSnapshot({ pages: [page('p1', blocks)], currentPageId: 'p1' });
+  assert.equal(result.ok, true, result.errors.join('; '));
+});
+
+test('accepts every runtime-supported page type', () => {
+  for (const pageType of PAGE_TYPES) {
+    const result = validateWorkspaceSnapshot({ pages: [page(`p-${pageType}`, [block(`b-${pageType}`)], { pageType })], currentPageId: `p-${pageType}` });
+    assert.equal(result.ok, true, `${pageType}: ${result.errors.join('; ')}`);
+  }
+});
+
+test('accepts and rejects reminderDate using the canonical page contract', () => {
+  const valid = validateWorkspaceSnapshot({
+    pages: [page('p-reminder', [block('b-reminder')], { reminderDate: '2026-05-25T09:30' })],
+    currentPageId: 'p-reminder',
+  });
+  assert.equal(valid.ok, true, valid.errors.join('; '));
+
+  const invalid = validateWorkspaceSnapshot({
+    pages: [page('p-reminder-bad', [block('b-reminder-bad')], { reminderDate: 'not-a-date' })],
+    currentPageId: 'p-reminder-bad',
+  });
+  assert.equal(invalid.ok, false);
+  assert.match(invalid.errors.join('\n'), /reminderDate/);
+});
+
+test('rejects unsupported block and page types', () => {
+  const badBlock = { id: 'b1', type: 'unsupported-widget', content: '' };
+  const badPage = page('p1', [badBlock as Block], { pageType: 'unsupported-page' as Page['pageType'] });
+  const result = validateWorkspaceSnapshot({ pages: [badPage], currentPageId: 'p1' });
   assert.equal(result.ok, false);
   assert.match(result.errors.join('\n'), /supported block type/);
+  assert.match(result.errors.join('\n'), /supported page type/);
 });
 
 test('creates a versioned export wrapper only for valid snapshots', () => {
@@ -89,6 +120,24 @@ test('creates a versioned export wrapper only for valid snapshots', () => {
   assert.equal(exported.schemaVersion, WORKSPACE_SCHEMA_VERSION);
   assert.equal(exported.app, WORKSPACE_APP_ID);
   assert.equal(exported.exportedAt, '2026-05-21T00:00:00.000Z');
+});
+
+test('creates the durable motionai.workspace envelope shape', () => {
+  const envelope = createWorkspaceEnvelope({ pages: [page('p1')], currentPageId: 'p1' }, { exportedAt: '2026-05-22T00:00:00.000Z', source: 'test' });
+  assert.equal(envelope.schema, WORKSPACE_EXPORT_SCHEMA);
+  assert.equal(envelope.schemaVersion, WORKSPACE_SCHEMA_VERSION);
+  assert.equal(envelope.workspace.currentPageId, 'p1');
+});
+
+test('validates page versions and rejects corrupt version blocks', () => {
+  const result = validateWorkspaceSnapshot({
+    pages: [page('p1', [block('b1')], {
+      versions: [{ id: 'v1', timestamp: 1_779_360_000_000, title: 'Old', blocks: [{ id: 'old-b1', type: 'not-real', content: '' } as unknown as Block] }],
+    })],
+    currentPageId: 'p1',
+  });
+  assert.equal(result.ok, false);
+  assert.match(result.errors.join('\n'), /versions\[0\]\.blocks\[0\]\.type/);
 });
 
 test('assertValidWorkspaceSnapshot throws actionable errors', () => {

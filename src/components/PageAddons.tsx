@@ -1,8 +1,11 @@
 import React, { useState } from 'react';
 import { Page, PageVersion, PageType } from '../types';
-import { History, RotateCcw, Users, Link2, Sparkles } from 'lucide-react';
+import type { PresenceDiagnostics } from '../lib/presence';
+import { History, RotateCcw, Users, Link2, Sparkles, Lock, ShieldCheck, Save, Clock, AlertTriangle, GitGraph } from 'lucide-react';
 import { BacklinksPanel } from './BacklinksPanel';
+import { BacklinksGraph } from './BacklinksGraph';
 import { WorkspaceCopilot } from './copilot/WorkspaceCopilot';
+import { TTSControl } from './TTSControl';
 
 function stringToColor(str: string): string {
   const PALETTE = ['#8B5CF6', '#10B981', '#F59E0B', '#EF4444', '#3B82F6', '#EC4899', '#14B8A6', '#F97316'];
@@ -21,12 +24,18 @@ interface PageAddonsProps {
   collaborationActive: boolean;
   onToggleCollaboration: (active: boolean) => void;
   presencePeers: Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>;
+  presenceDiagnostics?: PresenceDiagnostics | null;
   // Backlinks
   pages: Page[];
   backlinks: string[];
   onNavigateToPage: (pageId: string) => void;
   onAddPage?: (pageType?: PageType, parentId?: string | null) => void;
+  // Sync status details
+  encryptionLocked?: boolean;
+  encryptionKeySet?: boolean;
+  lastSavedAt?: number | null;
 }
+
 
 export function PageAddons({
   currentPage,
@@ -35,16 +44,22 @@ export function PageAddons({
   collaborationActive,
   onToggleCollaboration,
   presencePeers,
+  presenceDiagnostics,
   pages,
   backlinks,
   onNavigateToPage,
-  onAddPage
+  onAddPage,
+  encryptionLocked = false,
+  encryptionKeySet = false,
+  lastSavedAt = null,
 }: PageAddonsProps) {
   const [activeTab, setActiveTab] = useState<'history' | 'collab' | 'links' | 'brain'>('history');
+  const [showGraph, setShowGraph] = useState(false);
 
   if (!currentPage) return null;
 
   const versions = currentPage.versions || [];
+  const pageText = currentPage.title + '\n' + (currentPage.blocks || []).map(b => b.content).filter(Boolean).join('\n');
 
   return (
     <div className="w-full h-full border-l border-[#EBEBE9] dark:border-[#2F2F2F] bg-[#FBFBFA] dark:bg-[#1C1C1C] flex flex-col overflow-y-auto">
@@ -96,7 +111,9 @@ export function PageAddons({
         </button>
       </div>
 
-      <div className="p-4 flex-1 flex flex-col overflow-y-auto">
+      <div className="p-4 flex-1 flex flex-col overflow-y-auto gap-4">
+        <TTSControl text={pageText} title={currentPage.title || 'Page Reader'} />
+
         {activeTab === 'history' && (
           <div className="space-y-4 flex flex-col h-full">
             <div className="flex items-center justify-between">
@@ -163,6 +180,60 @@ export function PageAddons({
               </button>
             </div>
 
+            {/* Status Cards */}
+            <div className="space-y-2">
+              {/* Local Save Status */}
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-[#252525]">
+                <Save size={14} className="text-gray-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium text-[#37352F] dark:text-[#E3E3E3]">Local Save</div>
+                  <div className="text-[10px] text-gray-400 dark:text-stone-500">
+                    {lastSavedAt
+                      ? new Date(lastSavedAt).toLocaleTimeString()
+                      : 'Not yet saved'}
+                  </div>
+                </div>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${lastSavedAt ? 'bg-green-400' : 'bg-amber-400 animate-pulse'}`} />
+              </div>
+
+              {/* Encryption Status */}
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-[#252525]">
+                {encryptionKeySet && !encryptionLocked ? (
+                  <ShieldCheck size={14} className="text-green-500 shrink-0" />
+                ) : encryptionLocked ? (
+                  <Lock size={14} className="text-amber-500 shrink-0" />
+                ) : (
+                  <Lock size={14} className="text-gray-400 shrink-0" />
+                )}
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium text-[#37352F] dark:text-[#E3E3E3]">Encryption</div>
+                  <div className="text-[10px] text-gray-400 dark:text-stone-500">
+                    {encryptionKeySet && !encryptionLocked
+                      ? 'At-rest encryption active'
+                      : encryptionLocked
+                      ? 'Locked — enter passphrase'
+                      : 'No encryption key set'}
+                  </div>
+                </div>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${
+                  encryptionKeySet && !encryptionLocked ? 'bg-green-400' : encryptionLocked ? 'bg-amber-400' : 'bg-gray-300 dark:bg-stone-600'
+                }`} />
+              </div>
+
+              {/* Conflict / Replay Queue */}
+              <div className="flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-gray-200 dark:border-stone-700 bg-white dark:bg-[#252525]">
+                <Clock size={14} className="text-gray-400 shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <div className="text-[11px] font-medium text-[#37352F] dark:text-[#E3E3E3]">Replay Queue</div>
+                  <div className="text-[10px] text-gray-400 dark:text-stone-500">
+                    No pending conflicts
+                  </div>
+                </div>
+                <span className="text-[10px] text-gray-400 shrink-0">0</span>
+              </div>
+            </div>
+
+            {/* Peer connection summary */}
             <div className="p-3 bg-blue-50/50 dark:bg-blue-950/10 border border-blue-100 dark:border-blue-950/20 rounded-lg text-xs leading-relaxed text-blue-700 dark:text-blue-400">
               {collaborationActive ? (
                 <span>🛜 <strong>Active connection</strong>. Your workspace is synced with peers via WebRTC.</span>
@@ -170,6 +241,30 @@ export function PageAddons({
                 <span>Offline local mode. Enable sync to engage collaborative editing with peers concurrently on this Workspace board.</span>
               )}
             </div>
+
+
+            {presenceDiagnostics && (
+              <div className="space-y-2 rounded-lg border border-[#EBEBE9] dark:border-[#2F2F2F] bg-white dark:bg-[#252525] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Diagnostics</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${presenceDiagnostics.lastError ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-300'}`}>
+                    {presenceDiagnostics.lastError ? 'needs attention' : 'healthy'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-500 dark:text-stone-400">
+                  <div>WebRTC: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.webRtcAvailable ? 'available' : 'unavailable'}</strong></div>
+                  <div>Local channel: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.broadcastChannelAvailable ? 'available' : 'off'}</strong></div>
+                  <div>Active peers: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.activePeerCount}</strong></div>
+                  <div>Known peers: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.totalPeerCount}</strong></div>
+                  <div>STUN entries: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.iceServers.length}</strong></div>
+                  <div>Polling: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.lastSignalPollAt ? 'seen' : 'pending'}</strong></div>
+                </div>
+                <div className="text-[9px] text-gray-400 break-all">Signal endpoint: {presenceDiagnostics.httpSignalUrl}</div>
+                {presenceDiagnostics.lastError && (
+                  <div className="text-[10px] text-amber-600 dark:text-amber-300">Last signal note: {presenceDiagnostics.lastError}</div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-3 pt-2">
               <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 block">
@@ -215,13 +310,47 @@ export function PageAddons({
         )}
 
         {activeTab === 'links' && (
-          <div className="pt-2">
-            <BacklinksPanel
-              currentPage={currentPage}
-              pages={pages}
-              backlinks={backlinks}
-              onNavigateToPage={onNavigateToPage}
-            />
+          <div className="pt-2 space-y-4">
+            {/* Toggle between list and graph view */}
+            <div className="flex items-center gap-1 p-0.5 rounded-lg bg-gray-100 dark:bg-stone-800 w-fit">
+              <button
+                onClick={() => setShowGraph(false)}
+                className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors ${
+                  !showGraph
+                    ? 'bg-white dark:bg-[#252525] text-[#37352F] dark:text-[#E3E3E3] shadow-sm'
+                    : 'text-gray-500 dark:text-stone-400 hover:text-gray-700 dark:hover:text-stone-200'
+                }`}
+              >
+                List
+              </button>
+              <button
+                onClick={() => setShowGraph(true)}
+                className={`px-2.5 py-1 text-[10px] font-medium rounded-md transition-colors flex items-center gap-1 ${
+                  showGraph
+                    ? 'bg-white dark:bg-[#252525] text-[#37352F] dark:text-[#E3E3E3] shadow-sm'
+                    : 'text-gray-500 dark:text-stone-400 hover:text-gray-700 dark:hover:text-stone-200'
+                }`}
+              >
+                <GitGraph size={11} />
+                Graph
+              </button>
+            </div>
+
+            {showGraph ? (
+              <BacklinksGraph
+                pages={pages}
+                backlinks={backlinks}
+                currentPageId={currentPage.id}
+                onNavigateToPage={onNavigateToPage}
+              />
+            ) : (
+              <BacklinksPanel
+                currentPage={currentPage}
+                pages={pages}
+                backlinks={backlinks}
+                onNavigateToPage={onNavigateToPage}
+              />
+            )}
           </div>
         )}
 

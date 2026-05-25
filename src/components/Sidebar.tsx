@@ -13,9 +13,13 @@ import {
   Trash2,
   Edit2,
   Table,
-  Folder
+  Folder,
+  Layers,
+  MoveHorizontal,
+  LayoutTemplate
 } from 'lucide-react';
 import { WorkspaceMeta } from '../lib/persistence';
+import { WORKSPACE_TEMPLATES, instantiateTemplate, WorkspaceTemplate } from '../lib/workspaceTemplates';
 
 interface SidebarProps {
   pages: Page[];
@@ -23,6 +27,8 @@ interface SidebarProps {
   onSelectPage: (id: string) => void;
   onAddPage: (pageType?: PageType, parentId?: string | null) => void;
   onDeletePage?: (id: string) => void;
+  onMovePage?: (id: string) => void;
+  onInstantiateTemplate?: (template: WorkspaceTemplate) => void;
   userEmail: string | null;
   onLogout: () => void;
   onLogin: () => void;
@@ -70,6 +76,7 @@ interface SidebarItemProps {
   onSelectPage: (id: string) => void;
   onAddPage: (pageType?: PageType, parentId?: string | null) => void;
   onDeletePage?: (id: string) => void;
+  onMovePage?: (id: string) => void;
   expandedPageIds: Record<string, boolean>;
   onToggleExpand: (id: string) => void;
 }
@@ -81,6 +88,7 @@ function SidebarItem({
   onSelectPage,
   onAddPage,
   onDeletePage,
+  onMovePage,
   expandedPageIds,
   onToggleExpand,
 }: SidebarItemProps) {
@@ -100,9 +108,11 @@ function SidebarItem({
 
   const getIcon = () => {
     if (page.icon) return <span className="mr-1.5 shrink-0 text-sm select-none">{page.icon}</span>;
+    if (page.pageType === 'space') return <Layers size={14} className="mr-1.5 shrink-0 text-indigo-500" />;
+    if (page.pageType === 'folder') return <Folder size={14} className="mr-1.5 shrink-0 text-blue-500" />;
     if (page.pageType === 'canvas') return <Layout size={14} className="mr-1.5 shrink-0 text-amber-500" />;
     if (page.pageType === 'database') return <Table size={14} className="mr-1.5 shrink-0 text-purple-550" />;
-    if (hasChildren) return <Folder size={14} className="mr-1.5 shrink-0 text-blue-500" />;
+    if (hasChildren) return <Folder size={14} className="mr-1.5 shrink-0 text-blue-400" />;
     return <FileText size={14} className="mr-1.5 shrink-0 text-stone-500" />;
   };
 
@@ -146,6 +156,18 @@ function SidebarItem({
           >
             <Plus size={11} />
           </button>
+          {onMovePage && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onMovePage(page.id);
+              }}
+              title="Move page"
+              className="p-0.5 rounded-sm hover:bg-[#D9D8D6] dark:hover:bg-[#3F3F3F] text-stone-550 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-150 cursor-pointer"
+            >
+              <MoveHorizontal size={11} />
+            </button>
+          )}
           {onDeletePage && (
             <button
               onClick={(e) => {
@@ -174,6 +196,7 @@ function SidebarItem({
               onSelectPage={onSelectPage}
               onAddPage={onAddPage}
               onDeletePage={onDeletePage}
+              onMovePage={onMovePage}
               expandedPageIds={expandedPageIds}
               onToggleExpand={onToggleExpand}
             />
@@ -190,6 +213,8 @@ export function Sidebar({
   onSelectPage,
   onAddPage,
   onDeletePage,
+  onMovePage,
+  onInstantiateTemplate,
   userEmail,
   onLogout,
   onLogin,
@@ -371,6 +396,12 @@ export function Sidebar({
          <button onClick={() => onAddPage('block')} className="w-full flex items-center px-2 py-1.5 text-xs font-semibold rounded hover:bg-[#EBEBE9] dark:hover:bg-[#2F2F2F] text-stone-650 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 cursor-pointer">
            <span className="mr-2 text-sm">+</span> New Page
          </button>
+         <button onClick={() => onAddPage('space')} className="w-full flex items-center px-2 py-1.5 text-xs font-semibold rounded hover:bg-[#EBEBE9] dark:hover:bg-[#2F2F2F] text-stone-650 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 cursor-pointer">
+           <span className="mr-2"><Layers size={13} className="text-indigo-500" /></span> New Space
+         </button>
+         <button onClick={() => onAddPage('folder')} className="w-full flex items-center px-2 py-1.5 text-xs font-semibold rounded hover:bg-[#EBEBE9] dark:hover:bg-[#2F2F2F] text-stone-650 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 cursor-pointer">
+           <span className="mr-2"><Folder size={13} className="text-blue-500" /></span> New Folder
+         </button>
          <button onClick={() => onAddPage('database')} className="w-full flex items-center px-2 py-1.5 text-xs font-semibold rounded hover:bg-[#EBEBE9] dark:hover:bg-[#2F2F2F] text-stone-650 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 cursor-pointer">
            <span className="mr-2"><Table size={13} /></span> New Database
          </button>
@@ -378,6 +409,29 @@ export function Sidebar({
            <span className="mr-2"><Layout size={13} /></span> New Canvas
          </button>
       </div>
+
+      {/* Template Quick-Start */}
+      {onInstantiateTemplate && (
+        <div className="p-2 border-t border-[#EBEBE9] dark:border-[#2F2F2F] shrink-0 bg-stone-50/50 dark:bg-stone-900/10">
+          <div className="flex items-center gap-1.5 px-1 mb-1.5">
+            <LayoutTemplate size={11} className="text-purple-500" />
+            <span className="text-[9px] font-semibold uppercase tracking-wider text-gray-500">Templates</span>
+          </div>
+          <div className="space-y-0.5 max-h-32 overflow-y-auto">
+            {WORKSPACE_TEMPLATES.map(template => (
+              <button
+                key={template.id}
+                onClick={() => onInstantiateTemplate(template)}
+                className="w-full flex items-center gap-2 px-2 py-1 rounded hover:bg-[#EBEBE9] dark:hover:bg-[#2F2F2F] text-stone-650 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 cursor-pointer transition-colors"
+                title={template.description}
+              >
+                <span className="text-xs shrink-0">{template.icon}</span>
+                <span className="text-[11px] font-medium truncate">{template.name}</span>
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="p-3 border-t border-[#EBEBE9] dark:border-[#2F2F2F] shrink-0">
         {userEmail ? (

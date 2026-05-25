@@ -122,3 +122,48 @@ html.dark .drag-handle:hover {
   font-size: 12px;
   pointer-events: none;
 }
+
+/* iOS stand-alone native viewport locks and safe areas */
+html, body, #root {
+  overflow: hidden;
+  height: 100%;
+  width: 100%;
+  position: fixed;
+  overscroll-behavior: none;
+  overscroll-behavior-y: none;
+}
+
+/* Prevent selection on non-interactive regions */
+body, button, div, span, nav, header, footer {
+  -webkit-user-select: none;
+  user-select: none;
+}
+
+/* Allow text selection in text fields / editable areas only */
+input, textarea, [contenteditable="true"], .select-text {
+  -webkit-user-select: text;
+  user-select: text;
+}
+
+/* Prevent native long-press menus / touch callouts on elements */
+* {
+  -webkit-touch-callout: none;
+}
+input, textarea, [contenteditable="true"], .select-text {
+  -webkit-touch-callout: default;
+}
+
+/* Safe area padding utilities */
+.pt-safe {
+  padding-top: env(safe-area-inset-top);
+}
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+.pl-safe {
+  padding-left: env(safe-area-inset-left);
+}
+.pr-safe {
+  padding-right: env(safe-area-inset-right);
+}
+

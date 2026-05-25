@@ -4,29 +4,56 @@
  * Credential-free AI contract tests.
  *
  * Validates endpoint guard behavior and response shapes without needing
- * a real Gemini/Ollama/OpenAI key. Uses the disabled provider and
- * unconfigured provider paths.
+ * a real Gemini/Ollama/OpenAI key. Uses disabled, unconfigured, local,
+ * and custom endpoint provider paths.
  */
 
 import { strict as assert } from 'node:assert/strict';
-import { createAiClient, extractAiSettings, getConfiguredProviders, probeAi, safeErrorMessage } from '../src/lib/ai/providers';
+import {
+  createAiClient,
+  extractAiSettings,
+  getConfiguredProviders,
+  probeAi,
+  providerUnavailableMessage,
+  safeErrorMessage,
+} from '../src/lib/ai/providers';
 import { checkRateLimit, resetRateLimitStore } from '../src/lib/rateLimit';
+
+const AI_ENV_KEYS = [
+  'AI_PROVIDER',
+  'GEMINI_API_KEY',
+  'GEMINI_MODEL',
+  'OPENAI_API_KEY',
+  'OPENAI_BASE_URL',
+  'OPENAI_MODEL',
+  'OLLAMA_API_KEY',
+  'OLLAMA_BASE_URL',
+  'OLLAMA_MODEL',
+  'LM_STUDIO_API_KEY',
+  'LM_STUDIO_BASE_URL',
+  'LM_STUDIO_MODEL',
+  'VLLM_API_KEY',
+  'VLLM_BASE_URL',
+  'VLLM_MODEL',
+  'CUSTOM_AI_API_KEY',
+  'CUSTOM_AI_BASE_URL',
+  'CUSTOM_AI_MODEL',
+];
+for (const key of AI_ENV_KEYS) delete process.env[key];
 
 let passed = 0;
 let failed = 0;
+const tests: Array<{ name: string; fn: () => void | Promise<void> }> = [];
 
 function test(name: string, fn: () => void | Promise<void>) {
+  tests.push({ name, fn });
+}
+
+async function runTest(name: string, fn: () => void | Promise<void>) {
   try {
-    const result = fn();
-    if (result instanceof Promise) {
-      result.then(
-        () => { passed++; console.log(`  ✓ ${name}`); },
-        (error) => { failed++; console.error(`  ✗ ${name}\n    ${error.message}`); }
-      );
-    } else {
-      passed++;
-      console.log(`  ✓ ${name}`);
-    }
+    await fn();
+    passed++;
+    console.log(`  ✓ ${name}`);
   } catch (error: any) {
     failed++;
     console.error(`  ✗ ${name}`);
@@ -62,23 +89,42 @@ async function run() {
     assert.equal(client.info.id, 'gemini');
     assert.equal(client.info.configured, true);
     assert.equal(client.info.enabled, true);
+    assert.equal(client.info.keysReturned, false);
+  });
+
+  test('createAiClient with openai-compatible remote URL requires an apiKey', () => {
+    const client = createAiClient({ provider: 'openai', baseUrl: 'https://api.openai.example/v1', model: 'test-model' });
+    assert.equal(client.info.id, 'openai-compatible');
+    assert.equal(client.info.configured, false);
+    assert.match(providerUnavailableMessage(client.info), /API key/);
   });
 
   test('createAiClient with openai-compatible and baseUrl returns configured enabled client', () => {
-    const client = createAiClient({ provider: 'openai', baseUrl: 'http://localhost:8080/v1', apiKey: 'test-key' });
+    const client = createAiClient({ provider: 'openai', baseUrl: 'http://localhost:8080/v1', model: 'test-model', apiKey: 'test-key' });
     assert.equal(client.info.id, 'openai-compatible');
     assert.equal(client.info.configured, true);
     assert.equal(client.info.enabled, true);
   });
 
+  test('createAiClient supports custom endpoint aliases without defaulting to hosted OpenAI', () => {
+    const client = createAiClient({ provider: 'custom', baseUrl: 'http://localhost:9000/v1', model: 'custom-model' });
+    assert.equal(client.info.id, 'custom-endpoint');
+    assert.equal(client.info.label, 'Custom endpoint');
+    assert.equal(client.info.configured, true);
+    assert.equal(client.info.keysReturned, false);
+  });
+
+  test('custom endpoint unconfigured error is non-secret and actionable', () => {
+    const secret = 'sk-custom-secret-12345';
+    const client = createAiClient({ provider: 'custom-endpoint', apiKey: secret });
+    const message = providerUnavailableMessage(client.info);
+    assert.match(message, /Custom endpoint is not configured/);
+    assert.ok(!message.includes(secret), 'unconfigured message must not include provided API key');
+  });
+
   test('disabled client generateText throws an error', async () => {
     const client = createAiClient({ disabled: true });
-    try {
-      await client.generateText('test prompt');
-      assert.fail('should have thrown');
-    } catch (error: any) {
-      assert.ok(error.message.includes('AI is disabled') || error.message.includes('disabled'), 'should mention disabled');
-    }
+    await assert.rejects(() => client.generateText('test prompt'), /disabled/i);
   });
 
   // --- extractAiSettings ---
@@ -110,9 +156,11 @@ async function run() {
   // --- getConfiguredProviders ---
   test('getConfiguredProviders returns all provider infos with keysReturned: false', () => {
     const providers = getConfiguredProviders();
-    assert.ok(providers.length >= 5);
+    assert.ok(providers.length >= 7);
+    assert.ok(providers.some(p => p.id === 'custom-endpoint'), 'custom endpoint should be listed');
     for (const p of providers) {
       assert.equal(p.keysReturned, false, `${p.id} must return keysReturned: false`);
+      assert.ok(!('apiKey' in p), `${p.id} must not expose an apiKey field`);
     }
   });
 
@@ -121,12 +169,23 @@ async function run() {
     const result = await probeAi({ disabled: true });
     assert.equal(result.ok, true);
     assert.equal(result.provider.enabled, false);
+    assert.equal(result.provider.keysReturned, false);
   });
 
   test('probeAi with unconfigured provider returns ok: true for disabled', async () => {
     const result = await probeAi({ provider: 'none' });
     assert.equal(result.ok, true);
     assert.equal(result.provider.enabled, false);
+  });
+
+  test('probeAi with unconfigured custom endpoint returns 503-safe shape', async () => {
+    const secret = 'sk-custom-probe-secret-12345';
+    const result = await probeAi({ provider: 'custom-endpoint', apiKey: secret });
+    assert.equal(result.ok, false);
+    assert.equal(result.provider.id, 'custom-endpoint');
+    assert.equal(result.provider.keysReturned, false);
+    assert.ok(!result.message.includes(secret), 'probe message must not include provided API key');
+    assert.match(result.message, /base URL and model name/);
   });
 
   // --- safeErrorMessage ---
@@ -147,6 +206,12 @@ async function run() {
     assert.ok(sanitized.includes('Authorization=[redacted]'), 'bearer token should be redacted');
   });
 
+  test('safeErrorMessage redacts custom endpoint secret extras', () => {
+    const fakeKey = 'custom-secret-abc12345';
+    const sanitized = safeErrorMessage(new Error(`upstream rejected ${fakeKey}`), [fakeKey]);
+    assert.ok(!sanitized.includes(fakeKey), 'custom endpoint API key should be redacted');
+  });
+
   // --- rateLimit ---
   test('checkRateLimit allows initial requests', () => {
     resetRateLimitStore();
@@ -162,6 +227,10 @@ async function run() {
     assert.ok(typeof result.resetAt === 'number');
     assert.ok(result.resetAt > Date.now());
   });
+
+  for (const { name, fn } of tests) {
+    await runTest(name, fn);
+  }
 
   console.log(`\n${passed}/${passed + failed} AI contract tests passed.\n`);
   if (failed > 0) process.exit(1);

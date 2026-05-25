@@ -1,26 +1,24 @@
-import React, { useState } from 'react';
-import { Database, DatabaseRow, DatabaseProperty } from '../../types/database';
-import { Plus, Trash2, GripVertical, CheckCircle2, Circle, Clock } from 'lucide-react';
+import React from 'react';
+import { Database, DatabaseRow, DatabaseView } from '../../types/database';
+import { Plus, Trash2, GripVertical } from 'lucide-react';
 import { cn } from '../../lib/utils';
 
 interface DatabaseBoardViewProps {
   database: Database;
   onChange: (updatedDb: Database) => void;
-  groupByPropertyId?: string;
+  view: DatabaseView;
+  onViewChange: (updatedView: DatabaseView) => void;
 }
 
-export function DatabaseBoardView({ database, onChange, groupByPropertyId }: DatabaseBoardViewProps) {
+export function DatabaseBoardView({ database, onChange, view, onViewChange }: DatabaseBoardViewProps) {
   const { properties, rows } = database;
 
   // Find suitable grouping property (either selected or first 'select' property)
-  const groupProperty = groupByPropertyId
-    ? properties.find(p => p.id === groupByPropertyId)
+  const groupProperty = view.groupByPropertyId
+    ? properties.find(p => p.id === view.groupByPropertyId)
     : properties.find(p => p.type === 'select');
 
-  const [selectedGroupPropId, setSelectedGroupPropId] = useState<string>(groupProperty?.id || '');
-
-  // Update selected group property
-  const activeGroupProp = properties.find(p => p.id === selectedGroupPropId);
+  const activeGroupProp = groupProperty;
 
   // If no group property can be found, show setup UI
   if (!activeGroupProp || activeGroupProp.type !== 'select') {
@@ -35,8 +33,8 @@ export function DatabaseBoardView({ database, onChange, groupByPropertyId }: Dat
         {selectProperties.length > 0 ? (
           <div className="flex gap-2">
             <select
-              value={selectedGroupPropId}
-              onChange={(e) => setSelectedGroupPropId(e.target.value)}
+              value={view.groupByPropertyId || ''}
+              onChange={(e) => onViewChange({ ...view, groupByPropertyId: e.target.value || undefined })}
               className="px-2.5 py-1 text-xs border border-gray-200 dark:border-gray-800 rounded-lg bg-white dark:bg-[#1E1E1E]"
             >
               <option value="">Select a column...</option>
@@ -147,8 +145,8 @@ export function DatabaseBoardView({ database, onChange, groupByPropertyId }: Dat
         <div className="flex items-center gap-2">
           <span className="text-xs font-semibold text-gray-500 dark:text-gray-400">Group by:</span>
           <select
-            value={selectedGroupPropId}
-            onChange={(e) => setSelectedGroupPropId(e.target.value)}
+            value={activeGroupProp.id}
+            onChange={(e) => onViewChange({ ...view, groupByPropertyId: e.target.value })}
             className="px-2 py-1 text-xs border border-gray-200 dark:border-gray-800 rounded bg-white dark:bg-[#1E1E1E] font-medium"
           >
             {properties

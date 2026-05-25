@@ -8,7 +8,7 @@
 import { WebSocketServer } from 'ws';
 import http from 'http';
 
-const port = process.env.PORT || 3005;
+const port = process.env.SIGNALING_PORT || process.env.PORT || 3005;
 const topics = new Map(); // topicName → Set<WebSocket>
 
 const send = (conn, msg) => {
