@@ -131,6 +131,7 @@ function clonePage(page: Page): Page {
     ...(page.actualTime !== undefined ? { actualTime: page.actualTime } : {}),
     ...(page.isTimerRunning !== undefined ? { isTimerRunning: page.isTimerRunning } : {}),
     ...(page.timerStartTime !== undefined ? { timerStartTime: page.timerStartTime } : {}),
+    ...(page.reminderDate !== undefined ? { reminderDate: page.reminderDate } : {}),
   };
 }
 

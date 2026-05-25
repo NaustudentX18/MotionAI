@@ -1,0 +1,140 @@
+/**
+ * localAuth.ts — Local PIN lock for MotionAI PWA.
+ *
+ * Security model:
+ *  - Raw PIN is never stored.
+ *  - A random 16-byte hex salt is generated per pin-set.
+ *  - SHA-256(salt + pin) is computed via crypto.subtle and stored as hex.
+ *  - Lock state lives in sessionStorage (cleared on tab/browser close).
+ */
+
+const LS_KEY = 'motionai_local_auth';
+const SS_KEY = 'motionai_pin_unlocked';
+const FAILURE_KEY = 'motionai_pin_failures';
+const MAX_FAILURES = 5;
+const LOCKOUT_MS = 60_000;
+
+interface AuthRecord {
+  salt: string;
+  hash: string;
+}
+
+interface FailureRecord {
+  count: number;
+  lockoutUntil?: number;
+}
+
+/** Encode a Uint8Array to lowercase hex */
+function toHex(buf: ArrayBuffer): string {
+  return Array.from(new Uint8Array(buf))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
+}
+
+/** Compute SHA-256 of a plain string, return hex */
+async function sha256(text: string): Promise<string> {
+  const encoded = new TextEncoder().encode(text);
+  const buf = await crypto.subtle.digest('SHA-256', encoded);
+  return toHex(buf);
+}
+
+/** Generate a cryptographically random 16-byte hex salt */
+function generateSalt(): string {
+  const bytes = new Uint8Array(16);
+  crypto.getRandomValues(bytes);
+  return toHex(bytes.buffer);
+}
+
+// ─── Public API ─────────────────────────────────────────────────────────────
+
+/** Returns true if a PIN has been configured */
+export function hasPin(): boolean {
+  return localStorage.getItem(LS_KEY) !== null;
+}
+
+/** Hash and store the PIN. Overwrites any existing PIN. */
+export async function setPin(pin: string): Promise<void> {
+  if (!/^\d{6}$/.test(pin)) {
+    throw new Error('PIN must be exactly 6 digits');
+  }
+  const salt = generateSalt();
+  const hash = await sha256(salt + pin);
+  const record: AuthRecord = { salt, hash };
+  localStorage.setItem(LS_KEY, JSON.stringify(record));
+  sessionStorage.removeItem(SS_KEY);
+}
+
+/** Verify a candidate PIN. Returns true if correct. */
+export async function verifyPin(pin: string): Promise<boolean> {
+  const raw = localStorage.getItem(LS_KEY);
+  if (!raw) return false;
+  if (getPinLockoutMs() > 0) return false;
+  try {
+    const record: AuthRecord = JSON.parse(raw);
+    const candidate = await sha256(record.salt + pin);
+    return candidate === record.hash;
+  } catch {
+    return false;
+  }
+}
+
+/** Remove the stored PIN (disables lock) */
+export function clearPin(): void {
+  localStorage.removeItem(LS_KEY);
+  sessionStorage.removeItem(SS_KEY);
+  sessionStorage.removeItem(FAILURE_KEY);
+}
+
+/** Returns true if the app is currently locked */
+export function isLocked(): boolean {
+  return hasPin() && sessionStorage.getItem(SS_KEY) !== '1';
+}
+
+/** Lock the app (persists until unlocked in this session) */
+export function lock(): void {
+  sessionStorage.removeItem(SS_KEY);
+}
+
+/** Unlock the app for this session */
+export function unlock(): void {
+  sessionStorage.setItem(SS_KEY, '1');
+  sessionStorage.removeItem(FAILURE_KEY);
+}
+
+function loadFailureRecord(): FailureRecord {
+  try {
+    const raw = sessionStorage.getItem(FAILURE_KEY);
+    if (!raw) return { count: 0 };
+    const parsed = JSON.parse(raw) as Partial<FailureRecord>;
+    return {
+      count: typeof parsed.count === 'number' ? parsed.count : 0,
+      lockoutUntil: typeof parsed.lockoutUntil === 'number' ? parsed.lockoutUntil : undefined,
+    };
+  } catch {
+    return { count: 0 };
+  }
+}
+
+function saveFailureRecord(record: FailureRecord): void {
+  sessionStorage.setItem(FAILURE_KEY, JSON.stringify(record));
+}
+
+/** Returns remaining PIN lockout time in milliseconds for this browser session. */
+export function getPinLockoutMs(now = Date.now()): number {
+  const record = loadFailureRecord();
+  if (!record.lockoutUntil || record.lockoutUntil <= now) return 0;
+  return record.lockoutUntil - now;
+}
+
+/** Records a failed unlock attempt and returns current lockout time in milliseconds. */
+export function registerFailedPin(now = Date.now()): number {
+  const record = loadFailureRecord();
+  const nextCount = record.count + 1;
+  const nextRecord: FailureRecord = { count: nextCount };
+  if (nextCount >= MAX_FAILURES) {
+    nextRecord.count = 0;
+    nextRecord.lockoutUntil = now + LOCKOUT_MS;
+  }
+  saveFailureRecord(nextRecord);
+  return getPinLockoutMs(now);
+}

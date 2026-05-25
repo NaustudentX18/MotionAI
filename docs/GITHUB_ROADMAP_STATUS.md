@@ -1,8 +1,8 @@
 # GitHub Roadmap Status
 
-**Checked:** 2026-05-23T09:08:21+10:00 with `gh` from `/home/pi/OpenNotion`  
-**Repository:** <https://github.com/NaustudentX18/MotionAI>  
-**Default branch:** `main`  
+**Checked:** 2026-05-25T23:02:25+10:00 with `gh` from `/home/pi/OpenNotion`
+**Repository:** <https://github.com/NaustudentX18/MotionAI>
+**Default branch:** `main`
 **Visibility:** public repository
 
 This file reconciles the local roadmap docs with live GitHub issue, milestone, and project state. It is a documentation snapshot only; do not treat open issues as closed just because local code now appears to satisfy some acceptance criteria.
@@ -10,9 +10,10 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 ## Summary
 
 - Live issues #1–#35 are open.
-- No closed issues were returned by `gh issue list --state closed --limit 50`.
-- Milestones Phase 0 through Phase 8 plus `Backlog — Needs shaping` exist; Phase 6-8 now have issue coverage.
-- Owner project **MotionAI Public Roadmap** is public and now tracks the initial roadmap issues plus Phase 6-8 follow-ups.
+- No closed issues were returned by `gh issue list --state closed --limit 20`.
+- Milestones Phase 0 through Phase 8 plus `Backlog — Needs shaping` exist; Phase 6-8 have issue coverage.
+- Owner project **MotionAI Public Roadmap** was previously verified public with 35 tracked items; project metadata was not mutated in this pass.
+- This branch adds local-first reminder plumbing, a meeting-parser API, webhook replay protection, local PIN lock hardening, and canvas selection-to-task conversion. Keep GitHub issues open until the branch is pushed and acceptance criteria are checked.
 
 ## Milestones
 
@@ -67,7 +68,7 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 | Issue | Title | Labels | Reconciliation note |
 | --- | --- | --- | --- |
 | #17 | tasks: add My Tasks and Home views | `type:feature`, `area:tasks`, `phase-3`, `claim:planned` | `DashboardWidget.tsx` implements My Tasks/Home; verify before closing. |
-| #18 | tasks: add inbox, notifications, and reminders | `type:feature`, `area:tasks`, `phase-3`, `claim:planned` | Inbox exists; durable notifications/reminders are not complete. Split or keep open. |
+| #18 | tasks: add inbox, notifications, and reminders | `type:feature`, `area:tasks`, `phase-3`, `claim:planned` | This branch adds schema/UI/local HTML5 reminder plumbing and dashboard reminder filters. Background push/Tauri reminders and snooze/dismiss remain open. |
 | #19 | tasks: define project hierarchy model | `type:rfc`, `area:object-graph`, `phase-3`, `needs-rfc` | Spaces/folders/parent IDs exist locally; RFC may still be needed. |
 | #20 | security: design guest/collaborator permissions | `type:rfc`, `type:security`, `phase-3`, `needs-rfc` | Still planned/not claimed. |
 
@@ -77,14 +78,14 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 | --- | --- | --- | --- |
 | #21 | ai: harden BYO/local provider registry UI | `type:feature`, `area:ai`, `phase-4`, `claim:experimental` | Provider registry UI exists; verify before closing. |
 | #22 | ai: add summarize page action | `type:feature`, `area:ai`, `phase-4`, `claim:planned` | Summarize action exists; issue label/status may be stale. |
-| #23 | ai: add meeting-notes-to-tasks action | `type:feature`, `area:tasks`, `area:ai`, `phase-4`, `claim:planned` | Meeting capture exists, but no verified AI meeting-notes-to-tasks action was found. |
+| #23 | ai: add meeting-notes-to-tasks action | `type:feature`, `area:tasks`, `area:ai`, `phase-4`, `claim:planned` | This branch adds `/api/ai/meeting-parser` with deterministic fallback and redaction coverage. Preview/apply UI remains open. |
 | #24 | security: design safe agent mode | `type:rfc`, `type:security`, `area:ai`, `phase-4`, `needs-rfc` | Guardrail helper exists; full agent mode remains not claimed. |
 
 ### Phase 5
 
 | Issue | Title | Labels | Reconciliation note |
 | --- | --- | --- | --- |
-| #25 | automations: write rule-builder RFC | `type:rfc`, `area:automations`, `phase-5`, `needs-rfc` | Rule engine/UI exists locally; webhook/API route implementation and RFC still need reconciliation. |
+| #25 | automations: write rule-builder RFC | `type:rfc`, `area:automations`, `phase-5`, `needs-rfc` | This branch adds webhook path validation, replay protection, and docs. Rule execution history/RFC reconciliation remain open. |
 
 ## Project board
 
@@ -95,6 +96,13 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 | MotionAI Public Roadmap | 1 | 35 | true | <https://github.com/users/NaustudentX18/projects/1> |
 
 Action: keep the board public and add new launch/blocker issues as roadmap scope changes.
+
+## Current branch reconciliation notes (2026-05-25)
+
+- `docs/ROADMAP_TODO.md` now distinguishes completed local work from remaining GitHub issue acceptance.
+- `docs/WORKSPACE_SCHEMA.md` now documents task/page fields including `reminderDate`.
+- `docs/WEBHOOK_API.md` now documents replay protection via `x-motionai-delivery`.
+- Do not mass-close or mass-relabel issues from this branch alone; use issue comments/closures only after the pushed branch and verification evidence are visible on GitHub.
 
 ## Documentation maintenance rules
 

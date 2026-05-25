@@ -222,6 +222,20 @@ async function runTests() {
     assertNoSecrets(data);
   }).run();
 
+  await test('POST /api/ai/meeting-parser redacts request API key on deterministic fallback path', async () => {
+    const { status, data } = await postJson('/api/ai/meeting-parser', {
+      transcript: 'Alex will send the urgent launch checklist by Friday',
+      ai: {
+        provider: 'custom-endpoint',
+        apiKey: testSecrets.github,
+      },
+    });
+    assert.equal(status, 200);
+    assertKeysReturnedFalse(data);
+    assertNoSecrets(data);
+    assert.ok(Array.isArray(data?.tasks), 'meeting parser must return tasks array');
+  }).run();
+
   await test('POST /api/ai/chat redacts request API key on error path', async () => {
     const { status, data } = await postJson('/api/ai/chat', {
       message: 'hello',
@@ -257,6 +271,19 @@ async function runTests() {
     assert.equal(data?.webhook, 'secret-redaction');
     assertKeysReturnedFalse(data);
     assertNoSecrets(data);
+  }).run();
+
+  await test('POST /api/webhooks/:path rejects replayed delivery id', async () => {
+    const headers = { 'x-motionai-delivery': 'secret-redaction-replay-test' };
+    const first = await postJson('/api/webhooks/replay-test', { event: 'first' }, headers);
+    assert.equal(first.status, 200);
+    assertKeysReturnedFalse(first.data);
+    assertNoSecrets(first.data);
+
+    const second = await postJson('/api/webhooks/replay-test', { event: 'second', token: testSecrets.webhook }, headers);
+    assert.equal(second.status, 409);
+    assertKeysReturnedFalse(second.data);
+    assertNoSecrets(second.data);
   }).run();
 
   console.log(`\n${'═'.repeat(50)}`);

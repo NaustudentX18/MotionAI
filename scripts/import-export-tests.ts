@@ -65,6 +65,7 @@ function makeSnapshot(): WorkspaceSnapshot {
     icon: '🧪',
     cover: 'cover.png',
     pageType: 'block',
+    reminderDate: '2026-05-25T09:30',
     versions: [
       { id: 'v1', timestamp: 1_779_360_000_002, title: 'Previous', blocks: [makeBlock('old-b1', 'p', 'Old')] },
     ],

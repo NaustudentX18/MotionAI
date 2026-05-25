@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { v4 as uuidv4 } from 'uuid';
 import {
   Tldraw,
   Editor,
@@ -20,6 +21,7 @@ interface CanvasEditorProps {
   pageId: string;
   pages: Page[];
   onSelectPage: (id: string) => void;
+  onAddPage: (page: Page) => void;
 }
 
 type CanvasCreateShape = TLCreateShapePartial<TLGeoShape> | TLCreateShapePartial<TLNoteShape>;
@@ -81,7 +83,7 @@ function getPageCardColor(page: Page): TLDefaultColorStyle {
   return 'grey';
 }
 
-export function CanvasEditor({ pageId, pages, onSelectPage }: CanvasEditorProps) {
+export function CanvasEditor({ pageId, pages, onSelectPage, onAddPage }: CanvasEditorProps) {
   const [editor, setEditor] = useState<Editor | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(true);
 
@@ -167,6 +169,57 @@ export function CanvasEditor({ pageId, pages, onSelectPage }: CanvasEditorProps)
 
     editor.updateShapes(updates);
     editor.zoomToFit({ animation: { duration: 300 } });
+  };
+
+  const handleSelectionToTasks = () => {
+    if (!editor) return;
+    const selectedShapes = editor.getSelectedShapes();
+    const textShapes = selectedShapes
+      .map(shape => {
+        const props = shape.props as { richText?: unknown; text?: string };
+        const richText = typeof props.richText === 'object' && props.richText
+          ? JSON.stringify(props.richText).replace(/[{}"\\[\\],:]/g, ' ')
+          : '';
+        return (props.text || richText || shape.type).replace(/\s+/g, ' ').trim();
+      })
+      .filter(Boolean);
+
+    if (textShapes.length === 0) {
+      const { x, y } = editor.getViewportPageBounds().center;
+      editor.createShapes([{
+        id: createShapeId(),
+        type: 'note',
+        x: x - 140,
+        y: y - 40,
+        props: {
+          richText: toRichText('Select one or more canvas notes/cards, then run “Selection to Tasks”.'),
+          color: 'yellow',
+          font: 'sans',
+          align: 'start',
+          verticalAlign: 'start',
+          growY: 0,
+        },
+      }]);
+      return;
+    }
+
+    const now = Date.now();
+    const newPage: Page = {
+      id: uuidv4(),
+      title: `Canvas Tasks - ${new Date(now).toLocaleDateString()}`,
+      icon: '✅',
+      cover: null,
+      pageType: 'block',
+      createdAt: now,
+      updatedAt: now,
+      blocks: [
+        { id: uuidv4(), type: 'h1', content: 'Canvas task conversion' },
+        { id: uuidv4(), type: 'callout', content: `Generated from ${textShapes.length} selected canvas item(s). Review before assigning owners or due dates.` },
+        ...textShapes.map(text => ({ id: uuidv4(), type: 'todo' as const, content: text.slice(0, 220), checked: false })),
+      ],
+    };
+    onAddPage(newPage);
+    onSelectPage(newPage.id);
   };
 
   const handleEmbedPage = (page: Page) => {
@@ -270,6 +323,20 @@ export function CanvasEditor({ pageId, pages, onSelectPage }: CanvasEditorProps)
                       Cluster Sticky Notes
                     </div>
                     <div className="text-[9px] text-stone-400">Local scaffold: groups notes by color into grids.</div>
+                  </div>
+                </div>
+              </button>
+              <button
+                onClick={handleSelectionToTasks}
+                className="mt-1 w-full text-left px-2.5 py-2 rounded-lg border border-purple-200 dark:border-purple-800 bg-purple-50/50 dark:bg-purple-950/10 hover:border-purple-400 dark:hover:border-purple-600 transition-all group"
+              >
+                <div className="flex items-center gap-2">
+                  <span className="text-sm">✅</span>
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-semibold text-stone-750 dark:text-stone-250">
+                      Selection to Tasks
+                    </div>
+                    <div className="text-[9px] text-stone-400">Creates a reviewable task page from selected canvas items.</div>
                   </div>
                 </div>
               </button>

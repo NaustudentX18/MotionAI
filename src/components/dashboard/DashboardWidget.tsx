@@ -21,7 +21,9 @@ import {
   dueBucket,
   getTaskStats,
   listAssignees,
+  reminderBucket,
   type DueDateFilter,
+  type ReminderFilter,
   type TaskFilters,
   type TaskItem,
   type TaskPriority,
@@ -70,6 +72,13 @@ function formatDueDate(date?: string): string {
   const parsed = new Date(`${date.slice(0, 10)}T00:00:00`);
   if (Number.isNaN(parsed.getTime())) return date;
   return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric' }).format(parsed);
+}
+
+function formatReminderDate(date?: string): string {
+  if (!date) return 'No reminder';
+  const parsed = new Date(date);
+  if (Number.isNaN(parsed.getTime())) return date;
+  return new Intl.DateTimeFormat(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' }).format(parsed);
 }
 
 function StateCard({
@@ -137,6 +146,7 @@ function TaskMetaPill({ children, className = '' }: { children: React.ReactNode;
 
 function TaskRow({ task, onSelectPage }: { task: TaskItem; onSelectPage: (id: string) => void }) {
   const bucket = dueBucket(task);
+  const reminder = reminderBucket(task);
   const priority = task.priority ?? 'None';
 
   return (
@@ -177,6 +187,11 @@ function TaskRow({ task, onSelectPage }: { task: TaskItem; onSelectPage: (id: st
             {task.isInbox && (
               <TaskMetaPill className="border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/20 dark:text-amber-200">
                 <Inbox size={11} /> Inbox
+              </TaskMetaPill>
+            )}
+            {task.reminderDate && (
+              <TaskMetaPill className="border-purple-200 bg-purple-50 text-purple-800 dark:border-purple-900/50 dark:bg-purple-950/20 dark:text-purple-200">
+                <Clock3 size={11} /> {reminder === 'due' ? 'Reminder due' : 'Reminder'} · {formatReminderDate(task.reminderDate)}
               </TaskMetaPill>
             )}
           </div>
@@ -225,6 +240,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
     query: '',
     status: 'open',
     due: 'all',
+    reminder: 'all',
     priority: 'all',
     assignee: 'all',
   });
@@ -250,7 +266,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
     [tasks]
   );
 
-  const hasFilters = filters.query.trim() !== '' || filters.status !== 'open' || filters.due !== 'all' || filters.priority !== 'all' || filters.assignee !== 'all';
+  const hasFilters = filters.query.trim() !== '' || filters.status !== 'open' || filters.due !== 'all' || filters.reminder !== 'all' || filters.priority !== 'all' || filters.assignee !== 'all';
   const taskError = error || taskState.error;
 
   const updateFilter = <K extends keyof TaskFilters>(key: K, value: TaskFilters[K]) => {
@@ -272,7 +288,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
                 <span className="block text-amber-200">without the drift.</span>
               </h1>
               <p className="mt-4 max-w-2xl text-sm font-medium leading-6 text-stone-300 sm:text-base">
-                A consolidated home surface for page tasks and inline checklists, using the current workspace schema only: due date, priority, assignee, time tracking, and todo completion.
+                A consolidated home surface for page tasks and inline checklists, using the current workspace schema only: due date, reminder, priority, assignee, time tracking, and todo completion.
               </p>
             </div>
 
@@ -297,7 +313,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
           <StateCard icon={<Inbox size={18} />} label="Inbox" value={stats.inbox} detail="Open tasks missing routing metadata" tone="bg-amber-300/40" />
           <StateCard icon={<CalendarClock size={18} />} label="Due today" value={stats.today} detail={`${stats.next7} more in the next 7 days`} tone="bg-cyan-300/40" />
           <StateCard icon={<AlertTriangle size={18} />} label="Overdue" value={stats.overdue} detail="Open tasks past their due date" tone="bg-red-300/40" />
-          <StateCard icon={<Clock3 size={18} />} label="Tracked" value={formatMinutes(stats.trackedMinutes)} detail={`${formatMinutes(stats.estimatedMinutes)} estimated`} tone="bg-emerald-300/40" />
+          <StateCard icon={<Clock3 size={18} />} label="Reminders" value={stats.remindersDue} detail={`${stats.remindersUpcoming} upcoming in 7 days`} tone="bg-purple-300/40" />
         </section>
 
         <section className="rounded-[1.75rem] border border-stone-200 bg-white/80 p-4 shadow-sm backdrop-blur dark:border-stone-800 dark:bg-[#171716]/90">
@@ -329,6 +345,12 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
                 <option value="next7">Next 7 days</option>
                 <option value="no-date">No date</option>
               </FilterSelect>
+              <FilterSelect label="Reminder" value={filters.reminder} onChange={value => updateFilter('reminder', value as ReminderFilter)}>
+                <option value="all">All reminders</option>
+                <option value="due">Due now</option>
+                <option value="upcoming">Upcoming</option>
+                <option value="none">No reminder</option>
+              </FilterSelect>
               <FilterSelect label="Priority" value={filters.priority} onChange={value => updateFilter('priority', value as TaskFilters['priority'])}>
                 <option value="all">All priorities</option>
                 {(Object.keys(PRIORITY_ORDER) as TaskPriority[]).map(priority => (
@@ -350,7 +372,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
             {hasFilters && (
               <button
                 type="button"
-                onClick={() => setFilters({ query: '', status: 'open', due: 'all', priority: 'all', assignee: 'all' })}
+                onClick={() => setFilters({ query: '', status: 'open', due: 'all', reminder: 'all', priority: 'all', assignee: 'all' })}
                 className="rounded-full border border-stone-200 px-3 py-1 text-[10px] font-black uppercase tracking-[0.12em] text-stone-600 transition hover:border-amber-300 hover:text-stone-950 dark:border-stone-700 dark:text-stone-300 dark:hover:border-amber-700 dark:hover:text-white"
               >
                 Reset filters
@@ -394,7 +416,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
                 <div className="mb-3 flex items-start justify-between gap-3">
                   <div>
                     <h2 className="font-serif text-xl font-black text-stone-950 dark:text-stone-50">Inbox triage</h2>
-                    <p className="text-xs font-medium text-stone-600 dark:text-stone-400">Schema-compatible inbox = open tasks with no due date, priority, or assignee.</p>
+                    <p className="text-xs font-medium text-stone-600 dark:text-stone-400">Schema-compatible inbox = open tasks with no due date, reminder, priority, or assignee.</p>
                   </div>
                   <Inbox size={20} className="text-amber-700 dark:text-amber-300" />
                 </div>
@@ -432,7 +454,7 @@ export function DashboardWidget({ pages, onSelectPage, isLoading = false, error 
         )}
 
         <div className="rounded-2xl border border-stone-200 bg-white/70 p-3 text-[11px] font-semibold text-stone-500 dark:border-stone-800 dark:bg-[#171716] dark:text-stone-400">
-          Reminder/status note: this surface does not add schema. Status is inferred from todo completion; page tasks are complete only when all internal todos are checked. Reminder scheduling is not shown because the current task model has no reminder field.
+          Reminder/status note: this surface reads the canonical reminderDate field from the task/page model. Browser notifications require user permission and are local-device reminders, not cross-device push delivery.
         </div>
       </div>
     </div>

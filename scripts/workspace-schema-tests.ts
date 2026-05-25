@@ -91,6 +91,21 @@ test('accepts every runtime-supported page type', () => {
   }
 });
 
+test('accepts and rejects reminderDate using the canonical page contract', () => {
+  const valid = validateWorkspaceSnapshot({
+    pages: [page('p-reminder', [block('b-reminder')], { reminderDate: '2026-05-25T09:30' })],
+    currentPageId: 'p-reminder',
+  });
+  assert.equal(valid.ok, true, valid.errors.join('; '));
+
+  const invalid = validateWorkspaceSnapshot({
+    pages: [page('p-reminder-bad', [block('b-reminder-bad')], { reminderDate: 'not-a-date' })],
+    currentPageId: 'p-reminder-bad',
+  });
+  assert.equal(invalid.ok, false);
+  assert.match(invalid.errors.join('\n'), /reminderDate/);
+});
+
 test('rejects unsupported block and page types', () => {
   const badBlock = { id: 'b1', type: 'unsupported-widget', content: '' };
   const badPage = page('p1', [badBlock as Block], { pageType: 'unsupported-page' as Page['pageType'] });

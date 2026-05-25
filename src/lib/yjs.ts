@@ -113,6 +113,7 @@ function yMapToPage(id: string, ymap: Y.Map<unknown>): Page {
     actualTime: ymap.get('actualTime') as number | undefined,
     isTimerRunning: ymap.get('isTimerRunning') as boolean | undefined,
     timerStartTime: ymap.get('timerStartTime') as number | undefined,
+    reminderDate: ymap.get('reminderDate') as string | undefined,
   };
 }
 
@@ -185,6 +186,7 @@ function pageToYMap(doc: Y.Doc, page: Page): Y.Map<unknown> {
   if (page.actualTime !== undefined) ymap.set('actualTime', page.actualTime);
   if (page.isTimerRunning !== undefined) ymap.set('isTimerRunning', page.isTimerRunning);
   if (page.timerStartTime !== undefined) ymap.set('timerStartTime', page.timerStartTime);
+  if (page.reminderDate !== undefined) ymap.set('reminderDate', page.reminderDate);
 
   // Blocks as Y.Array of Y.Maps
   const blocksYArray = new Y.Array<Y.Map<unknown>>();

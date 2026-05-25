@@ -119,7 +119,16 @@ interface PageV1 {
   createdAt: number;
   updatedAt: number;
   versions?: PageVersionV1[];
-  pageType?: 'block' | 'canvas' | 'database' | 'dashboard';
+  pageType?: 'block' | 'canvas' | 'database' | 'dashboard' | 'space' | 'folder';
+  parentId?: string | null;
+  priority?: 'Urgent' | 'High' | 'Normal' | 'Low';
+  dueDate?: string;
+  assignee?: string;
+  estimatedTime?: number;
+  actualTime?: number;
+  isTimerRunning?: boolean;
+  timerStartTime?: number;
+  reminderDate?: string;
 }
 ```
 
@@ -130,7 +139,10 @@ Rules:
 - `icon` and `cover` are nullable scalars.
 - `createdAt` and `updatedAt` are Unix epoch milliseconds.
 - `updatedAt` should be advanced on user-visible mutations.
-- `pageType` defaults to `'block'` when missing. Runtime-supported page types are `'block'`, `'canvas'`, `'database'`, and `'dashboard'`; schema validation must stay in lockstep with `PAGE_TYPES` in `src/types.ts`.
+- `pageType` defaults to `'block'` when missing. Runtime-supported page types are `'block'`, `'canvas'`, `'database'`, `'dashboard'`, `'space'`, and `'folder'`; schema validation must stay in lockstep with `PAGE_TYPES` in `src/types.ts`.
+- `parentId` models spaces/folders/project hierarchy and must reference another page when used by UI workflows.
+- Task metadata (`priority`, `dueDate`, `assignee`, `estimatedTime`, `actualTime`, `isTimerRunning`, `timerStartTime`, `reminderDate`) is canonical page-level metadata. It may be rendered by `TaskPropertiesPanel`, dashboard surfaces, import/export, and Yjs snapshots.
+- `reminderDate` is a valid date/datetime string used for local browser/desktop reminder scheduling. It is not a cloud push delivery guarantee.
 - `'canvas'` pages currently have no block content contract beyond `blocks: []`.
 - `'database'` pages may include a `database` block used by the current database UI.
 - `'dashboard'` pages are accepted as an experimental runtime page type so backups do not reject existing user work; public docs must continue to label dashboard behavior conservatively until dedicated tests exist.

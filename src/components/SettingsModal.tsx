@@ -14,6 +14,7 @@ import { exportDiagnostics } from '../lib/diagnostics';
 import { csvExportToWorkspace } from '../lib/importers/csvImporter';
 import { Page } from '../types';
 import { cn } from '../lib/utils';
+import { clearPin, hasPin, lock, setPin } from '../lib/localAuth';
 
 import {
   Rule,
@@ -29,7 +30,7 @@ import {
   defaultDueDateRule,
 } from '../lib/automations/ruleBuilder';
 
-type TabId = 'ai' | 'appearance' | 'data' | 'automations' | 'about';
+type TabId = 'ai' | 'appearance' | 'data' | 'security' | 'automations' | 'about';
 
 const PROVIDER_ORDER: AiProviderId[] = [
   'gemini',
@@ -830,6 +831,100 @@ function DataTab() {
   );
 }
 
+function SecurityTab() {
+  const [pin, setPinInput] = useState('');
+  const [confirmPin, setConfirmPin] = useState('');
+  const [message, setMessage] = useState('');
+  const [configured, setConfigured] = useState(() => hasPin());
+
+  const handleSavePin = async () => {
+    setMessage('');
+    if (!/^\d{6}$/.test(pin)) {
+      setMessage('PIN must be exactly 6 digits.');
+      return;
+    }
+    if (pin !== confirmPin) {
+      setMessage('PIN entries do not match.');
+      return;
+    }
+    await setPin(pin);
+    setPinInput('');
+    setConfirmPin('');
+    setConfigured(true);
+    setMessage('Local PIN enabled. The app will lock on the next session or when you lock it now.');
+  };
+
+  const handleClearPin = () => {
+    clearPin();
+    setConfigured(false);
+    setMessage('Local PIN disabled on this device.');
+  };
+
+  const handleLockNow = () => {
+    lock();
+    window.dispatchEvent(new CustomEvent('motionai-local-lock'));
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold text-[#37352F] dark:text-[#E3E3E3] mb-2">Local app PIN lock</h3>
+        <p className="text-xs text-gray-500 dark:text-stone-400">
+          Adds a device-local 6 digit PIN gate for the browser app. This is a local privacy lock, not a
+          replacement for OS login, disk encryption, or production multi-user permissions.
+        </p>
+      </div>
+
+      <div className="rounded-lg border border-gray-200 dark:border-stone-700 p-4 space-y-3">
+        <div className="text-sm font-medium text-[#37352F] dark:text-[#E3E3E3]">
+          Status: {configured ? 'PIN enabled' : 'PIN not configured'}
+        </div>
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={6}
+          value={pin}
+          onChange={event => setPinInput(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="New 6 digit PIN"
+          className="w-full text-sm px-3 py-2 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3]"
+        />
+        <input
+          type="password"
+          inputMode="numeric"
+          maxLength={6}
+          value={confirmPin}
+          onChange={event => setConfirmPin(event.target.value.replace(/\D/g, '').slice(0, 6))}
+          placeholder="Confirm PIN"
+          className="w-full text-sm px-3 py-2 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3]"
+        />
+        <div className="flex flex-wrap gap-2">
+          <button
+            onClick={handleSavePin}
+            className="px-3 py-2 rounded-lg bg-purple-600 hover:bg-purple-700 text-white text-xs font-medium"
+          >
+            Save PIN
+          </button>
+          <button
+            onClick={handleLockNow}
+            disabled={!configured}
+            className="px-3 py-2 rounded-lg border border-gray-200 dark:border-stone-600 text-xs font-medium text-[#37352F] dark:text-[#E3E3E3] disabled:opacity-50"
+          >
+            Lock now
+          </button>
+          <button
+            onClick={handleClearPin}
+            disabled={!configured}
+            className="px-3 py-2 rounded-lg border border-red-200 dark:border-red-900 text-xs font-medium text-red-600 dark:text-red-400 disabled:opacity-50"
+          >
+            Disable PIN
+          </button>
+        </div>
+        {message && <p className="text-xs text-gray-500 dark:text-stone-400">{message}</p>}
+      </div>
+    </div>
+  );
+}
+
 // ─── About Tab ────────────────────────────────────────────────────────────────
 
 function AboutTab() {
@@ -1405,6 +1500,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'ai', label: 'AI Providers' },
   { id: 'appearance', label: 'Appearance' },
   { id: 'data', label: 'Data' },
+  { id: 'security', label: 'Security' },
   { id: 'automations', label: 'Automations' },
   { id: 'about', label: 'About' },
 ];
@@ -1486,6 +1582,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {activeTab === 'ai' && <AiTab />}
           {activeTab === 'appearance' && <AppearanceTab />}
           {activeTab === 'data' && <DataTab />}
+          {activeTab === 'security' && <SecurityTab />}
           {activeTab === 'automations' && <AutomationsTab />}
           {activeTab === 'about' && <AboutTab />}
         </div>

@@ -16,6 +16,10 @@ All webhook endpoints require the `x-motionai-secret` header matching `MOTIONAI_
 curl -H "x-motionai-secret: your-secret" http://localhost:3003/api/webhooks/...
 ```
 
+For idempotent deliveries, send a stable `x-motionai-delivery` value. MotionAI rejects duplicate
+delivery ids for the same webhook path for five minutes with `409`, which protects local
+automation rules from simple replay storms.
+
 ## Endpoints
 
 ### Webhook Triggers
@@ -39,6 +43,7 @@ Trigger automations from external services by calling webhook endpoints.
 POST /api/webhooks/github-pr
 Content-Type: application/json
 x-motionai-secret: your-secret
+x-motionai-delivery: github-pr-123
 
 {
   "event": "pull_request.opened",
@@ -137,3 +142,4 @@ curl -X POST http://localhost:3003/api/webhooks/test \
 - Error messages are sanitized to never include provider API keys
 - Workspace exports strip credential-like fields automatically
 - Webhook secrets are checked with a timing-safe digest comparison
+- Optional `x-motionai-delivery` replay ids are cached briefly and duplicate deliveries are rejected

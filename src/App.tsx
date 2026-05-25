@@ -35,6 +35,9 @@ import { backlinksIndex } from './lib/backlinksIndex';
 import { PresenceManager } from './lib/presence';
 import { PresenceIndicator } from './components/PresenceIndicator';
 import { keychain } from './lib/keychain';
+import { useReminders } from './hooks/useReminders';
+import { hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
+import { LockScreen } from './components/LockScreen';
 
 function createDefaultPage(): Page {
   return {
@@ -59,6 +62,7 @@ export default function App() {
   const [currentPageId, setCurrentPageId] = useState<string | null>(null);
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [workspaceLocked, setWorkspaceLocked] = useState(false);
+  const [localAppLocked, setLocalAppLocked] = useState(() => isLocalAuthLocked());
   const [passphraseInput, setPassphraseInput] = useState('');
   const [passphraseError, setPassphraseError] = useState('');
   // Workspace state
@@ -124,6 +128,16 @@ export default function App() {
     return () => {
       cancelled = true;
     };
+  }, []);
+
+  useEffect(() => {
+    const handleLocalLock = () => {
+      if (!hasPin()) return;
+      lockLocalAuth();
+      setLocalAppLocked(true);
+    };
+    window.addEventListener('motionai-local-lock', handleLocalLock);
+    return () => window.removeEventListener('motionai-local-lock', handleLocalLock);
   }, []);
 
   // y-webrtc: real-time cross-device CRDT sync
@@ -262,27 +276,10 @@ export default function App() {
     }
   }, []);
 
-  // Reminders scheduler pipeline
-  useEffect(() => {
-    if (!workspaceLoaded || pages.length === 0) return;
-
-    const checkReminders = () => {
-      const todayStr = new Date().toISOString().split('T')[0];
-      const alertedPages = JSON.parse(sessionStorage.getItem('motion_ai_alerted_reminders') || '[]');
-
-      pages.forEach(page => {
-        if (page.reminderDate && page.reminderDate <= todayStr && !alertedPages.includes(page.id)) {
-          alert(`⏰ Reminder: "${page.title}" is due or has a scheduled alert today (${page.reminderDate})!`);
-          alertedPages.push(page.id);
-          sessionStorage.setItem('motion_ai_alerted_reminders', JSON.stringify(alertedPages));
-        }
-      });
-    };
-
-    checkReminders();
-    const interval = setInterval(checkReminders, 60000);
-    return () => clearInterval(interval);
-  }, [pages, workspaceLoaded]);
+  useReminders({
+    snapshot: workspaceLoaded ? { pages, currentPageId } : null,
+    onReminder: (title, body) => console.info('[reminder]', title, body),
+  });
 
   // AI Provider Status
   const aiProviderStatus = useMemo(() => {
@@ -798,6 +795,10 @@ export default function App() {
     );
   }
 
+  if (localAppLocked) {
+    return <LockScreen onUnlocked={() => setLocalAppLocked(false)} />;
+  }
+
   return (
     <SettingsProvider>
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
@@ -1037,6 +1038,7 @@ export default function App() {
                  pageId={currentPage.id} 
                  pages={pages}
                  onSelectPage={setCurrentPageId}
+                 onAddPage={handleAddNewPageObj}
                />
              ) : currentPage.pageType === 'dashboard' ? (
                <div className="w-full px-6 sm:px-12 py-12 pb-48 font-sans max-w-5xl mx-auto overflow-y-auto h-full">

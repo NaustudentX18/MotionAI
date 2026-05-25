@@ -14,6 +14,7 @@ import {
   safeErrorMessage,
   spellcheckResponseSchema,
   checklistResponseSchema,
+  meetingParserResponseSchema,
   buildGeneratePrompt,
   parseJsonObject,
   type ChatMessage,
@@ -40,9 +41,89 @@ interface SignalStoreEntry {
   expiresAt: number;
 }
 
+
+interface MeetingTask {
+  title: string;
+  assignee: string;
+  dueDate: string;
+  priority: 'low' | 'medium' | 'high';
+}
+
+interface MeetingParserResult {
+  summary: string[];
+  tasks: MeetingTask[];
+}
+
+function normalizeMeetingPriority(value: unknown): MeetingTask['priority'] {
+  return value === 'high' || value === 'low' || value === 'medium' ? value : 'medium';
+}
+
+function sanitizeMeetingTask(input: unknown, index: number): MeetingTask | null {
+  if (!input || typeof input !== 'object') return null;
+  const record = input as Record<string, unknown>;
+  const rawTitle = typeof record.title === 'string' ? record.title : '';
+  const title = rawTitle.replace(/[\r\n]+/g, ' ').trim().slice(0, 180);
+  if (title.length < 3) return null;
+  const assignee = (typeof record.assignee === 'string' && record.assignee.trim())
+    ? record.assignee.trim().slice(0, 80)
+    : 'Unassigned';
+  const dueDate = (typeof record.dueDate === 'string' && record.dueDate.trim())
+    ? record.dueDate.trim().slice(0, 80)
+    : 'No due date';
+  return { title: title || `Action item ${index + 1}`, assignee, dueDate, priority: normalizeMeetingPriority(record.priority) };
+}
+
+function deterministicMeetingParser(transcript: string): MeetingParserResult {
+  const lines = transcript.split(/\r?\n/).map(line => line.trim()).filter(Boolean);
+  const tasks: MeetingTask[] = [];
+  const summary: string[] = [];
+
+  for (const line of lines) {
+    const cleaned = line.replace(/^[-*\d.)\s]+/, '').trim();
+    if (summary.length < 3 && cleaned.length > 8) summary.push(cleaned.slice(0, 180));
+    const isTaskLine = /\b(todo|action item|need to|will|follow up|deadline|due|assign|owner)\b/i.test(cleaned);
+    if (!isTaskLine) continue;
+    let title = cleaned.replace(/^(todo|action item):\s*/i, '').trim();
+    let assignee = 'Unassigned';
+    const assigneeMatch = title.match(/(?:owner|assignee|assigned to|by):\s*([A-Za-z0-9 _.-]+)/i)
+      || title.match(/^([A-Z][A-Za-z0-9_-]+):\s+/)
+      || title.match(/\b([A-Z][A-Za-z0-9_-]+)\s+will\s+/);
+    if (assigneeMatch) assignee = assigneeMatch[1].trim().slice(0, 80);
+    let priority: MeetingTask['priority'] = 'medium';
+    if (/\b(urgent|critical|asap|high priority)\b/i.test(title)) priority = 'high';
+    if (/\b(low priority|backlog|minor)\b/i.test(title)) priority = 'low';
+    let dueDate = 'No due date';
+    const dueMatch = title.match(/\b(?:due|by|deadline):?\s*([A-Za-z0-9, /-]+?)(?:[.;]|$)/i);
+    if (dueMatch) dueDate = dueMatch[1].trim().slice(0, 80);
+    const task = sanitizeMeetingTask({ title, assignee, dueDate, priority }, tasks.length);
+    if (task) tasks.push(task);
+  }
+
+  if (summary.length === 0) summary.push('Meeting transcript captured for review.');
+  if (tasks.length === 0 && transcript.trim()) {
+    tasks.push({ title: `Review transcript for action items: ${transcript.trim().slice(0, 80)}`, assignee: 'Unassigned', dueDate: 'No due date', priority: 'medium' });
+  }
+  return { summary, tasks };
+}
+
+function normalizeMeetingParserResult(input: unknown, transcript: string): MeetingParserResult {
+  const fallback = deterministicMeetingParser(transcript);
+  if (!input || typeof input !== 'object') return fallback;
+  const record = input as Record<string, unknown>;
+  const summary = Array.isArray(record.summary)
+    ? record.summary.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean).slice(0, 6)
+    : fallback.summary;
+  const tasks = Array.isArray(record.tasks)
+    ? record.tasks.map(sanitizeMeetingTask).filter((task): task is MeetingTask => task !== null).slice(0, 25)
+    : fallback.tasks;
+  return { summary: summary.length ? summary : fallback.summary, tasks: tasks.length ? tasks : fallback.tasks };
+}
+
 const signalStore = new Map<string, SignalStoreEntry>();
+const webhookReplayStore = new Map<string, number>();
 const SIGNAL_TTL_MS = 30_000;
 const CLEANUP_INTERVAL_MS = 10_000;
+const WEBHOOK_REPLAY_TTL_MS = 5 * 60_000;
 
 // Non-blocking cleanup of expired signal entries
 setInterval(() => {
@@ -51,6 +132,9 @@ setInterval(() => {
     if (entry.expiresAt <= now) {
       signalStore.delete(peerId);
     }
+  }
+  for (const [key, expiresAt] of webhookReplayStore) {
+    if (expiresAt <= now) webhookReplayStore.delete(key);
   }
 }, CLEANUP_INTERVAL_MS);
 
@@ -82,6 +166,25 @@ function requireWebhookAuth(req: Request, res: Response, next: NextFunction): vo
     return;
   }
   requireAuth(req, res, next);
+}
+
+function validateWebhookPath(pathValue: string): boolean {
+  return /^[a-zA-Z0-9][a-zA-Z0-9._/-]{0,127}$/.test(pathValue) && !pathValue.includes('..');
+}
+
+function requireWebhookReplayProtection(req: Request, res: Response, next: NextFunction): void {
+  const replayId = getHeaderValue(req.headers['x-motionai-delivery']);
+  if (!replayId) {
+    next();
+    return;
+  }
+  const key = `${req.params.path}:${replayId}`;
+  if (webhookReplayStore.has(key)) {
+    res.status(409).json({ error: 'Duplicate webhook delivery rejected.', keysReturned: false });
+    return;
+  }
+  webhookReplayStore.set(key, Date.now() + WEBHOOK_REPLAY_TTL_MS);
+  next();
 }
 
 
@@ -170,6 +273,31 @@ async function startServer() {
     } catch (err) {
       console.error('Spellcheck API error:', safeErrorMessage(err, [settings.apiKey]));
       res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), provider: client.info, keysReturned: false });
+    }
+  });
+
+  app.post('/api/ai/meeting-parser', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const settings = extractAiSettings(req.body || {});
+    const client = createAiClient(settings);
+    const { transcript } = req.body || {};
+    if (!transcript || typeof transcript !== 'string') {
+      return res.status(400).json({ error: 'Missing or invalid transcript parameter', keysReturned: false });
+    }
+
+    if (!client.info.enabled || !client.info.configured) {
+      return res.json({ ...deterministicMeetingParser(transcript), provider: client.info, source: 'deterministic', keysReturned: false });
+    }
+
+    try {
+      const resultText = await client.generateText(transcript, {
+        systemInstruction: 'You are a meeting-to-tasks parser for MotionAI. Extract concise summary bullets and concrete task objects from the transcript. Return ONLY valid JSON matching: { "summary": ["string"], "tasks": [{ "title": "string", "assignee": "string", "dueDate": "string", "priority": "low|medium|high" }] }. Do not include markdown or explanations.',
+        jsonSchema: meetingParserResponseSchema,
+      });
+      const parsed = parseJsonObject(resultText);
+      res.json({ ...normalizeMeetingParserResult(parsed, transcript), provider: client.info, source: 'ai', keysReturned: false });
+    } catch (err) {
+      console.warn('AI meeting parser failed, falling back to deterministic parser:', safeErrorMessage(err, [settings.apiKey]));
+      res.json({ ...deterministicMeetingParser(transcript), provider: client.info, source: 'deterministic-fallback', keysReturned: false });
     }
   });
 
@@ -443,10 +571,10 @@ async function startServer() {
     }
   });
 
-  app.post('/api/webhooks/:path', requireWebhookAuth, (req, res) => {
+  app.post('/api/webhooks/:path', requireWebhookAuth, requireWebhookReplayProtection, (req, res) => {
     const webhookPath = String(req.params.path || '').trim();
-    if (!webhookPath) {
-      res.status(400).json({ error: 'Missing webhook path', keysReturned: false });
+    if (!webhookPath || !validateWebhookPath(webhookPath)) {
+      res.status(400).json({ error: 'Missing or invalid webhook path', keysReturned: false });
       return;
     }
 
@@ -454,6 +582,7 @@ async function startServer() {
       ok: true,
       webhook: webhookPath,
       received: true,
+      deliveryId: getHeaderValue(req.headers['x-motionai-delivery']) || null,
       keysReturned: false,
     });
   });

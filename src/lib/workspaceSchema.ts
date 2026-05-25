@@ -126,6 +126,12 @@ function validatePage(page: unknown, path: string, errors: string[]): page is Pa
     }
   }
 
+  if ('reminderDate' in page && page.reminderDate !== undefined) {
+    if (typeof page.reminderDate !== 'string' || Number.isNaN(new Date(page.reminderDate).getTime())) {
+      errors.push(`${path}.reminderDate must be a valid date string when present`);
+    }
+  }
+
   if ('versions' in page && page.versions !== undefined) {
     if (!Array.isArray(page.versions)) {
       errors.push(`${path}.versions must be an array when present`);

@@ -61,7 +61,7 @@ npm run verify
 | Canvas pages and canvas templates | Implemented prototype | `src/components/CanvasEditor.tsx`, `src/lib/canvasTemplates.ts`, `src/types.ts` |
 | Database objects, views, formula-lite, and templates | Implemented, still hardening | `src/components/blocks/DatabaseBlock.tsx`, `src/components/database/`, `src/lib/ai/AiFormulaEngine.ts` |
 | Task properties, My Tasks/Home, Inbox, dashboard, time tracking | Implemented, still hardening | `src/components/tasks/TaskPropertiesPanel.tsx`, `src/components/tasks/taskAdapter.ts`, `src/components/dashboard/DashboardWidget.tsx` |
-| Durable notifications/reminder scheduling | Planned/partial | `DashboardWidget.tsx` states reminder scheduling is not shown; `ruleBuilder.ts` has a due-date reminder rule template only |
+| Durable notifications/reminder scheduling | Implemented, still hardening | `src/hooks/useReminders.ts`, `src/components/tasks/TaskPropertiesPanel.tsx`, `src/components/dashboard/DashboardWidget.tsx`; browser notifications are local-device only and require permission |
 | Spaces/folders/project hierarchy | Implemented, still hardening | `src/types.ts`, `src/components/SpaceFolderPicker.tsx`, `src/components/Sidebar.tsx`, `src/App.tsx` |
 | Workspace templates | Implemented | `src/lib/workspaceTemplates.ts`, `src/components/Sidebar.tsx` |
 | Automations rule builder and settings UI | Implemented, still hardening | `src/lib/automations/ruleBuilder.ts`, `src/components/SettingsModal.tsx` |
