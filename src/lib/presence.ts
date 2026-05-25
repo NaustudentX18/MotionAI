@@ -17,9 +17,24 @@ export interface PresencePeer {
   lastSeen: number;
 }
 
+export interface PresenceDiagnostics {
+  webRtcAvailable: boolean;
+  broadcastChannelAvailable: boolean;
+  httpSignalUrl: string;
+  iceServers: RTCIceServer[];
+  activePeerCount: number;
+  totalPeerCount: number;
+  currentPageId: string;
+  startedAt: number | null;
+  lastSignalPollAt: number | null;
+  lastSignalPostAt: number | null;
+  lastError: string | null;
+}
+
 export interface PresenceManagerEvents {
   onPeersChange: (peers: PresencePeer[]) => void;
   onError: (msg: string) => void;
+  onDiagnosticsChange?: (diagnostics: PresenceDiagnostics) => void;
 }
 
 interface PeerConnection {
@@ -62,6 +77,7 @@ export class PresenceManager {
   private heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   private isOpen: boolean = false;
   private userInfo: { userId: string; userName: string };
+  private diagnostics: PresenceDiagnostics;
 
   constructor(userInfo: { userId: string; userName: string }, events: PresenceManagerEvents) {
     this.peerId = uuidv4();
@@ -69,10 +85,23 @@ export class PresenceManager {
     this.userName = userInfo.userName;
     this.userInfo = userInfo;
     this.events = events;
+    this.diagnostics = {
+      webRtcAvailable: typeof RTCPeerConnection !== 'undefined',
+      broadcastChannelAvailable: typeof BroadcastChannel !== 'undefined',
+      httpSignalUrl: typeof window !== 'undefined' ? this.getHttpSignalUrl() : '',
+      iceServers: ICE_SERVERS,
+      activePeerCount: 0,
+      totalPeerCount: 0,
+      currentPageId: '',
+      startedAt: null,
+      lastSignalPollAt: null,
+      lastSignalPostAt: null,
+      lastError: null,
+    };
 
     // Check for WebRTC support
     if (typeof RTCPeerConnection === 'undefined') {
-      this.events.onError('WebRTC not available — presence unavailable');
+      this.reportError('WebRTC not available — presence unavailable');
       return;
     }
   }
@@ -92,9 +121,11 @@ export class PresenceManager {
     try {
       this.localBc = new BroadcastChannel('motionai-presence');
       this.localBc.onmessage = (ev) => this.handleBcMessage(ev.data);
+      this.updateDiagnostics({ broadcastChannelAvailable: true });
       // Announce ourselves to other tabs on the same device
       this.broadcastBc({ type: 'announce', peerId: this.peerId, userId: this.userId, userName: this.userName });
     } catch {
+      this.updateDiagnostics({ broadcastChannelAvailable: false });
       // BroadcastChannel not supported — skip
     }
   }
@@ -249,7 +280,10 @@ export class PresenceManager {
         body: JSON.stringify(signal),
         signal: AbortSignal.timeout(3000),
       });
-    } catch { /* ignore — peer may not be reachable */ }
+      this.updateDiagnostics({ lastSignalPostAt: Date.now(), lastError: null });
+    } catch (error) {
+      this.reportError(`signal send failed: ${error instanceof Error ? error.message : 'unknown error'}`, false);
+    }
   }
 
   private async httpPollSignals() {
@@ -257,13 +291,20 @@ export class PresenceManager {
       const res = await fetch(`${this.getHttpSignalUrl()}?peerId=${encodeURIComponent(this.peerId)}`, {
         signal: AbortSignal.timeout(5000),
       });
-      if (!res.ok) return;
+      this.updateDiagnostics({ lastSignalPollAt: Date.now() });
+      if (!res.ok) {
+        this.reportError(`signal poll failed: HTTP ${res.status}`, false);
+        return;
+      }
 
       const signals: IncomingSignal[] = await res.json();
+      this.updateDiagnostics({ lastError: null });
       for (const signal of signals) {
         await this.handleHttpSignal(signal);
       }
-    } catch { /* ignore polling failures */ }
+    } catch (error) {
+      this.reportError(`signal poll failed: ${error instanceof Error ? error.message : 'unknown error'}`, false);
+    }
   }
 
   private async handleHttpSignal(signal: IncomingSignal) {
@@ -320,6 +361,7 @@ export class PresenceManager {
     peer.lastSeen = Date.now();
     this.peers.set(peer.peerId, peer);
     this.notifyPeersChange();
+    this.emitDiagnostics();
   }
 
   private removePeer(peerId: string) {
@@ -331,6 +373,30 @@ export class PresenceManager {
       this.peerConnections.delete(peerId);
     }
     this.notifyPeersChange();
+    this.emitDiagnostics();
+  }
+
+  private updateDiagnostics(partial: Partial<PresenceDiagnostics>) {
+    this.diagnostics = { ...this.diagnostics, ...partial };
+    this.emitDiagnostics();
+  }
+
+  private reportError(msg: string, notify = true) {
+    this.updateDiagnostics({ lastError: msg });
+    if (notify) this.events.onError(msg);
+  }
+
+  private emitDiagnostics() {
+    const activePeerCount = this.getActivePeers().length;
+    this.diagnostics = {
+      ...this.diagnostics,
+      webRtcAvailable: this.isWebRtcAvailable(),
+      httpSignalUrl: this.getHttpSignalUrl(),
+      activePeerCount,
+      totalPeerCount: this.peers.size,
+      currentPageId: this.currentPageId,
+    };
+    this.events.onDiagnosticsChange?.({ ...this.diagnostics });
   }
 
   private notifyPeersChange() {
@@ -349,7 +415,10 @@ export class PresenceManager {
         changed = true;
       }
     }
-    if (changed) this.notifyPeersChange();
+    if (changed) {
+      this.notifyPeersChange();
+      this.emitDiagnostics();
+    }
   }
 
   // ─── Public API ───────────────────────────────────────────────────────────
@@ -365,6 +434,7 @@ export class PresenceManager {
 
     this.currentPageId = pageId;
     this.isOpen = true;
+    this.updateDiagnostics({ startedAt: Date.now(), currentPageId: pageId, lastError: null });
 
     this.initBroadcastChannel();
     this.announce(pageId);
@@ -381,6 +451,7 @@ export class PresenceManager {
   updatePage(pageId: string) {
     if (pageId === this.currentPageId) return;
     this.currentPageId = pageId;
+    this.updateDiagnostics({ currentPageId: pageId });
     this.broadcastToAll({ type: 'presence', peerId: this.peerId, userId: this.userId, userName: this.userName, pageId });
     this.notifyPeersChange();
   }
@@ -390,6 +461,7 @@ export class PresenceManager {
    */
   announce(pageId: string) {
     this.currentPageId = pageId;
+    this.updateDiagnostics({ currentPageId: pageId });
     this.broadcastToAll({ type: 'presence', peerId: this.peerId, userId: this.userId, userName: this.userName, pageId });
     this.notifyPeersChange();
   }
@@ -428,6 +500,7 @@ export class PresenceManager {
     this.peerConnections.clear();
     this.peers.clear();
     this.notifyPeersChange();
+    this.updateDiagnostics({ startedAt: null, activePeerCount: 0, totalPeerCount: 0 });
   }
 
   getPeerId(): string {
@@ -436,6 +509,11 @@ export class PresenceManager {
 
   isWebRtcAvailable(): boolean {
     return typeof RTCPeerConnection !== 'undefined';
+  }
+
+  getDiagnostics(): PresenceDiagnostics {
+    this.emitDiagnostics();
+    return { ...this.diagnostics };
   }
 
   /** Get currently active peers on the same page */

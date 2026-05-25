@@ -68,7 +68,7 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 | Issue | Title | Labels | Reconciliation note |
 | --- | --- | --- | --- |
 | #17 | tasks: add My Tasks and Home views | `type:feature`, `area:tasks`, `phase-3`, `claim:planned` | `DashboardWidget.tsx` implements My Tasks/Home; verify before closing. |
-| #18 | tasks: add inbox, notifications, and reminders | `type:feature`, `area:tasks`, `phase-3`, `claim:planned` | This branch adds schema/UI/local HTML5 reminder plumbing and dashboard reminder filters. Background push/Tauri reminders and snooze/dismiss remain open. |
+| #18 | tasks: add inbox, notifications, and reminders | `type:feature`, `area:tasks`, `phase-3`, `claim:planned` | This branch adds schema/UI/local HTML5 reminder plumbing, dashboard reminder filters, and in-app snooze/dismiss actions. Background push/Tauri reminders remain open. |
 | #19 | tasks: define project hierarchy model | `type:rfc`, `area:object-graph`, `phase-3`, `needs-rfc` | Spaces/folders/parent IDs exist locally; RFC may still be needed. |
 | #20 | security: design guest/collaborator permissions | `type:rfc`, `type:security`, `phase-3`, `needs-rfc` | Still planned/not claimed. |
 
@@ -78,7 +78,7 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 | --- | --- | --- | --- |
 | #21 | ai: harden BYO/local provider registry UI | `type:feature`, `area:ai`, `phase-4`, `claim:experimental` | Provider registry UI exists; verify before closing. |
 | #22 | ai: add summarize page action | `type:feature`, `area:ai`, `phase-4`, `claim:planned` | Summarize action exists; issue label/status may be stale. |
-| #23 | ai: add meeting-notes-to-tasks action | `type:feature`, `area:tasks`, `area:ai`, `phase-4`, `claim:planned` | This branch adds `/api/ai/meeting-parser` with deterministic fallback and redaction coverage. Preview/apply UI remains open. |
+| #23 | ai: add meeting-notes-to-tasks action | `type:feature`, `area:tasks`, `area:ai`, `phase-4`, `claim:planned` | This branch adds `/api/ai/meeting-parser` with deterministic fallback/redaction coverage plus a preview/select/apply UI. Provider-mocked tests remain open. |
 | #24 | security: design safe agent mode | `type:rfc`, `type:security`, `area:ai`, `phase-4`, `needs-rfc` | Guardrail helper exists; full agent mode remains not claimed. |
 
 ### Phase 5
@@ -103,6 +103,7 @@ Action: keep the board public and add new launch/blocker issues as roadmap scope
 - `docs/WORKSPACE_SCHEMA.md` now documents task/page fields including `reminderDate`.
 - `docs/WEBHOOK_API.md` now documents replay protection via `x-motionai-delivery`.
 - Do not mass-close or mass-relabel issues from this branch alone; use issue comments/closures only after the pushed branch and verification evidence are visible on GitHub.
+- Next pass adds in-app meeting-parser preview/select/apply UI, reminder snooze/dismiss toast, and a peer diagnostics panel in Peers & Sync.
 
 ## Documentation maintenance rules
 

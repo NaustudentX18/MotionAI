@@ -24,6 +24,7 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
   - `npm run build`
   - `npm run test:secret-redaction`
   - `PLAYWRIGHT_PORT=43107 npm run test:e2e`
+- Next pass evidence: meeting-parser preview/select/apply UI, reminder snooze/dismiss toast, and presence diagnostics panel added.
 - Live runtime proof after restart:
   - `systemctl --user restart motionai.service motionai-signaling.service`
   - `curl http://127.0.0.1:3003/api/health` → HTTP 200 / `ok:true`
@@ -66,14 +67,14 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 | L0 | Branch safety, snapshots, conflict map | P0 | none | ✅ checkpoint + ownership map captured |
 | L1 | Fix lint break + verify gate | P0 | L0 | ✅ green full verify/build/e2e |
 | L2 | GitHub issue/milestone/project reconciliation | P0 | L0 | 🟡 live audit complete; no mass closures yet |
-| L3 | Reminder schema + runtime notification pipeline | P0 | L1 | 🟡 local reminder pipeline implemented; push/service-worker reminders still future |
-| L4 | AI meeting-notes-to-tasks endpoint + preview UI | P0 | L1 | 🟡 endpoint + fallback + redaction tests done; preview UI still future |
+| L3 | Reminder schema + runtime notification pipeline | P0 | L1 | 🟡 local reminder pipeline plus snooze/dismiss toast implemented; push/service-worker reminders still future |
+| L4 | AI meeting-notes-to-tasks endpoint + preview UI | P0 | L1 | 🟡 endpoint + fallback + redaction tests + preview/selective apply UI done; provider-mocked tests still future |
 | L5 | Rule-builder/webhook reliability hardening | P1 | L1, L2 | 🟡 webhook path validation + replay guard done; automation history still future |
 | L6 | Canvas AI actions | P1 | L4 | 🟡 selection-to-task action done; e2e coverage still future |
 | L7 | Tauri/mobile hardening path | P1 | L1 | ☐ docs/plans exist; no new signed release pipeline in this pass |
 | L8 | Local auth lockscreen + PIN hardening | P1 | L1, L3 | 🟡 PIN lock, lockscreen, throttled failures, tests done; inactivity option still future |
 | L9 | Schema/version/migration drift elimination | P1 | L1 | 🟡 reminder schema/docs/import/Yjs drift closed; broader fixtures remain future |
-| L10 | WebRTC stress + ICE/STUN UX + diagnostics | P1 | L1, L9 | 🟡 existing resilience + e2e tests passed; ICE UI still future |
+| L10 | WebRTC stress + ICE/STUN UX + diagnostics | P1 | L1, L9 | 🟡 existing resilience/e2e tests passed and peer diagnostics added; ICE config UI still future |
 | L11 | README/ROADMAP/SHIPPED truth reconciliation | P1 | L2 | 🟡 roadmap/shipped/schema/webhook docs updated |
 | L12 | Offline SW + perf + chunk budgets | P2 | L1 | ☐ build warnings captured; budget enforcement future |
 | L13 | Release gate, changelog, rollback runbook | P2 | L1, L11, L12 | 🟡 release checklist exists; final release notes future |
@@ -112,7 +113,7 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 - [x] Wire reminder editor controls into task properties UI
 - [x] Integrate `useReminders` into app bootstrap safely
 - [x] Add dedupe/re-fire behavior across session boundaries
-- [ ] Add dismiss/snooze interaction model
+- [x] Add dismiss/snooze interaction model
 - [x] Add tests for reminder data scheduling buckets and schema/import/export retention
 - [x] Add denied-permission no-op behavior in notification hook
 - [ ] Add service-worker/Tauri background notification path for inactive app reminders
@@ -121,8 +122,8 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 - [x] Define normalized response contract for extracted tasks
 - [x] Add `/api/ai/meeting-parser` endpoint contract
 - [x] Add deterministic fallback and malformed-output normalization
-- [ ] Add preview-before-write checklist UI
-- [ ] Add selective apply (check/uncheck generated tasks)
+- [x] Add preview-before-write checklist UI
+- [x] Add selective apply (check/uncheck generated tasks)
 - [ ] Add provider-mocked contract tests beyond redaction/fallback coverage
 - [x] Add secret-redaction assertions for this endpoint
 
@@ -167,7 +168,7 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 ## L10 — Collaboration/WebRTC resilience [P1]
 - [x] Existing offline/reconnect convergence suite passes
 - [ ] Add ICE/STUN config UI + validation
-- [ ] Add peer diagnostics panel (connectivity + sync lag)
+- [x] Add peer diagnostics panel (connectivity + sync lag)
 - [ ] Add signaling fallback behavior documentation
 - [ ] Add browser-compat and network constraint notes
 
@@ -196,7 +197,7 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 ## 6) Parallelization blueprint for remaining work
 
 - **Issue/label pass:** L2 + L11 after this branch lands.
-- **UX pass:** L3 snooze/dismiss + L4 preview UI + L6 field preview.
+- **UX pass:** L6 field preview + background reminder actions after local L3/L4 UX landed.
 - **Hardening pass:** L8 inactivity lock + L10 ICE diagnostics + L12 bundle budgets.
 - **Release pass:** L7 packaging + L13 changelog/rollback/versioning.
 

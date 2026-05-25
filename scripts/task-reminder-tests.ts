@@ -5,6 +5,12 @@ import {
   reminderBucket,
   type TaskFilters,
 } from '../src/components/tasks/taskAdapter';
+import {
+  DEFAULT_REMINDER_SNOOZE_MINUTES,
+  buildReminderKey,
+  formatLocalReminderDateTime,
+  snoozeReminderDate,
+} from '../src/hooks/useReminders';
 import type { Page } from '../src/types';
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -82,5 +88,10 @@ assert(dueFiltered.length === 1 && dueFiltered[0].id === 'due-reminder', 'Due re
 
 const noneFiltered = applyTaskFilters(tasks, { ...baseFilters, reminder: 'none' });
 assert(noneFiltered.length === 1 && noneFiltered[0].id === 'todo-1', 'None reminder filter should isolate tasks without reminders');
+
+const fixedLocalDate = new Date(2026, 0, 2, 3, 4, 5);
+assert(formatLocalReminderDateTime(fixedLocalDate) === '2026-01-02T03:04', 'Reminder datetime helper should format datetime-local values without seconds');
+assert(snoozeReminderDate(DEFAULT_REMINDER_SNOOZE_MINUTES, fixedLocalDate.getTime()) === formatLocalReminderDateTime(new Date(2026, 0, 2, 3, 14, 5)), 'Default snooze should move reminder forward ten minutes');
+assert(buildReminderKey('page-1', 12345) === 'page-1:12345', 'Reminder key should stay stable across hook and tests');
 
 console.log('✅ task reminder tests passed');

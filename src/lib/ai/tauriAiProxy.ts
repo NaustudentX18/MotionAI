@@ -204,7 +204,7 @@ export function initTauriAiProxy() {
       }
     }
 
-    if (url.endsWith('/api/ai/checklist')) {
+    if (url.endsWith('/api/ai/checklist') || url.endsWith('/api/ai/meeting-parser')) {
       const body = JSON.parse(init?.body as string || '{}');
       const settings = extractAiSettings(body);
       const providerId = settings.provider || 'disabled';
@@ -218,6 +218,7 @@ export function initTauriAiProxy() {
       });
 
       const { transcript } = body;
+      const isMeetingParser = url.endsWith('/api/ai/meeting-parser');
       
       const deterministicChecklistFallback = (text: string) => {
         const lines = text.split('\n');
@@ -282,8 +283,24 @@ export function initTauriAiProxy() {
         return { tasks };
       };
 
+      const deterministicMeetingFallback = (text: string) => {
+        const fallback = deterministicChecklistFallback(text);
+        const summary = text.split(/\r?\n/)
+          .map(line => line.trim())
+          .filter(Boolean)
+          .slice(0, 3)
+          .map(line => line.slice(0, 180));
+        return {
+          summary: summary.length > 0 ? summary : ['Meeting transcript captured for review.'],
+          tasks: fallback.tasks,
+          source: 'deterministic',
+        };
+      };
+
       if (!client.info.enabled || !client.info.configured) {
-        const fallbackResult = deterministicChecklistFallback(transcript || '');
+        const fallbackResult = isMeetingParser
+          ? deterministicMeetingFallback(transcript || '')
+          : deterministicChecklistFallback(transcript || '');
         return new Response(JSON.stringify({ ...fallbackResult, provider: client.info, keysReturned: false }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
@@ -291,20 +308,27 @@ export function initTauriAiProxy() {
       }
 
       try {
-        const { checklistResponseSchema } = await import('./providers');
+        const { checklistResponseSchema, meetingParserResponseSchema } = await import('./providers');
         const resultText = await client.generateText(transcript || '', {
-          systemInstruction: 'You are a meeting assistant. Analyze the meeting transcript or notes and convert them into a JSON checklist of tasks. For each task, extract: title (action item description), assignee (default to "Unassigned"), dueDate (default to "No due date"), and priority ("low", "medium", or "high"). Respond ONLY with a valid JSON document matching the specified schema.',
-          jsonSchema: checklistResponseSchema,
+          systemInstruction: isMeetingParser
+            ? 'You are a meeting-to-tasks parser for MotionAI. Extract concise summary bullets and concrete task objects from the transcript. Return ONLY valid JSON matching: { "summary": ["string"], "tasks": [{ "title": "string", "assignee": "string", "dueDate": "string", "priority": "low|medium|high" }] }.'
+            : 'You are a meeting assistant. Analyze the meeting transcript or notes and convert them into a JSON checklist of tasks. For each task, extract: title (action item description), assignee (default to "Unassigned"), dueDate (default to "No due date"), and priority ("low", "medium", or "high"). Respond ONLY with a valid JSON document matching the specified schema.',
+          jsonSchema: isMeetingParser ? meetingParserResponseSchema : checklistResponseSchema,
         });
 
         const parsed = parseJsonObject(resultText) || { tasks: [] };
-        return new Response(JSON.stringify({ tasks: Array.isArray(parsed.tasks) ? parsed.tasks : [], provider: client.info, keysReturned: false }), {
+        const tasks = Array.isArray(parsed.tasks) ? parsed.tasks : [];
+        const summary = Array.isArray(parsed.summary) ? parsed.summary : deterministicMeetingFallback(transcript || '').summary;
+        const payload = isMeetingParser ? { summary, tasks, source: 'ai' } : { tasks };
+        return new Response(JSON.stringify({ ...payload, provider: client.info, keysReturned: false }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },
         });
       } catch (err) {
         console.warn('AI checklist generation failed, falling back to deterministic parser:', safeErrorMessage(err, [actualApiKey || undefined]));
-        const fallbackResult = deterministicChecklistFallback(transcript || '');
+        const fallbackResult = isMeetingParser
+          ? deterministicMeetingFallback(transcript || '')
+          : deterministicChecklistFallback(transcript || '');
         return new Response(JSON.stringify({ ...fallbackResult, provider: client.info, keysReturned: false }), {
           status: 200,
           headers: { 'Content-Type': 'application/json' },

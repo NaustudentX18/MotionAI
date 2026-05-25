@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { Page, PageVersion, PageType } from '../types';
+import type { PresenceDiagnostics } from '../lib/presence';
 import { History, RotateCcw, Users, Link2, Sparkles, Lock, ShieldCheck, Save, Clock, AlertTriangle, GitGraph } from 'lucide-react';
 import { BacklinksPanel } from './BacklinksPanel';
 import { BacklinksGraph } from './BacklinksGraph';
@@ -23,6 +24,7 @@ interface PageAddonsProps {
   collaborationActive: boolean;
   onToggleCollaboration: (active: boolean) => void;
   presencePeers: Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>;
+  presenceDiagnostics?: PresenceDiagnostics | null;
   // Backlinks
   pages: Page[];
   backlinks: string[];
@@ -42,6 +44,7 @@ export function PageAddons({
   collaborationActive,
   onToggleCollaboration,
   presencePeers,
+  presenceDiagnostics,
   pages,
   backlinks,
   onNavigateToPage,
@@ -238,6 +241,30 @@ export function PageAddons({
                 <span>Offline local mode. Enable sync to engage collaborative editing with peers concurrently on this Workspace board.</span>
               )}
             </div>
+
+
+            {presenceDiagnostics && (
+              <div className="space-y-2 rounded-lg border border-[#EBEBE9] dark:border-[#2F2F2F] bg-white dark:bg-[#252525] p-3">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500">Diagnostics</span>
+                  <span className={`text-[10px] px-2 py-0.5 rounded-full ${presenceDiagnostics.lastError ? 'bg-amber-100 text-amber-700 dark:bg-amber-950/30 dark:text-amber-300' : 'bg-green-100 text-green-700 dark:bg-green-950/30 dark:text-green-300'}`}>
+                    {presenceDiagnostics.lastError ? 'needs attention' : 'healthy'}
+                  </span>
+                </div>
+                <div className="grid grid-cols-2 gap-2 text-[10px] text-gray-500 dark:text-stone-400">
+                  <div>WebRTC: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.webRtcAvailable ? 'available' : 'unavailable'}</strong></div>
+                  <div>Local channel: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.broadcastChannelAvailable ? 'available' : 'off'}</strong></div>
+                  <div>Active peers: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.activePeerCount}</strong></div>
+                  <div>Known peers: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.totalPeerCount}</strong></div>
+                  <div>STUN entries: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.iceServers.length}</strong></div>
+                  <div>Polling: <strong className="text-[#37352F] dark:text-[#E3E3E3]">{presenceDiagnostics.lastSignalPollAt ? 'seen' : 'pending'}</strong></div>
+                </div>
+                <div className="text-[9px] text-gray-400 break-all">Signal endpoint: {presenceDiagnostics.httpSignalUrl}</div>
+                {presenceDiagnostics.lastError && (
+                  <div className="text-[10px] text-amber-600 dark:text-amber-300">Last signal note: {presenceDiagnostics.lastError}</div>
+                )}
+              </div>
+            )}
 
             <div className="space-y-3 pt-2">
               <span className="text-[10px] uppercase tracking-wider font-bold text-gray-500 block">

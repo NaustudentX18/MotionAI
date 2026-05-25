@@ -2,8 +2,8 @@
  * useReminders.ts — HTML5 Notification API for task due-date reminders.
  *
  * Polls every 60 seconds for pages with `reminderDate` within a ±2-minute
- * window and fires a native browser notification. Falls back silently if
- * Notifications are unavailable or permission is denied.
+ * window and emits an in-app reminder event. Native browser notifications
+ * are attempted when permission is granted.
  */
 
 import { useCallback, useEffect, useRef } from 'react';
@@ -13,6 +13,7 @@ import type { WorkspaceSnapshot } from '../lib/persistence';
 const POLL_INTERVAL_MS = 60_000; // 1 minute
 const WINDOW_MS = 2 * 60 * 1000; // ±2 minutes
 const REMINDER_FIRED_KEY = 'motionai_fired_reminders';
+export const DEFAULT_REMINDER_SNOOZE_MINUTES = 10;
 
 /** Request notification permission — must be called from a user gesture */
 export async function requestNotificationPermission(): Promise<NotificationPermission> {
@@ -36,11 +37,38 @@ export function showNotification(title: string, body: string): void {
   }
 }
 
+export interface ReminderEvent {
+  pageId: string;
+  pageTitle: string;
+  title: string;
+  body: string;
+  dueAt: string;
+  key: string;
+}
+
 interface UseRemindersOptions {
   /** Current workspace snapshot — must be live-updated by the caller */
   snapshot: WorkspaceSnapshot | null;
   /** Called when a reminder fires (optional extra handler) */
-  onReminder?: (title: string, body: string) => void;
+  onReminder?: (reminder: ReminderEvent) => void;
+}
+
+export function formatLocalReminderDateTime(date: Date): string {
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const year = date.getFullYear();
+  const month = pad(date.getMonth() + 1);
+  const day = pad(date.getDate());
+  const hours = pad(date.getHours());
+  const minutes = pad(date.getMinutes());
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+}
+
+export function snoozeReminderDate(minutes = DEFAULT_REMINDER_SNOOZE_MINUTES, fromMs = Date.now()): string {
+  return formatLocalReminderDateTime(new Date(fromMs + minutes * 60_000));
+}
+
+export function buildReminderKey(pageId: string, dueMs: number): string {
+  return `${pageId}:${dueMs}`;
 }
 
 function parseReminderTime(page: Page): number | null {
@@ -77,7 +105,6 @@ export function useReminders({ snapshot, onReminder }: UseRemindersOptions): voi
 
   const check = useCallback(() => {
     if (!snapshot) return;
-    if (!('Notification' in window) || Notification.permission !== 'granted') return;
 
     const now = Date.now();
 
@@ -88,16 +115,24 @@ export function useReminders({ snapshot, onReminder }: UseRemindersOptions): voi
       const diff = due - now;
       // Fire if due within ±WINDOW_MS and not already fired this session
       if (diff >= -WINDOW_MS && diff <= WINDOW_MS) {
-        const key = `${page.id}:${due}`;
+        const key = buildReminderKey(page.id, due);
         if (firedRef.current.has(key)) continue;
         firedRef.current.add(key);
         saveFiredReminderKeys(firedRef.current);
 
-        const title = `⏰ Reminder: ${page.title || 'Untitled'}`;
+        const pageTitle = page.title || 'Untitled';
+        const title = `⏰ Reminder: ${pageTitle}`;
         const body = diff <= 0 ? 'This reminder was due just now.' : `Due in ${Math.round(diff / 60000)} minute(s).`;
 
         showNotification(title, body);
-        onReminder?.(title, body);
+        onReminder?.({
+          pageId: page.id,
+          pageTitle,
+          title,
+          body,
+          dueAt: new Date(due).toISOString(),
+          key,
+        });
       }
     }
   }, [snapshot, onReminder]);
