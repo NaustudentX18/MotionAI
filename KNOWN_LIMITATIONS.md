@@ -69,3 +69,11 @@ Unsupported browsers: Internet Explorer, legacy Edge (EdgeHTML), Opera Mini.
 - WebRTC collaboration requires a browser with WebRTC support (all listed browsers).
 - Push notifications require HTTPS (or localhost) and browser permission grant.
 - IndexedDB persistence is used for workspace storage and is available in all listed browsers.
+
+## WebRTC / signaling
+
+- WebRTC collaboration requires a running signaling server (default: `ws://localhost:3005`).
+- When the signaling server is unreachable, the workspace degrades to single-user mode. All local edits and persistence continue to work normally; real-time sync is simply unavailable.
+- Configure signaling server URLs via the `VITE_SIGNALING_URLS` or `VITE_SIGNALING_URL` environment variable. Multiple URLs can be comma-separated — y-webrtc tries them in order and fails over automatically.
+- ICE/STUN server configuration is available in Settings > Collaboration. Google's free STUN servers are pre-configured.
+- Direct peer connections (WebRTC) may fail on restrictive networks. A TURN server is required for NAT traversal in such environments.
