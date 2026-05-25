@@ -52,3 +52,28 @@ npm run verify
 - Add a two-browser Y.js convergence test against the local signaling server.
 - Add a credentialed deployment checklist for Firebase, Google OAuth, and provider-specific AI probes.
 - Decide whether the GitHub-facing name should remain MotionAI while the UI brand remains MotionAI, or unify the product name.
+
+## Browser compatibility
+
+MotionAI is tested and supported on the following browser versions:
+
+| Browser | Minimum version | Notes |
+|---------|----------------|-------|
+| Chrome / Edge | 90+ | Best performance and WebRTC support |
+| Firefox | 100+ | Full feature support |
+| Safari (desktop + iOS) | 16+ | PWA standalone mode supported on iOS 16.4+ |
+| Samsung Internet | 20+ | Basic feature support |
+
+Unsupported browsers: Internet Explorer, legacy Edge (EdgeHTML), Opera Mini.
+
+- WebRTC collaboration requires a browser with WebRTC support (all listed browsers).
+- Push notifications require HTTPS (or localhost) and browser permission grant.
+- IndexedDB persistence is used for workspace storage and is available in all listed browsers.
+
+## WebRTC / signaling
+
+- WebRTC collaboration requires a running signaling server (default: `ws://localhost:3005`).
+- When the signaling server is unreachable, the workspace degrades to single-user mode. All local edits and persistence continue to work normally; real-time sync is simply unavailable.
+- Configure signaling server URLs via the `VITE_SIGNALING_URLS` or `VITE_SIGNALING_URL` environment variable. Multiple URLs can be comma-separated — y-webrtc tries them in order and fails over automatically.
+- ICE/STUN server configuration is available in Settings > Collaboration. Google's free STUN servers are pre-configured.
+- Direct peer connections (WebRTC) may fail on restrictive networks. A TURN server is required for NAT traversal in such environments.

@@ -173,3 +173,82 @@ export function registerFailedPin(now = Date.now()): number {
   saveFailureRecord(nextRecord);
   return getPinLockoutMs(now);
 }
+
+// ─── Auth State Versioning & Migration ──────────────────────────────────────
+
+export const AUTH_STATE_VERSION = 1 as const;
+
+interface VersionedAuthEnvelope<T = unknown> {
+  version: number;
+  data: T;
+}
+
+/**
+ * Wraps auth state in a versioned envelope for forward-compatible migrations.
+ */
+export function wrapAuthState<T>(data: T): VersionedAuthEnvelope<T> {
+  return { version: AUTH_STATE_VERSION, data };
+}
+
+/**
+ * Reads raw auth state from localStorage and migrates it to the current version.
+ * Handles unversioned (legacy) state gracefully.
+ */
+export function migrateAuthState<T>(raw: string | null): { data: T | null; version: number } {
+  if (!raw) return { data: null, version: 0 };
+
+  try {
+    const parsed = JSON.parse(raw);
+
+    // Check if it's already a versioned envelope
+    if (typeof parsed === 'object' && parsed !== null && typeof parsed.version === 'number') {
+      let version = parsed.version;
+      let data = parsed.data as T;
+
+      // Apply sequential migrations up to current version
+      while (version < AUTH_STATE_VERSION) {
+        const nextVersion = version + 1;
+        const migrator = MIGRATORS[nextVersion];
+        if (migrator) {
+          data = migrator(data) as T;
+        }
+        version = nextVersion;
+      }
+
+      return { data, version };
+    }
+
+    // Legacy unversioned data — migrate from version 0 to current
+    let data = parsed as T;
+    for (let v = 1; v <= AUTH_STATE_VERSION; v++) {
+      const migrator = MIGRATORS[v];
+      if (migrator) {
+        data = migrator(data) as T;
+      }
+    }
+
+    return { data, version: AUTH_STATE_VERSION };
+  } catch {
+    return { data: null, version: 0 };
+  }
+}
+
+// ─── Migration Registry ─────────────────────────────────────────────────────
+// Keyed by target version. Each function transforms data from v-1 to v.
+
+type MigratorFn = (prev: unknown) => unknown;
+
+const MIGRATORS: Record<number, MigratorFn> = {
+  // v0 → v1: Initial migration — data shape is unchanged, just versioned.
+  1: (data: unknown) => data,
+};
+
+/**
+ * Read and migrate the stored auth record. Returns null if none exists.
+ */
+export function getMigratedAuthRecord(): AuthRecord | null {
+  const raw = localStorage.getItem(LS_KEY);
+  if (!raw) return null;
+  const { data } = migrateAuthState<AuthRecord>(raw);
+  return data;
+}

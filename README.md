@@ -130,10 +130,12 @@ npm run test:reliability    # Heavy database stress testing
 ### 🔒 Local-First Foundation
 * **Y.js Engine:** Document state built on top of CRDTs with IndexedDB persistence and secure localStorage recovery fallbacks.
 * **Multi-workspace Support:** Easily create, delete, switch, export, or import clean JSON database dumps.
-* **Schema Migrations:** Integrated database version tracking ensures backwards compatibility and safety during upgrades.
+* **Schema Migrations:** Integrated database version tracking with automated `WORKSPACE_SCHEMA_VERSION` invariant checks and backward-compatible fixture tests.
 * **Encryption at Rest:** Optional client-side AES-GCM database encryption (see limitations).
-* **Sync Wiring:** WebRTC/Y.js signaling framework ready for peer synchronization (currently experimental).
-* **Desktop Packaging:** Local desktop builds utilizing Tauri.
+* **Offline Support:** Service worker caches static assets for offline boot. Push notifications for reminders (requires HTTPS).
+* **WebRTC Sync:** ICE/STUN/TURN server configuration UI with connection tester. Degrades gracefully to single-user mode when signaling is unavailable.
+* **Automation Engine:** Rule builder (trigger → conditions → action) with persistent execution history, retry support, and diagnostics export.
+* **Desktop Packaging:** Local desktop builds utilizing Tauri with keychain-based secret storage.
 
 ---
 
@@ -152,6 +154,12 @@ npm run test:reliability    # Heavy database stress testing
 | **WebRTC Document Synchronization**| Experimental | [signaling-server.js](file:///home/pi/OpenNotion/signaling-server.js) |
 | **tldraw Canvas Interface** | Early prototype | [CanvasEditor.tsx](file:///home/pi/OpenNotion/src/components/CanvasEditor.tsx) |
 | **Tauri Desktop Application** | Prototype | [tauri.conf.json](file:///home/pi/OpenNotion/src-tauri/tauri.conf.json) |
+| **Automation rules engine** | Implemented, still hardening | `src/lib/automations/ruleBuilder.ts`, `automationHistory.ts` |
+| **Offline PWA + push notifications** | Implemented | `public/sw.js`, `src/hooks/useServiceWorker.ts` |
+| **ICE/STUN/TURN config UI** | Implemented | `src/components/settings/StunTurnConfig.tsx`, `src/hooks/useWebRTCConfig.ts` |
+| **Local auth inactivity lock** | Implemented | `src/lib/localAuth.ts`, `scripts/local-auth-tests.ts` |
+| **AI meeting notes → tasks** | Implemented, still hardening | `src/components/MeetingParserModal.tsx`, `scripts/meeting-parser-contract-tests.ts` |
+| **Canvas selection → tasks** | Implemented | `src/components/CanvasEditor.tsx` |
 | **Production multi-user security** | Not claimed | [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md), [`SECURITY.md`](SECURITY.md) |
 
 ---

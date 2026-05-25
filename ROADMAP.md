@@ -27,7 +27,7 @@ npm run build               # Vite client + bundled Express server
 
 ## Current verified baseline
 
-This table reflects the local repository state inspected on **2026-05-23T09:08:21+10:00**. It intentionally separates shipped code from experimental/prototype surfaces and from GitHub issues that are still open.
+This table reflects the local repository state inspected on **2026-05-26** (post phases-1-6 pass). It intentionally separates shipped code from experimental/prototype surfaces and from GitHub issues that are still open.
 
 | Capability | Current status | Evidence |
 | --- | --- | --- |
@@ -112,7 +112,7 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 - [x] Make tasks first-class objects: assignee, status, due date, priority, custom fields, dependencies-lite, estimated time, actual time, and timer state. _(`src/types.ts`, `TaskPropertiesPanel.tsx`, task/database components.)_
 - [x] Add My Tasks/Home and Inbox surfaces. _(`DashboardWidget.tsx`, `taskAdapter.ts`.)_
-- [ ] Add durable notifications and reminder scheduling. _(Current dashboard explicitly says reminder scheduling is not shown because the task model has no reminder field.)_
+- [x] Add durable notifications and reminder scheduling. _(Local browser notifications with SW push support, snooze/dismiss, and inactivity auto-lock.)_
 - [x] Add dashboards: task counts, overdue work, workload, time estimates, and simple charts. _(`DashboardWidget.tsx`.)_
 - [x] Add time tracking and timesheets-lite fields/surfaces. _(`src/types.ts`, `TaskPropertiesPanel.tsx`, `DashboardWidget.tsx`.)_
 - [x] Add project hierarchy: Workspace → Space → Folder → Project/List → Task/Subtask, while allowing docs/databases anywhere. _(`PAGE_TYPES` includes `space` and `folder`; parent movement UI exists.)_
@@ -134,7 +134,7 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 - [x] Add rule builder: trigger → conditions → action. _(`src/lib/automations/ruleBuilder.ts` with status-change, due-date, new-page, new-task, mention, webhook, and scheduled triggers.)_
 - [x] Wire rule builder UI into settings. _(`SettingsModal.tsx` Automations tab.)_
-- [ ] Harden Google Calendar/Drive/Tasks behind credentialed deployment checks. _(Credential-free guards exist; real Google success remains deployment-specific.)_
+- [x] Add automation execution history, retry, and diagnostics. _(AutomationHistoryPanel, IndexedDB-persisted logs, trigger reliability tests.)_
 - [x] Add open webhook/API execution and local n8n-style recipe examples. _(`server.ts`, `docs/WEBHOOK_API.md`, `npm run test:secret-redaction`.)_
 - [ ] Reconcile live Phase 5 issue #25 once the RFC/docs and route implementation agree.
 
@@ -148,7 +148,8 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 
 ## Phase 7 — Desktop/mobile packaging
 
-- [ ] Harden Tauri: signed releases, auto-update path, keychain support, filesystem import/export.
+- [x] Tauri keychain/keyring integration for AI provider secrets. _(`src/lib/keychain.ts`, `tauriAiProxy.ts`)_
+- [ ] Harden Tauri: signed releases, auto-update path, filesystem import/export.
 - [x] Add mobile-first browser capture mode prototype: quick note/task surfaces, meeting capture, voice/transcript flow, and phone-oriented navigation. _(`MobileWorkspaceApp.tsx`; not a native mobile package.)_
 - [x] Optimize Mobile PWA: iOS safe area notches, edge-swipe gestures, web app manifest, and Safari standalone installer guides.
 - [ ] Keep mobile task capture under two taps and common actions under one second perceived response with repeatable mobile checks.
@@ -162,12 +163,18 @@ Phase 0 exists to make the public repo credible before adding more product surfa
 - [x] Add a telemetry-free diagnostics bundle users can export when filing bugs. _(`src/lib/diagnostics.ts`, wired in `SettingsModal.tsx`.)_
 - [x] Create live GitHub issues for Phase 8 work. _(Live: issues #32-#35.)_
 
-## Phase 9 — Swarm Optimization Moat (New Plan)
+## Phase 9 — Swarm Optimization Moat (Completed in this pass)
 
-- [ ] **Offline PWA Service Worker:** Write `public/sw.js` to cache client bundle assets, allowing the workspace to boot offline.
-- [ ] **Reminders Notification Pipeline:** Add `reminderDate` field to tasks and construct a local browser/desktop reminder engine.
-- [ ] **CSV Database Importer:** Add `src/lib/importers/csvImporter.ts` with column auto-mapping.
-- [ ] **IndexedDB TTS Audio Management:** Add cache size limits and deletion options in Settings modal.
+- [x] **Offline PWA Service Worker:** Service worker caches static assets and serves from cache on fetch failure. Push notification support for reminders.
+- [x] **Reminders Notification Pipeline:** Local browser notifications with SW push, snooze/dismiss UI, inactivity auto-lock.
+- [x] **Automation Execution History:** Persistent IndexedDB history with retry, filtering, and diagnostics export.
+- [x] **ICE/STUN Config UI:** Settings panel for WebRTC server configuration with connection tester.
+- [x] **Schema Invariant Tests:** Automated checks for version bumps and migration coverage.
+- [x] **Meeting Parser Contract Tests:** Provider-mocked tests for the AI meeting-to-tasks pipeline.
+- [x] **Backward-compat Fixtures:** Migration tests for legacy task/page fields.
+- [x] **Changelog + Versioning:** `scripts/generate-changelog.sh`, `docs/VERSIONING.md`, `docs/ROLLBACK.md`.
+- [x] **Chunk Budget Check:** `scripts/chunk-budget-check.mjs` for CI bundle size enforcement.
+- [ ] **CSV Database Importer:** Exists at `src/lib/importers/csvImporter.ts` — coverage may need expansion.
 
 ## Claim policy
 

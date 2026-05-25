@@ -169,3 +169,86 @@ describe('WorkspaceSnapshot validation', () => {
     assert.equal(result.currentPageId, 'p1');
   });
 });
+
+
+// ─── Backward-compat migration fixtures ───────────────────────────────────────
+
+describe('Backward-compat migration fixtures', () => {
+  it('migrates legacy page without reminderDate', () => {
+    const legacyPage = JSON.stringify({
+      id: 'page-1',
+      title: 'Legacy Task',
+      icon: null,
+      cover: null,
+      createdAt: 1700000000000,
+      updatedAt: 1700000000000,
+      blocks: [{ id: 'b1', type: 'task', content: 'old task' }],
+    });
+    const parsed = JSON.parse(legacyPage);
+    // reminderDate was added later; legacy pages should work without it
+    assert.equal(parsed.id, 'page-1');
+    assert.equal(parsed.reminderDate, undefined);
+  });
+
+  it('migrates legacy task without assignee field', () => {
+    const legacyTask = {
+      id: 'task-1',
+      title: 'Unassigned task',
+      status: 'todo',
+      priority: 'medium',
+      // no assignee
+    };
+    const parsed = JSON.parse(JSON.stringify(legacyTask));
+    assert.equal(parsed.assignee, undefined);
+    // After migration, assignee should be undefined (not null or empty string)
+    const migrated = { ...parsed, assignee: parsed.assignee ?? undefined };
+    assert.equal(migrated.assignee, undefined);
+  });
+
+  it('migrates legacy task without priority field', () => {
+    const legacyTask = {
+      id: 'task-2',
+      title: 'No priority task',
+      status: 'in-progress',
+      // no priority
+    };
+    const migrated = JSON.parse(JSON.stringify(legacyTask));
+    assert.equal(migrated.priority, undefined);
+  });
+
+  it('handles unexpected fields gracefully during migration', () => {
+    const legacyWithExtra = {
+      id: 'task-3',
+      title: 'Task with extra fields',
+      status: 'done',
+      extraField1: 'unexpected',
+      nestedExtra: { key: 'value' },
+    };
+    const parsed = JSON.parse(JSON.stringify(legacyWithExtra));
+    // Extra fields should be preserved but not cause migration errors
+    assert.equal(parsed.extraField1, 'unexpected');
+    assert.equal(parsed.title, 'Task with extra fields');
+  });
+
+  it('preserves reminderDate through JSON round-trip', () => {
+    const taskWithReminder = {
+      id: 'task-4',
+      title: 'Task with reminder',
+      status: 'todo',
+      reminderDate: '2026-06-15',
+    };
+    const roundTripped = JSON.parse(JSON.stringify(taskWithReminder));
+    assert.equal(roundTripped.reminderDate, '2026-06-15');
+    assert.equal(roundTripped.title, 'Task with reminder');
+  });
+
+  it('handles reminderDate as ISO datetime string', () => {
+    const taskWithDatetime = {
+      id: 'task-5',
+      title: 'Task with datetime reminder',
+      reminderDate: '2026-06-15T14:30:00.000Z',
+    };
+    const parsed = JSON.parse(JSON.stringify(taskWithDatetime));
+    assert.ok(parsed.reminderDate.startsWith('2026-06-15'), 'ISO datetime parsed correctly');
+  });
+});

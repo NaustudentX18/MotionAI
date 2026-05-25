@@ -1,4 +1,4 @@
-const CACHE_NAME = 'motionai-cache-v1';
+const CACHE_NAME = 'motionai-cache-v2';
 const ASSETS_TO_CACHE = [
   '/',
   '/index.html',
@@ -6,6 +6,8 @@ const ASSETS_TO_CACHE = [
   '/docs/media/motionai-logo.png',
   '/docs/media/motionai-logo.svg'
 ];
+
+// ─── Install: cache static assets ────────────────────────────────────────────
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
@@ -15,6 +17,8 @@ self.addEventListener('install', (event) => {
   );
   self.skipWaiting();
 });
+
+// ─── Activate: clean old caches ──────────────────────────────────────────────
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
@@ -30,6 +34,8 @@ self.addEventListener('activate', (event) => {
   );
   self.clients.claim();
 });
+
+// ─── Fetch: serve from cache, fall back to network ───────────────────────────
 
 self.addEventListener('fetch', (event) => {
   if (!event.request.url.startsWith('http')) return;
@@ -56,6 +62,59 @@ self.addEventListener('fetch', (event) => {
           return caches.match('/');
         }
       });
+    })
+  );
+});
+
+// ─── Push notifications: receive and display reminders ───────────────────────
+
+self.addEventListener('push', (event) => {
+  let data = {};
+
+  try {
+    if (event.data) {
+      data = event.data.json();
+    }
+  } catch {
+    // Not JSON — use raw text as body
+    data = { body: event.data?.text() || 'MotionAI reminder' };
+  }
+
+  const options = {
+    body: data.body || 'You have a pending reminder',
+    icon: data.icon || '/docs/media/motionai-logo.png',
+    tag: data.tag || 'motionai-reminder',
+    vibrate: [200, 100, 200],
+    requireInteraction: true,
+  };
+
+  event.waitUntil(
+    self.registration.showNotification(
+      data.title || 'MotionAI',
+      options
+    )
+  );
+});
+
+// ─── Notification click: open or focus the app ───────────────────────────────
+
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+
+  const urlToOpen = new URL('/', self.location.origin).href;
+
+  event.waitUntil(
+    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      // Focus existing window if any
+      for (const client of windowClients) {
+        if (client.url === urlToOpen && 'focus' in client) {
+          return client.focus();
+        }
+      }
+      // Open new window
+      if (clients.openWindow) {
+        return clients.openWindow(urlToOpen);
+      }
     })
   );
 });

@@ -25,10 +25,11 @@ import { SettingsModal } from './components/SettingsModal';
 import { TaskPropertiesPanel } from './components/tasks/TaskPropertiesPanel';
 import { ReminderActionToast } from './components/tasks/ReminderActionToast';
 import { DashboardWidget } from './components/dashboard/DashboardWidget';
+import OfflineBanner from './components/OfflineBanner';
 import { SettingsProvider } from './hooks/useSettings';
 import { initAuth, googleSignIn, logout } from './lib/firebase';
 import { User } from 'firebase/auth';
-import { Menu, History, Download, Smartphone, Laptop, Sparkles, CheckSquare, Settings as SettingsIcon, Lock } from 'lucide-react';
+import { Menu, History, Download, Smartphone, Laptop, Sparkles, CheckSquare, Settings as SettingsIcon, Lock, WifiOff } from 'lucide-react';
 import { cn } from './lib/utils';
 import { loadWorkspace, saveWorkspace, isWorkspaceLocked, setWorkspaceKey, clearWorkspaceKey, savePage, deletePage as deletePageFromStore, addPage as addPageToStore, setCurrentPageId as setCurrentPageIdInStore, reloadWorkspaceFromLegacyStore, listWorkspaces, createWorkspace, deleteWorkspace, renameWorkspace, updateLastOpened, getDefaultWorkspace, WorkspaceMeta } from './lib/persistence';
 import { getYDoc, yDocToSnapshot, destroyYjs } from './lib/yjs';
@@ -896,6 +897,7 @@ export default function App() {
 
   return (
     <SettingsProvider>
+    <OfflineBanner />
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
       <CommandPalette
          isOpen={paletteOpen}

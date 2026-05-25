@@ -13,6 +13,8 @@ import { exportWorkspaceJson, importWorkspaceJson } from '../lib/workspaceImport
 import { exportDiagnostics } from '../lib/diagnostics';
 import { csvExportToWorkspace } from '../lib/importers/csvImporter';
 import { Page } from '../types';
+import AutomationHistoryPanel from './automations/AutomationHistoryPanel';
+import StunTurnConfig from './settings/StunTurnConfig';
 import { cn } from '../lib/utils';
 import {
   clearPin,
@@ -38,7 +40,7 @@ import {
   defaultDueDateRule,
 } from '../lib/automations/ruleBuilder';
 
-type TabId = 'ai' | 'appearance' | 'data' | 'security' | 'automations' | 'about';
+type TabId = 'ai' | 'appearance' | 'data' | 'security' | 'automations' | 'collaboration' | 'about';
 
 const PROVIDER_ORDER: AiProviderId[] = [
   'gemini',
@@ -1301,9 +1303,30 @@ function AutomationsTab() {
           ))}
         </div>
       )}
+
+      <hr className="my-4 border-gray-100 dark:border-stone-700" />
+      <AutomationHistoryPanel />
     </div>
   );
 }
+
+
+// ─── Collaboration Tab ────────────────────────────────────────────────────────
+
+function CollaborationTab() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-sm font-semibold text-[#37352F] dark:text-[#E3E3E3]">Collaboration & WebRTC</h3>
+        <p className="text-xs text-gray-500 dark:text-stone-400 mt-0.5">
+          Configure ICE/STUN/TURN servers for WebRTC peer-to-peer document sync.
+        </p>
+      </div>
+      <StunTurnConfig />
+    </div>
+  );
+}
+
 
 // ─── Rule Edit Form ────────────────────────────────────────────────────────────
 
@@ -1559,6 +1582,7 @@ const TABS: { id: TabId; label: string }[] = [
   { id: 'data', label: 'Data' },
   { id: 'security', label: 'Security' },
   { id: 'automations', label: 'Automations' },
+  { id: 'collaboration', label: 'Collaboration' },
   { id: 'about', label: 'About' },
 ];
 
@@ -1642,6 +1666,7 @@ export function SettingsModal({ isOpen, onClose }: SettingsModalProps) {
           {activeTab === 'security' && <SecurityTab />}
           {activeTab === 'automations' && <AutomationsTab />}
           {activeTab === 'about' && <AboutTab />}
+          {activeTab === 'collaboration' && <CollaborationTab />}
         </div>
       </div>
     </div>,

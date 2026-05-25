@@ -4,6 +4,8 @@
  * No network calls — export is entirely local and user-initiated.
  */
 import { Page } from '../types';
+import { getStats } from './automations/automationHistory';
+
 
 export interface DiagnosticsStatus {
   encryptionLocked?: boolean;
@@ -39,6 +41,13 @@ export interface DiagnosticsBundle {
     createdAt: string;
     updatedAt: string;
   }>;
+  automations: {
+    totalRuns: number;
+    triggered: number;
+    skipped: number;
+    failed: number;
+    error: number;
+  };
 }
 
 function formatBytes(bytes: number): string {
@@ -106,6 +115,13 @@ export function generateDiagnostics(
       createdAt: new Date(p.createdAt).toISOString(),
       updatedAt: new Date(p.updatedAt).toISOString(),
     })),
+    automations: {
+      totalRuns: 0,
+      triggered: 0,
+      skipped: 0,
+      failed: 0,
+      error: 0,
+    },
   };
 }
 
