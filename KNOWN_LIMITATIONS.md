@@ -52,3 +52,20 @@ npm run verify
 - Add a two-browser Y.js convergence test against the local signaling server.
 - Add a credentialed deployment checklist for Firebase, Google OAuth, and provider-specific AI probes.
 - Decide whether the GitHub-facing name should remain MotionAI while the UI brand remains MotionAI, or unify the product name.
+
+## Browser compatibility
+
+MotionAI is tested and supported on the following browser versions:
+
+| Browser | Minimum version | Notes |
+|---------|----------------|-------|
+| Chrome / Edge | 90+ | Best performance and WebRTC support |
+| Firefox | 100+ | Full feature support |
+| Safari (desktop + iOS) | 16+ | PWA standalone mode supported on iOS 16.4+ |
+| Samsung Internet | 20+ | Basic feature support |
+
+Unsupported browsers: Internet Explorer, legacy Edge (EdgeHTML), Opera Mini.
+
+- WebRTC collaboration requires a browser with WebRTC support (all listed browsers).
+- Push notifications require HTTPS (or localhost) and browser permission grant.
+- IndexedDB persistence is used for workspace storage and is available in all listed browsers.
