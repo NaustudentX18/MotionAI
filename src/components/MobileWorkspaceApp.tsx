@@ -90,6 +90,7 @@ export function MobileWorkspaceApp({
 
   // Meeting notes screen state
   const [isRecordingMeeting, setIsRecordingMeeting] = useState(false);
+  const [isProcessingMeeting, setIsProcessingMeeting] = useState(false);
   const [meetingTimer, setMeetingTimer] = useState(0);
   const [meetingTranscript, setMeetingTranscript] = useState<string[]>([]);
   const meetingTimerRef = useRef<NodeJS.Timeout | null>(null);
@@ -469,11 +470,52 @@ export function MobileWorkspaceApp({
   // Convert meeting to page after recording
   const finishMeetingRecording = async () => {
     setIsRecordingMeeting(false);
+    setIsProcessingMeeting(true);
     
     // Generate page title and structured blocks using transcript or defaults
     const finalTranscriptText = meetingTranscript.length > 0 
       ? meetingTranscript.join('\n') 
       : "No transcript recorded. User started a blank meeting session.";
+
+    let summaryPoints: string[] = ['No summary points extracted.'];
+    let actionItems: string[] = ['Review meeting notes for action items.'];
+
+    try {
+      const today = new Date().toISOString().split('T')[0];
+      const res = await fetch('/api/ai/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          command: 'custom',
+          context: finalTranscriptText,
+          prompt: `You are a meeting assistant. Summarize this transcript. Extract 3 key discussion bullet points and a list of concrete task action items. Return ONLY a JSON object matching this schema, without any markdown enclosing tags or surrounding explanations:
+{
+  "summary": ["point 1", "point 2", "point 3"],
+  "tasks": ["task 1", "task 2"]
+}`
+        })
+      });
+      const data = await res.json();
+      if (!data.error && data.text) {
+        let cleanText = data.text.trim();
+        if (cleanText.startsWith('```json')) {
+          cleanText = cleanText.substring(7);
+        }
+        if (cleanText.endsWith('```')) {
+          cleanText = cleanText.substring(0, cleanText.length - 3);
+        }
+        const parsed = JSON.parse(cleanText.trim());
+        if (Array.isArray(parsed.summary)) summaryPoints = parsed.summary;
+        if (Array.isArray(parsed.tasks)) actionItems = parsed.tasks;
+      }
+    } catch (err) {
+      console.warn('AI meeting summarization failed, falling back to defaults:', err);
+      summaryPoints = meetingTranscript.length > 0 ? meetingTranscript.slice(0, 3) : ['Discussion was blank.'];
+      actionItems = [
+        'Review dock container volume metrics with Alex',
+        'Confirm OMV backup pools synchronization'
+      ];
+    }
 
     const dateStr = new Date().toLocaleDateString();
     
@@ -488,14 +530,18 @@ export function MobileWorkspaceApp({
         { id: uuidv4(), type: 'h1', content: `🎙️ AI Sync: Meeting Summary` },
         { id: uuidv4(), type: 'callout', content: `This structured meeting documentation was auto-captured live using state-of-the-art AI transcripts inside the Workspace client.` },
         { id: uuidv4(), type: 'h3', content: 'Discussion points & Key takeaways' },
-        ...meetingTranscript.map(line => ({
+        ...summaryPoints.map(line => ({
           id: uuidv4(),
           type: 'bullet' as const,
           content: line
         })),
         { id: uuidv4(), type: 'h3', content: 'Action Checklist' },
-        { id: uuidv4(), type: 'todo', content: 'Review dock container volume metrics with Alex', checked: false },
-        { id: uuidv4(), type: 'todo', content: 'Confirm OMV backup pools synchronization', checked: false }
+        ...actionItems.map(line => ({
+          id: uuidv4(),
+          type: 'todo' as const,
+          content: line,
+          checked: false
+        }))
       ]
     };
 
@@ -503,6 +549,7 @@ export function MobileWorkspaceApp({
     setMobileEditingPageId(meetingPage.id);
     setActiveTab('home');
     setMeetingTranscript([]);
+    setIsProcessingMeeting(false);
   };
 
   // Compose shortcuts
@@ -779,7 +826,19 @@ export function MobileWorkspaceApp({
                 {/* View C: MEETING PAGE (Image 4) */}
                 {activeTab === 'meeting' && (
                   <div className="flex-1 flex flex-col justify-center h-full min-h-[400px] animate-in fade-in duration-200">
-                    {!isRecordingMeeting ? (
+                    {isProcessingMeeting ? (
+                      <div className="flex flex-col items-center justify-center text-center py-10 space-y-4">
+                        <div className="w-12 h-12 rounded-xl bg-stone-900 border border-stone-850 flex items-center justify-center text-stone-400 shadow-lg">
+                          <span className="w-6 h-6 border-2 border-purple-500 border-t-transparent rounded-full animate-spin" />
+                        </div>
+                        <div className="space-y-1.5 px-6">
+                          <h3 className="text-[15px] font-bold text-stone-200 font-sans">Processing transcript...</h3>
+                          <p className="text-[12px] text-stone-500 leading-relaxed font-sans px-2">
+                            Creating key summaries and extracting action tasks with AI.
+                          </p>
+                        </div>
+                      </div>
+                    ) : !isRecordingMeeting ? (
                       <div className="flex flex-col items-center justify-center text-center py-10 space-y-4">
                         <div className="w-16 h-16 rounded-2xl bg-stone-900/80 border border-stone-800 flex flex-col items-center justify-center text-stone-400 shadow-lg relative glow-effect">
                           <Mic size={24} className="text-purple-400" />

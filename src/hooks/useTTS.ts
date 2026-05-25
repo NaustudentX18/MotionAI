@@ -3,6 +3,66 @@ import { useSettings } from './useSettings';
 
 export type TTSProvider = 'browser' | 'local' | 'openai';
 
+// Simple IndexedDB cache for TTS audio blobs
+const DB_NAME = 'motionai_tts_cache';
+const STORE_NAME = 'audio_blobs';
+const DB_VERSION = 1;
+
+function getDb(): Promise<IDBDatabase> {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(DB_NAME, DB_VERSION);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => resolve(request.result);
+    request.onupgradeneeded = () => {
+      const db = request.result;
+      if (!db.objectStoreNames.contains(STORE_NAME)) {
+        db.createObjectStore(STORE_NAME);
+      }
+    };
+  });
+}
+
+async function getCachedAudio(key: string): Promise<Blob | null> {
+  try {
+    const db = await getDb();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readonly');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.get(key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve(request.result || null);
+    });
+  } catch (err) {
+    console.warn('TTS Cache Read Error:', err);
+    return null;
+  }
+}
+
+async function setCachedAudio(key: string, blob: Blob): Promise<void> {
+  try {
+    const db = await getDb();
+    return new Promise((resolve, reject) => {
+      const transaction = db.transaction(STORE_NAME, 'readwrite');
+      const store = transaction.objectStore(STORE_NAME);
+      const request = store.put(blob, key);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolve();
+    });
+  } catch (err) {
+    console.warn('TTS Cache Write Error:', err);
+  }
+}
+
+function generateCacheKey(text: string, provider: string, voice: string, speed: number): string {
+  const str = `${text}_${provider}_${voice}_${speed}`;
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  return `tts_${hash}`;
+}
+
 export interface TTSConfig {
   provider: TTSProvider;
   voice?: string;
@@ -207,36 +267,49 @@ export function useTTS(initialConfig?: Partial<TTSConfig>): UseTTSResult {
       } else {
         setIsBuffering(true);
 
-        // Fetch active settings config for keys and endpoints if not explicitly provided
-        const activeAiSettings = settings.providers[settings.activeProvider];
-        const localUrl = localEndpointUrl || activeAiSettings?.baseUrl;
-        const apiKey = activeAiSettings?.apiKey;
+        const cacheKey = generateCacheKey(text, provider, voice || 'default', speed || 1.0);
 
         try {
-          const response = await fetch('/api/ai/tts', {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            body: JSON.stringify({
-              text,
-              provider,
-              voice,
-              speed,
-              localEndpointUrl: localUrl,
-              model: openaiModel || activeAiSettings?.model,
-              ai: {
-                apiKey,
-              },
-            }),
-          });
+          // Check local IndexedDB cache first
+          const cachedBlob = await getCachedAudio(cacheKey);
+          let blob: Blob;
 
-          if (!response.ok) {
-            const errBody = await response.json().catch(() => ({}));
-            throw new Error(errBody.error || `TTS proxy failed: ${response.status}`);
+          if (cachedBlob) {
+            blob = cachedBlob;
+          } else {
+            // Fetch active settings config for keys and endpoints if not explicitly provided
+            const activeAiSettings = settings.providers[settings.activeProvider];
+            const localUrl = localEndpointUrl || activeAiSettings?.baseUrl;
+            const apiKey = activeAiSettings?.apiKey;
+
+            const response = await fetch('/api/ai/tts', {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+              },
+              body: JSON.stringify({
+                text,
+                provider,
+                voice,
+                speed,
+                localEndpointUrl: localUrl,
+                model: openaiModel || activeAiSettings?.model,
+                ai: {
+                  apiKey,
+                },
+              }),
+            });
+
+            if (!response.ok) {
+              const errBody = await response.json().catch(() => ({}));
+              throw new Error(errBody.error || `TTS proxy failed: ${response.status}`);
+            }
+
+            blob = await response.blob();
+            // Cache the newly fetched audio blob
+            await setCachedAudio(cacheKey, blob);
           }
 
-          const blob = await response.blob();
           const url = URL.createObjectURL(blob);
           audioUrlRef.current = url;
 
