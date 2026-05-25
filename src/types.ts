@@ -53,7 +53,7 @@ export interface PageVersion {
   blocks: Block[];
 }
 
-export const PAGE_TYPES = ['block', 'canvas', 'database', 'dashboard'] as const;
+export const PAGE_TYPES = ['block', 'canvas', 'database', 'dashboard', 'space', 'folder'] as const;
 
 export type PageType = typeof PAGE_TYPES[number];
 
@@ -75,5 +75,6 @@ export interface Page {
   actualTime?: number; // tracked time in minutes
   isTimerRunning?: boolean;
   timerStartTime?: number;
+  reminderDate?: string; // ISO date string (YYYY-MM-DD) or datetime
 }
 

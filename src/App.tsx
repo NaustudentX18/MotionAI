@@ -262,6 +262,28 @@ export default function App() {
     }
   }, []);
 
+  // Reminders scheduler pipeline
+  useEffect(() => {
+    if (!workspaceLoaded || pages.length === 0) return;
+
+    const checkReminders = () => {
+      const todayStr = new Date().toISOString().split('T')[0];
+      const alertedPages = JSON.parse(sessionStorage.getItem('motion_ai_alerted_reminders') || '[]');
+
+      pages.forEach(page => {
+        if (page.reminderDate && page.reminderDate <= todayStr && !alertedPages.includes(page.id)) {
+          alert(`⏰ Reminder: "${page.title}" is due or has a scheduled alert today (${page.reminderDate})!`);
+          alertedPages.push(page.id);
+          sessionStorage.setItem('motion_ai_alerted_reminders', JSON.stringify(alertedPages));
+        }
+      });
+    };
+
+    checkReminders();
+    const interval = setInterval(checkReminders, 60000);
+    return () => clearInterval(interval);
+  }, [pages, workspaceLoaded]);
+
   // AI Provider Status
   const aiProviderStatus = useMemo(() => {
     const settings = loadSettings();
