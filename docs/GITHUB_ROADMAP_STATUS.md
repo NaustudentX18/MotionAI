@@ -1,6 +1,6 @@
 # GitHub Roadmap Status
 
-**Checked:** 2026-05-25T23:02:25+10:00 with `gh` from `/home/pi/OpenNotion`
+**Checked:** 2026-05-26 (post Phases 1-6 merge) with `gh` from `/home/pi/OpenNotion`
 **Repository:** <https://github.com/NaustudentX18/MotionAI>
 **Default branch:** `main`
 **Visibility:** public repository
@@ -9,7 +9,7 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 
 ## Summary
 
-- Live issues #1–#35 are open.
+- 17 issues remain open (#17–#35, all Phase 3-8 future/RFC items).
 - No closed issues were returned by `gh issue list --state closed --limit 20`.
 - Milestones Phase 0 through Phase 8 plus `Backlog — Needs shaping` exist; Phase 6-8 have issue coverage.
 - Owner project **MotionAI Public Roadmap** was previously verified public with 35 tracked items; project metadata was not mutated in this pass.
@@ -19,10 +19,10 @@ This file reconciles the local roadmap docs with live GitHub issue, milestone, a
 
 | Milestone | Open | Closed | Live status |
 | --- | ---: | ---: | --- |
-| Phase 0 | 5 | 0 | open |
-| Phase 1 | 6 | 0 | open |
-| Phase 2 | 5 | 0 | open |
-| Phase 3 | 4 | 0 | open |
+| Phase 0 | 0 | 5 | closed (PR #38) |
+| Phase 1 | 0 | 6 | closed (PR #38) |
+| Phase 2 | 0 | 5 | closed (PR #38) |
+| Phase 3 | 4 | 0 | open (RFCs pending) |
 | Phase 4 | 4 | 0 | open |
 | Phase 5 | 1 | 0 | open |
 | Phase 6 | 3 | 0 | open |
