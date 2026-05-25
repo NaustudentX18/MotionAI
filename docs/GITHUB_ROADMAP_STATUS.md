@@ -104,6 +104,7 @@ Action: keep the board public and add new launch/blocker issues as roadmap scope
 - `docs/WEBHOOK_API.md` now documents replay protection via `x-motionai-delivery`.
 - Do not mass-close or mass-relabel issues from this branch alone; use issue comments/closures only after the pushed branch and verification evidence are visible on GitHub.
 - Next pass adds in-app meeting-parser preview/select/apply UI, reminder snooze/dismiss toast, and a peer diagnostics panel in Peers & Sync.
+- Follow-up pass adds device-local inactivity auto-lock settings for the PIN lockscreen, with supported timeout validation and local-auth regression coverage.
 
 ## Documentation maintenance rules
 

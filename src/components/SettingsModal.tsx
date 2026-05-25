@@ -14,7 +14,15 @@ import { exportDiagnostics } from '../lib/diagnostics';
 import { csvExportToWorkspace } from '../lib/importers/csvImporter';
 import { Page } from '../types';
 import { cn } from '../lib/utils';
-import { clearPin, hasPin, lock, setPin } from '../lib/localAuth';
+import {
+  clearPin,
+  getInactivityTimeoutMs,
+  hasPin,
+  INACTIVITY_TIMEOUT_OPTIONS_MS,
+  lock,
+  setInactivityTimeoutMs,
+  setPin,
+} from '../lib/localAuth';
 
 import {
   Rule,
@@ -836,6 +844,7 @@ function SecurityTab() {
   const [confirmPin, setConfirmPin] = useState('');
   const [message, setMessage] = useState('');
   const [configured, setConfigured] = useState(() => hasPin());
+  const [inactivityTimeout, setInactivityTimeout] = useState(() => getInactivityTimeoutMs());
 
   const handleSavePin = async () => {
     setMessage('');
@@ -851,18 +860,35 @@ function SecurityTab() {
     setPinInput('');
     setConfirmPin('');
     setConfigured(true);
+    setInactivityTimeout(getInactivityTimeoutMs());
+    window.dispatchEvent(new CustomEvent('motionai-local-auth-settings-change'));
     setMessage('Local PIN enabled. The app will lock on the next session or when you lock it now.');
   };
 
   const handleClearPin = () => {
     clearPin();
     setConfigured(false);
+    setInactivityTimeout(0);
+    window.dispatchEvent(new CustomEvent('motionai-local-auth-settings-change'));
     setMessage('Local PIN disabled on this device.');
   };
 
   const handleLockNow = () => {
     lock();
     window.dispatchEvent(new CustomEvent('motionai-local-lock'));
+  };
+
+  const handleInactivityChange = (timeoutMs: number) => {
+    try {
+      setInactivityTimeoutMs(timeoutMs);
+      setInactivityTimeout(timeoutMs);
+      window.dispatchEvent(new CustomEvent('motionai-local-auth-settings-change'));
+      setMessage(timeoutMs === 0
+        ? 'Inactivity auto-lock disabled.'
+        : `Inactivity auto-lock set to ${formatInactivityTimeout(timeoutMs)}.`);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : 'Unable to update inactivity auto-lock.');
+    }
   };
 
   return (
@@ -921,8 +947,39 @@ function SecurityTab() {
         </div>
         {message && <p className="text-xs text-gray-500 dark:text-stone-400">{message}</p>}
       </div>
+
+      <div className="rounded-lg border border-gray-200 dark:border-stone-700 p-4 space-y-3">
+        <div>
+          <h4 className="text-sm font-medium text-[#37352F] dark:text-[#E3E3E3]">Inactivity auto-lock</h4>
+          <p className="text-xs text-gray-500 dark:text-stone-400 mt-1">
+            Automatically re-lock this browser session after no keyboard, pointer, touch, or focus activity.
+            Requires a local PIN and stays device-local.
+          </p>
+        </div>
+        <select
+          value={inactivityTimeout}
+          onChange={event => handleInactivityChange(Number(event.target.value))}
+          disabled={!configured}
+          className="w-full text-sm px-3 py-2 rounded border border-gray-200 dark:border-stone-600 bg-white dark:bg-stone-800 text-[#37352F] dark:text-[#E3E3E3] disabled:opacity-50"
+        >
+          {INACTIVITY_TIMEOUT_OPTIONS_MS.map(option => (
+            <option key={option} value={option}>
+              {formatInactivityTimeout(option)}
+            </option>
+          ))}
+        </select>
+        {!configured && (
+          <p className="text-xs text-amber-600 dark:text-amber-400">Set a 6 digit PIN before enabling inactivity auto-lock.</p>
+        )}
+      </div>
     </div>
   );
+}
+
+function formatInactivityTimeout(timeoutMs: number): string {
+  if (timeoutMs === 0) return 'Off';
+  const minutes = timeoutMs / 60_000;
+  return minutes === 1 ? 'After 1 minute' : `After ${minutes} minutes`;
 }
 
 // ─── About Tab ────────────────────────────────────────────────────────────────
