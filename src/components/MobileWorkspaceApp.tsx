@@ -136,6 +136,18 @@ export function MobileWorkspaceApp({
   const [blockSwipeStartX, setBlockSwipeStartX] = useState<number | null>(null);
   const [touchStartX, setTouchStartX] = useState<number | null>(null);
   const [touchStartY, setTouchStartY] = useState<number | null>(null);
+  const [swipedPageId, setSwipedPageId] = useState<string | null>(null);
+  const [pageSwipeStartX, setPageSwipeStartX] = useState<number | null>(null);
+
+  const triggerHaptic = (duration = 50) => {
+    if (typeof navigator !== 'undefined' && navigator.vibrate) {
+      try {
+        navigator.vibrate(duration);
+      } catch (e) {
+        console.warn('Vibration not supported or blocked:', e);
+      }
+    }
+  };
 
   const handleTouchStart = (e: React.TouchEvent) => {
     setTouchStartX(e.touches[0].clientX);
@@ -150,6 +162,7 @@ export function MobileWorkspaceApp({
     // Edge Swipe hooks to toggle sidebar (open from left edge, close from anywhere)
     if (isWorkspaceMenuOpen) {
       if (diffX < -50 && Math.abs(diffY) < 65) {
+        triggerHaptic(50);
         setIsWorkspaceMenuOpen(false);
         setTouchStartX(null);
         setTouchStartY(null);
@@ -157,6 +170,7 @@ export function MobileWorkspaceApp({
       }
     } else {
       if (diffX > 60 && Math.abs(diffY) < 65 && touchStartX < 50) {
+        triggerHaptic(50);
         setIsWorkspaceMenuOpen(true);
         setTouchStartX(null);
         setTouchStartY(null);
@@ -194,17 +208,40 @@ export function MobileWorkspaceApp({
     setBlockSwipeStartX(e.touches[0].clientX);
   };
 
-  const handleBlockTouchEnd = (e: React.TouchEvent, blockId: string) => {
+  const handleBlockTouchEnd = (e: React.TouchEvent, block: Block) => {
     if (blockSwipeStartX === null) return;
     const diffX = e.changedTouches[0].clientX - blockSwipeStartX;
-    if (diffX < -50) {
+    if (block.type === 'todo' && diffX < -120) {
+      triggerHaptic(50);
+      if (activeMobilePage) {
+        onUpdatePage(activeMobilePage.id, {
+          blocks: activeMobilePage.blocks.filter(b => b.id !== block.id)
+        });
+      }
+      setSwipedBlockId(null);
+    } else if (diffX < -50) {
       // Swipe Left reveals formatting/delete tray
-      setSwipedBlockId(blockId);
+      setSwipedBlockId(block.id);
     } else if (diffX > 50) {
       // Swipe Right closes tray
       setSwipedBlockId(null);
     }
     setBlockSwipeStartX(null);
+  };
+
+  const handlePageTouchStart = (e: React.TouchEvent, pageId: string) => {
+    setPageSwipeStartX(e.touches[0].clientX);
+  };
+
+  const handlePageTouchEnd = (e: React.TouchEvent, pageId: string) => {
+    if (pageSwipeStartX === null) return;
+    const diffX = e.changedTouches[0].clientX - pageSwipeStartX;
+    if (diffX < -60) {
+      setSwipedPageId(pageId);
+    } else if (diffX > 60) {
+      setSwipedPageId(null);
+    }
+    setPageSwipeStartX(null);
   };
 
   // Real-time dynamic current clock
@@ -305,6 +342,7 @@ export function MobileWorkspaceApp({
 
   // Start/Stop chat voice dictation input
   const handleChatVoiceDictate = () => {
+    triggerHaptic(50);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Speech recognition isn't supported inside this browser context. Please use Safari on iOS or Google Chrome.");
@@ -357,6 +395,7 @@ export function MobileWorkspaceApp({
 
   // Start/Stop block editor voice input
   const handleEditorVoiceDictate = () => {
+    triggerHaptic(50);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
       alert("Speech recognition isn't supported inside this browser context. Please use Safari on iOS or Google Chrome.");
@@ -654,7 +693,7 @@ export function MobileWorkspaceApp({
               >
                 {/* J Profile circle */}
                 <button
-                  onClick={() => setIsWorkspaceMenuOpen(true)}
+                  onClick={() => { triggerHaptic(50); setIsWorkspaceMenuOpen(true); }}
                   className="w-11 h-11 min-w-11 rounded-full bg-stone-800 border border-stone-700 font-bold font-mono text-stone-300 text-sm flex items-center justify-center hover:bg-stone-700 transition-colors shrink-0 mr-1.5 cursor-pointer relative"
                 >
                   J
@@ -663,7 +702,7 @@ export function MobileWorkspaceApp({
 
                 {/* Home tab button */}
                 <button
-                  onClick={() => { setActiveTab('home'); setMobileEditingPageId(null); }}
+                  onClick={() => { triggerHaptic(50); setActiveTab('home'); setMobileEditingPageId(null); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'home'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -676,7 +715,7 @@ export function MobileWorkspaceApp({
 
                 {/* Chats tab button */}
                 <button
-                  onClick={() => setActiveTab('chats')}
+                  onClick={() => { triggerHaptic(50); setActiveTab('chats'); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'chats'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -689,7 +728,7 @@ export function MobileWorkspaceApp({
 
                 {/* Meeting tab button */}
                 <button
-                  onClick={() => setActiveTab('meeting')}
+                  onClick={() => { triggerHaptic(50); setActiveTab('meeting'); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'meeting'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -702,7 +741,7 @@ export function MobileWorkspaceApp({
 
                 {/* Inbox tab button */}
                 <button
-                  onClick={() => setActiveTab('inbox')}
+                  onClick={() => { triggerHaptic(50); setActiveTab('inbox'); }}
                   className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'inbox'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
@@ -731,21 +770,52 @@ export function MobileWorkspaceApp({
                     </div>
 
                     <div className="space-y-1.5 mt-2">
-                      {pages.map(page => (
-                        <button
-                          key={page.id}
-                          onClick={() => setMobileEditingPageId(page.id)}
-                          className="w-full flex items-center px-3 py-3 rounded-lg hover:bg-stone-850 text-left font-medium text-[15px] text-stone-200 transition-all hover:scale-101 border border-transparent hover:border-stone-800 group"
-                        >
-                          <span className="mr-3 text-lg flex-shrink-0 origin-center group-hover:scale-115 transition-transform">
-                            {page.icon || '📄'}
-                          </span>
-                          <span className="truncate flex-1 font-sans pr-4">
-                            {page.title || 'Untitled page'}
-                          </span>
-                          <ChevronRight size={14} className="text-stone-600 group-hover:text-stone-400 transition-colors" />
-                        </button>
-                      ))}
+                      {pages.map(page => {
+                        const isSwiped = swipedPageId === page.id;
+                        return (
+                          <div 
+                            key={page.id} 
+                            className="relative overflow-hidden rounded-lg w-full flex items-center transition-all duration-200"
+                            onTouchStart={(e) => handlePageTouchStart(e, page.id)}
+                            onTouchEnd={(e) => handlePageTouchEnd(e, page.id)}
+                          >
+                            <div 
+                              className={`w-full flex items-center px-3 py-3 hover:bg-stone-850 text-left font-medium text-[15px] text-stone-200 transition-transform duration-200 hover:scale-101 border border-transparent hover:border-stone-800 group cursor-pointer ${
+                                isSwiped ? '-translate-x-20' : 'translate-x-0'
+                              }`}
+                              onClick={() => {
+                                if (isSwiped) {
+                                  setSwipedPageId(null);
+                                } else {
+                                  setMobileEditingPageId(page.id);
+                                }
+                              }}
+                            >
+                              <span className="mr-3 text-lg flex-shrink-0 origin-center group-hover:scale-115 transition-transform">
+                                {page.icon || '📄'}
+                              </span>
+                              <span className="truncate flex-1 font-sans pr-4">
+                                {page.title || 'Untitled page'}
+                              </span>
+                              {!isSwiped && <ChevronRight size={14} className="text-stone-600 group-hover:text-stone-400 transition-colors" />}
+                            </div>
+                            
+                            {isSwiped && (
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  triggerHaptic(50);
+                                  onDeletePage(page.id);
+                                  setSwipedPageId(null);
+                                }}
+                                className="absolute right-0 top-0 bottom-0 w-20 bg-red-600 hover:bg-red-700 text-white flex items-center justify-center font-bold text-xs uppercase tracking-wider transition-colors z-10 cursor-pointer"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
                     </div>
 
                     {/* Creative additions: Hot tip banners */}
@@ -854,6 +924,7 @@ export function MobileWorkspaceApp({
 
                         <button 
                           onClick={() => {
+                            triggerHaptic(50);
                             setIsRecordingMeeting(true);
                             setMeetingTranscript([
                               "[Init]: Audio synchronization active... Ready to transcribe."
@@ -900,14 +971,20 @@ export function MobileWorkspaceApp({
 
                         <div className="flex justify-center items-center gap-4">
                           <button 
-                            onClick={() => setIsRecordingMeeting(false)}
+                            onClick={() => {
+                              triggerHaptic(50);
+                              setIsRecordingMeeting(false);
+                            }}
                             className="px-4 py-2 bg-stone-800 hover:bg-stone-750 text-stone-300 font-medium text-xs rounded-lg cursor-pointer transition-colors"
                           >
                             Cancel
                           </button>
                           
                           <button 
-                            onClick={finishMeetingRecording}
+                            onClick={() => {
+                              triggerHaptic(50);
+                              finishMeetingRecording();
+                            }}
                             className="px-5 py-2.5 bg-purple-600 hover:bg-purple-700 text-white font-bold text-xs rounded-xl cursor-pointer transition-colors flex items-center gap-1.5 shadow-md shadow-purple-950/40"
                           >
                             <Check size={14} /> Output notes page
@@ -1068,7 +1145,7 @@ export function MobileWorkspaceApp({
                     <div 
                       key={block.id} 
                       onTouchStart={(e) => handleBlockTouchStart(e, block.id)}
-                      onTouchEnd={(e) => handleBlockTouchEnd(e, block.id)}
+                      onTouchEnd={(e) => handleBlockTouchEnd(e, block)}
                       className={`relative group border border-transparent hover:border-[#2F2F2F] focus-within:border-[#2F2F2F] rounded-lg p-1.5 transition-all w-full ${
                         swipedBlockId === block.id ? 'bg-stone-900/40 border-stone-805 pr-24' : ''
                       }`}
@@ -1238,6 +1315,7 @@ export function MobileWorkspaceApp({
                         <div className="flex items-start gap-2.5 w-full">
                           <button 
                             onClick={() => {
+                              triggerHaptic(50);
                               if (activeMobilePage) {
                                 onUpdatePage(activeMobilePage.id, {
                                   blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, checked: !b.checked } : b)
