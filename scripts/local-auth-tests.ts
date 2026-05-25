@@ -1,11 +1,14 @@
 import { webcrypto } from 'node:crypto';
 import {
   clearPin,
+  getInactivityTimeoutMs,
   getPinLockoutMs,
   hasPin,
+  INACTIVITY_TIMEOUT_OPTIONS_MS,
   isLocked,
   lock,
   registerFailedPin,
+  setInactivityTimeoutMs,
   setPin,
   unlock,
   verifyPin,
@@ -65,10 +68,24 @@ async function expectRejects(fn: () => Promise<unknown>, message: string): Promi
   assert(rejected, message);
 }
 
+function expectThrows(fn: () => unknown, pattern: RegExp, message: string): void {
+  try {
+    fn();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    assert(pattern.test(errorMessage), message);
+    return;
+  }
+  throw new Error(message);
+}
+
 async function run(): Promise<void> {
   clearPin();
   assert(!hasPin(), 'PIN should be absent after clear');
   assert(!isLocked(), 'App should not be locked when no PIN is configured');
+  assert(getInactivityTimeoutMs() === 0, 'Inactivity auto-lock should default to off');
+  assert(INACTIVITY_TIMEOUT_OPTIONS_MS.includes(15 * 60_000), 'Supported timeout options should include 15 minutes');
+  expectThrows(() => setInactivityTimeoutMs(60_000), /Set a local PIN/, 'Inactivity auto-lock requires a PIN');
 
   await expectRejects(() => setPin('12345'), 'Short PIN should be rejected');
   await expectRejects(() => setPin('abcdef'), 'Non-numeric PIN should be rejected');
@@ -85,6 +102,11 @@ async function run(): Promise<void> {
 
   unlock();
   assert(!isLocked(), 'Unlock should persist for the current session');
+  setInactivityTimeoutMs(5 * 60_000);
+  assert(getInactivityTimeoutMs() === 5 * 60_000, 'Inactivity timeout should persist a supported option');
+  expectThrows(() => setInactivityTimeoutMs(2 * 60_000), /Unsupported/, 'Unsupported inactivity timeout should be rejected');
+  setInactivityTimeoutMs(0);
+  assert(getInactivityTimeoutMs() === 0, 'Setting inactivity timeout to off should clear it');
   lock();
   assert(isLocked(), 'Lock should clear the session unlock flag');
 
@@ -102,6 +124,7 @@ async function run(): Promise<void> {
 
   clearPin();
   assert(!hasPin(), 'clearPin should remove configured PIN');
+  assert(getInactivityTimeoutMs() === 0, 'clearPin should remove inactivity timeout');
 
   console.log('✅ local auth tests passed');
 }

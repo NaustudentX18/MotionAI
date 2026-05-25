@@ -11,8 +11,17 @@
 const LS_KEY = 'motionai_local_auth';
 const SS_KEY = 'motionai_pin_unlocked';
 const FAILURE_KEY = 'motionai_pin_failures';
+const INACTIVITY_KEY = 'motionai_pin_inactivity_timeout_ms';
 const MAX_FAILURES = 5;
 const LOCKOUT_MS = 60_000;
+
+export const INACTIVITY_TIMEOUT_OPTIONS_MS = [
+  0,
+  60_000,
+  5 * 60_000,
+  15 * 60_000,
+  30 * 60_000,
+] as const;
 
 interface AuthRecord {
   salt: string;
@@ -81,6 +90,7 @@ export async function verifyPin(pin: string): Promise<boolean> {
 /** Remove the stored PIN (disables lock) */
 export function clearPin(): void {
   localStorage.removeItem(LS_KEY);
+  localStorage.removeItem(INACTIVITY_KEY);
   sessionStorage.removeItem(SS_KEY);
   sessionStorage.removeItem(FAILURE_KEY);
 }
@@ -99,6 +109,31 @@ export function lock(): void {
 export function unlock(): void {
   sessionStorage.setItem(SS_KEY, '1');
   sessionStorage.removeItem(FAILURE_KEY);
+}
+
+/** Returns configured inactivity auto-lock timeout in milliseconds. 0 disables auto-lock. */
+export function getInactivityTimeoutMs(): number {
+  const raw = localStorage.getItem(INACTIVITY_KEY);
+  if (!raw) return 0;
+  const parsed = Number(raw);
+  return INACTIVITY_TIMEOUT_OPTIONS_MS.includes(parsed as typeof INACTIVITY_TIMEOUT_OPTIONS_MS[number])
+    ? parsed
+    : 0;
+}
+
+/** Stores the inactivity auto-lock timeout. Requires a PIN and one of the supported options. */
+export function setInactivityTimeoutMs(timeoutMs: number): void {
+  if (!hasPin()) {
+    throw new Error('Set a local PIN before enabling inactivity auto-lock');
+  }
+  if (!INACTIVITY_TIMEOUT_OPTIONS_MS.includes(timeoutMs as typeof INACTIVITY_TIMEOUT_OPTIONS_MS[number])) {
+    throw new Error('Unsupported inactivity auto-lock timeout');
+  }
+  if (timeoutMs === 0) {
+    localStorage.removeItem(INACTIVITY_KEY);
+    return;
+  }
+  localStorage.setItem(INACTIVITY_KEY, String(timeoutMs));
 }
 
 function loadFailureRecord(): FailureRecord {

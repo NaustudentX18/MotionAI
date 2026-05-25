@@ -72,7 +72,7 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 | L5 | Rule-builder/webhook reliability hardening | P1 | L1, L2 | 🟡 webhook path validation + replay guard done; automation history still future |
 | L6 | Canvas AI actions | P1 | L4 | 🟡 selection-to-task action done; e2e coverage still future |
 | L7 | Tauri/mobile hardening path | P1 | L1 | ☐ docs/plans exist; no new signed release pipeline in this pass |
-| L8 | Local auth lockscreen + PIN hardening | P1 | L1, L3 | 🟡 PIN lock, lockscreen, throttled failures, tests done; inactivity option still future |
+| L8 | Local auth lockscreen + PIN hardening | P1 | L1, L3 | 🟡 PIN lock, lockscreen, throttled failures, inactivity auto-lock, and tests done; auth state migration still future |
 | L9 | Schema/version/migration drift elimination | P1 | L1 | 🟡 reminder schema/docs/import/Yjs drift closed; broader fixtures remain future |
 | L10 | WebRTC stress + ICE/STUN UX + diagnostics | P1 | L1, L9 | 🟡 existing resilience/e2e tests passed and peer diagnostics added; ICE config UI still future |
 | L11 | README/ROADMAP/SHIPPED truth reconciliation | P1 | L2 | 🟡 roadmap/shipped/schema/webhook docs updated |
@@ -154,7 +154,7 @@ Create and execute a large, evidence-backed roadmap pass that subagents can keep
 - [x] Integrate lockscreen gating into app lifecycle
 - [x] Document local PIN threat model and limitations in UI copy
 - [x] Add retry throttling / short lockout policy
-- [ ] Add inactivity auto-lock option
+- [x] Add inactivity auto-lock option
 - [ ] Add auth state migration/versioning checks
 - [x] Add lock/unlock/session persistence tests
 

@@ -38,7 +38,7 @@ import { PresenceManager, type PresenceDiagnostics } from './lib/presence';
 import { PresenceIndicator } from './components/PresenceIndicator';
 import { keychain } from './lib/keychain';
 import { DEFAULT_REMINDER_SNOOZE_MINUTES, snoozeReminderDate, useReminders, type ReminderEvent } from './hooks/useReminders';
-import { hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
+import { getInactivityTimeoutMs, hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
 import { LockScreen } from './components/LockScreen';
 
 function createDefaultPage(): Page {
@@ -65,6 +65,7 @@ export default function App() {
   const [workspaceLoaded, setWorkspaceLoaded] = useState(false);
   const [workspaceLocked, setWorkspaceLocked] = useState(false);
   const [localAppLocked, setLocalAppLocked] = useState(() => isLocalAuthLocked());
+  const [localAuthSettingsVersion, setLocalAuthSettingsVersion] = useState(0);
   const [passphraseInput, setPassphraseInput] = useState('');
   const [passphraseError, setPassphraseError] = useState('');
   // Workspace state
@@ -134,6 +135,12 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    const handleSettingsChange = () => setLocalAuthSettingsVersion(version => version + 1);
+    window.addEventListener('motionai-local-auth-settings-change', handleSettingsChange);
+    return () => window.removeEventListener('motionai-local-auth-settings-change', handleSettingsChange);
+  }, []);
+
+  useEffect(() => {
     const handleLocalLock = () => {
       if (!hasPin()) return;
       lockLocalAuth();
@@ -142,6 +149,36 @@ export default function App() {
     window.addEventListener('motionai-local-lock', handleLocalLock);
     return () => window.removeEventListener('motionai-local-lock', handleLocalLock);
   }, []);
+
+  useEffect(() => {
+    if (localAppLocked || !hasPin()) return;
+
+    const timeoutMs = getInactivityTimeoutMs();
+    if (timeoutMs <= 0) return;
+
+    let timer: number | null = null;
+    const lockForInactivity = () => {
+      if (!hasPin()) return;
+      lockLocalAuth();
+      setLocalAppLocked(true);
+    };
+    const resetTimer = () => {
+      if (timer) window.clearTimeout(timer);
+      timer = window.setTimeout(lockForInactivity, timeoutMs);
+    };
+    const activityEvents = ['pointerdown', 'keydown', 'touchstart', 'visibilitychange', 'focus'];
+    const handleActivity = () => {
+      if (document.visibilityState === 'hidden') return;
+      resetTimer();
+    };
+
+    resetTimer();
+    activityEvents.forEach(eventName => window.addEventListener(eventName, handleActivity, { passive: true }));
+    return () => {
+      if (timer) window.clearTimeout(timer);
+      activityEvents.forEach(eventName => window.removeEventListener(eventName, handleActivity));
+    };
+  }, [localAppLocked, localAuthSettingsVersion]);
 
   // y-webrtc: real-time cross-device CRDT sync
   useEffect(() => {
