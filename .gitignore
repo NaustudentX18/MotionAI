@@ -24,3 +24,7 @@ src-tauri/gen/
 docs/CRDT-RESEARCH.md
 docs/TAURI-BUILD.md
 .tmp/
+
+# Test artifacts
+playwright-report/
+test-results/
