@@ -14,6 +14,7 @@
     "dev:all": "npm-run-all --parallel signaling dev",
     "verify:static": "node scripts/static-verify.mjs",
     "audit:secrets": "node scripts/audit-secrets.mjs",
+    "capture:media": "node scripts/capture-readme-media.mjs",
     "verify": "npm run verify:static && npm run audit:secrets && npm run lint && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:import-export && npm run test:local-auth && npm run test:task-reminders && npm run test:smoke && npm run test:migration && npm run test:reliability && npm run test:torture && npm run test:importers && npm run test:webrtc-resilience && npm run test:server-integration",
     "test": "npm run verify:static && npm run test:ai && npm run test:spellcheck && npm run test:workspace && npm run test:schema && npm run test:import-export && npm run test:local-auth && npm run test:task-reminders && npm run test:migration && npm run test:reliability && npm run test:webrtc-resilience",
     "test:ai": "npx tsx scripts/ai-contract-tests.ts",
