@@ -6,6 +6,7 @@ import {
 import { v4 as uuidv4 } from 'uuid';
 import { cn } from '../lib/utils';
 import { Page, Block } from '../types';
+import type { SearchResult } from '../lib/vectorStore';
 
 interface CommandPaletteProps {
   isOpen: boolean;
@@ -16,6 +17,9 @@ interface CommandPaletteProps {
   onInsertBlocks?: (blocks: Block[]) => void;
   currentPage?: Page | null;
   activeBlockId?: string | null;
+  vectorSearchReady?: boolean;
+  semanticHits?: SearchResult[];
+  onSemanticQuery?: (query: string) => void | Promise<void>;
 }
 
 const SUGGESTED_TOPICS = [
@@ -40,9 +44,13 @@ export function CommandPalette({
   onAiAction,
   onInsertBlocks,
   currentPage,
-  activeBlockId
+  activeBlockId,
+  vectorSearchReady = false,
+  semanticHits = [],
+  onSemanticQuery,
 }: CommandPaletteProps) {
   const [query, setQuery] = useState('');
+  const [selectedIndex, setSelectedIndex] = useState(0);
   const [isBrainstormingMode, setIsBrainstormingMode] = useState(false);
   const [brainstormTopic, setBrainstormTopic] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -152,7 +160,18 @@ export function CommandPalette({
   if (!isOpen) return null;
 
   const filteredPages = pages.filter(p => (p.title || 'Untitled').toLowerCase().includes(query.toLowerCase()));
-  
+
+  useEffect(() => {
+    if (!isOpen || !onSemanticQuery) return;
+    const t = window.setTimeout(() => onSemanticQuery(query), 300);
+    return () => window.clearTimeout(t);
+  }, [query, isOpen, onSemanticQuery]);
+
+  const previewPage = filteredPages[selectedIndex] ?? filteredPages[0] ?? null;
+  const previewExcerpt = previewPage?.blocks?.find((b) => b.content?.trim())?.content?.replace(/<[^>]*>/g, '').slice(0, 180);
+
+  const navigableCount = filteredPages.length + (semanticHits?.length ?? 0);
+
   const aiCommands = [
     { id: 'brainstorm', label: 'Brainstorm ideas...', icon: Sparkles, color: 'text-purple-600' },
     { id: 'summarize', label: 'Summarize text...', icon: MessageSquare, color: 'text-green-600' },
@@ -276,7 +295,8 @@ export function CommandPalette({
     }, 900);
 
     try {
-      const res = await fetch('/api/ai/generate', {
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -518,14 +538,28 @@ export function CommandPalette({
                 className="flex-1 bg-transparent border-none outline-none text-lg text-[#37352F] dark:text-gray-100 placeholder-[#37352f7a] dark:placeholder-gray-500"
                 placeholder="Search pages or ask AI..."
                 value={query}
-                onChange={e => setQuery(e.target.value)}
+                onChange={e => { setQuery(e.target.value); setSelectedIndex(0); }}
                 onKeyDown={e => {
                   if (e.key === 'Escape') onClose();
+                  if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    setSelectedIndex((i) => Math.min(i + 1, Math.max(0, navigableCount - 1)));
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSelectedIndex((i) => Math.max(i - 1, 0));
+                  }
+                  if (e.key === 'Enter' && filteredPages[selectedIndex]) {
+                    e.preventDefault();
+                    onSelectPage(filteredPages[selectedIndex].id);
+                    onClose();
+                  }
                 }}
               />
             </div>
 
-            <div className="max-h-[60vh] overflow-y-auto p-2">
+            <div className="flex max-h-[60vh] min-h-[200px]">
+            <div className="flex-1 overflow-y-auto p-2 border-r border-[#EBEBE9] dark:border-[#2F2F2F]">
               {/* Dynamic Page Extracted Commands Section */}
               {filteredExtracted.length > 0 && (
                 <div className="mb-5 animate-in slide-in-from-top-1 duration-200">
@@ -594,17 +628,47 @@ export function CommandPalette({
                 </div>
               )}
 
+              {vectorSearchReady && semanticHits.length > 0 && query.trim() && (
+                <div className="mb-4">
+                  <div className="px-3 py-1.5 text-[11px] font-bold text-cyan-600 dark:text-cyan-400 uppercase tracking-wider">Semantic matches</div>
+                  {semanticHits.map((hit, idx) => {
+                    const page = pages.find((p) => p.title === hit.pageId || p.id === hit.pageId);
+                    const pageId = page?.id;
+                    if (!pageId) return null;
+                    return (
+                      <button
+                        key={hit.id}
+                        onClick={() => { onSelectPage(pageId); onClose(); }}
+                        className={cn(
+                          'w-full text-left px-3 py-2 text-sm rounded-md cursor-pointer',
+                          selectedIndex === filteredPages.length + idx
+                            ? 'bg-cyan-50 dark:bg-cyan-950/30 text-cyan-900 dark:text-cyan-100'
+                            : 'hover:bg-[#F1F1F0] dark:hover:bg-[#252525]',
+                        )}
+                      >
+                        <span className="line-clamp-2 text-xs opacity-90">{hit.text}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+
               {filteredPages.length > 0 && (
                 <div>
                   <div className="px-3 py-1.5 text-[11px] font-bold text-[#37352f7a] dark:text-gray-500 uppercase tracking-wider">Pages</div>
-                  {filteredPages.map(page => (
+                  {filteredPages.map((page, idx) => (
                     <button
                       key={page.id}
                       onClick={() => {
                         onSelectPage(page.id);
                         onClose();
                       }}
-                      className="w-full flex items-center px-3 py-2 text-sm text-[#37352F] dark:text-gray-200 hover:bg-[#F1F1F0] dark:hover:bg-[#252525] rounded-md transition-colors cursor-pointer"
+                      className={cn(
+                        'w-full flex items-center px-3 py-2 text-sm rounded-md transition-colors cursor-pointer',
+                        selectedIndex === idx
+                          ? 'bg-purple-50 dark:bg-purple-950/30 text-purple-900 dark:text-purple-100'
+                          : 'text-[#37352F] dark:text-gray-200 hover:bg-[#F1F1F0] dark:hover:bg-[#252525]',
+                      )}
                     >
                       <span className="mr-3 text-[#37352f7a] dark:text-gray-500">{page.icon || <Hash size={16} />}</span>
                       {page.title || 'Untitled'}
@@ -613,11 +677,19 @@ export function CommandPalette({
                 </div>
               )}
 
-              {query && aiCommands.length === 0 && filteredPages.length === 0 && (
+              {query && aiCommands.length === 0 && filteredPages.length === 0 && semanticHits.length === 0 && (
                 <div className="p-8 text-center text-[#37352f7a] dark:text-gray-500 text-sm">
                   No results found for "{query}"
                 </div>
               )}
+            </div>
+            {previewPage && (
+              <div className="hidden md:flex w-48 shrink-0 flex-col p-3 bg-stone-50 dark:bg-stone-900/50">
+                <span className="text-2xl mb-2">{previewPage.icon || '📄'}</span>
+                <p className="text-sm font-bold truncate">{previewPage.title || 'Untitled'}</p>
+                <p className="text-[11px] text-stone-500 mt-2 line-clamp-6">{previewExcerpt || 'Empty page'}</p>
+              </div>
+            )}
             </div>
           </>
         )}

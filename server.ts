@@ -20,6 +20,7 @@ import {
   type ChatMessage,
 } from './src/lib/ai/providers';
 import { rateLimitMiddleware, shutdownRateLimitStore } from './src/lib/rateLimit';
+import { assertAllowedFetchUrl, SsrfBlockedError } from './src/lib/ssrfGuard';
 
 // ─── Presence Signaling Types & Store ────────────────────────────────────────
 
@@ -124,6 +125,7 @@ const webhookReplayStore = new Map<string, number>();
 const SIGNAL_TTL_MS = 30_000;
 const CLEANUP_INTERVAL_MS = 10_000;
 const WEBHOOK_REPLAY_TTL_MS = 5 * 60_000;
+const MAX_AI_PROMPT_CHARS = 32_000;
 
 // Non-blocking cleanup of expired signal entries
 setInterval(() => {
@@ -146,10 +148,8 @@ function getHeaderValue(value: string | string[] | undefined): string {
 function matchesMotionAiSecret(provided: string): boolean {
   const secret = process.env.MOTIONAI_API_SECRET;
   if (!secret) return true;
-
-  const providedDigest = crypto.createHash('sha256').update(provided).digest();
-  const secretDigest = crypto.createHash('sha256').update(secret).digest();
-  return provided.length === secret.length && crypto.timingSafeEqual(providedDigest, secretDigest);
+  if (!provided || provided.length !== secret.length) return false;
+  return crypto.timingSafeEqual(Buffer.from(provided, 'utf8'), Buffer.from(secret, 'utf8'));
 }
 
 function requireAuth(req: Request, res: Response, next: NextFunction): void {
@@ -187,10 +187,47 @@ function requireWebhookReplayProtection(req: Request, res: Response, next: NextF
   next();
 }
 
+function promptLengthExceeded(...parts: unknown[]): string | null {
+  let total = 0;
+  for (const part of parts) {
+    if (typeof part === 'string') total += part.length;
+    if (total > MAX_AI_PROMPT_CHARS) {
+      return `Prompt exceeds ${MAX_AI_PROMPT_CHARS} character limit.`;
+    }
+  }
+  return null;
+}
+
+function chatPromptLengthExceeded(message: unknown, history: unknown): string | null {
+  let total = 0;
+  if (typeof message === 'string') total += message.length;
+  if (Array.isArray(history)) {
+    for (const entry of history) {
+      if (entry && typeof entry === 'object' && typeof (entry as { text?: unknown }).text === 'string') {
+        total += (entry as { text: string }).text.length;
+      }
+    }
+  }
+  if (total > MAX_AI_PROMPT_CHARS) {
+    return `Prompt exceeds ${MAX_AI_PROMPT_CHARS} character limit.`;
+  }
+  return null;
+}
+
+function requestIdMiddleware(req: Request, res: Response, next: NextFunction): void {
+  const incoming = getHeaderValue(req.headers['x-request-id']);
+  const requestId = incoming || crypto.randomUUID();
+  res.setHeader('X-Request-Id', requestId);
+  (req as Request & { requestId?: string }).requestId = requestId;
+  next();
+}
+
 
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT || 3000);
+
+  app.set('trust proxy', 1);
 
   // Create uploads directory — outside the if/else so both branches can reference it
   const UPLOADS_DIR = path.join(process.cwd(), 'data', 'uploads');
@@ -198,6 +235,7 @@ async function startServer() {
     fs.mkdirSync(UPLOADS_DIR, { recursive: true });
   }
 
+  app.use(requestIdMiddleware);
   app.use(cors());
   app.use(express.json({ limit: '1mb' }));
 
@@ -224,6 +262,10 @@ async function startServer() {
 
   app.post('/api/ai/generate', rateLimitMiddleware, requireAuth, async (req, res) => {
     const { command, context, prompt } = req.body || {};
+    const lengthError = promptLengthExceeded(command, context, prompt);
+    if (lengthError) {
+      return res.status(413).json({ error: lengthError, keysReturned: false });
+    }
     const settings = extractAiSettings(req.body || {});
     const client = createAiClient(settings);
 
@@ -396,7 +438,7 @@ async function startServer() {
   });
 
   // Image Upload Endpoint
-  app.post('/api/upload/image', async (req, res) => {
+  app.post('/api/upload/image', rateLimitMiddleware, requireAuth, async (req, res) => {
     const { name, type, data } = req.body as { name?: string; type?: string; data?: string };
     if (!name || !type || !data) {
       res.status(400).json({ error: 'Missing name, type, or data' });
@@ -407,11 +449,16 @@ async function startServer() {
       res.status(400).json({ error: 'Invalid image type' });
       return;
     }
-    const ext = type.split('/')[1];
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const filepath = path.join(UPLOADS_DIR, filename);
+    const maxBytes = 4 * 1024 * 1024;
     try {
       const buffer = Buffer.from(data, 'base64');
+      if (buffer.length > maxBytes) {
+        res.status(413).json({ error: 'Image exceeds 4MB limit' });
+        return;
+      }
+      const ext = type.split('/')[1];
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      const filepath = path.join(UPLOADS_DIR, filename);
       fs.writeFileSync(filepath, buffer);
       res.json({ url: `/uploads/${filename}`, filename });
     } catch (err) {
@@ -430,6 +477,10 @@ async function startServer() {
     const { history, message } = req.body || {};
     if (!message) {
       return res.status(400).json({ error: 'Missing chat message' });
+    }
+    const lengthError = chatPromptLengthExceeded(message, history);
+    if (lengthError) {
+      return res.status(413).json({ error: lengthError, keysReturned: false });
     }
 
     try {
@@ -455,6 +506,63 @@ async function startServer() {
     } catch (err) {
       console.error('MotionAI Chat endpoint error:', safeErrorMessage(err, [settings.apiKey]));
       res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), provider: client.info, keysReturned: false });
+    }
+  });
+
+  app.post('/api/ai/chat/stream', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const settings = extractAiSettings(req.body || {});
+    const client = createAiClient(settings);
+    if (!client.info.enabled || !client.info.configured) {
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
+    }
+
+    const { history, message } = req.body || {};
+    if (!message) {
+      return res.status(400).json({ error: 'Missing chat message' });
+    }
+    const lengthError = chatPromptLengthExceeded(message, history);
+    if (lengthError) {
+      return res.status(413).json({ error: lengthError, keysReturned: false });
+    }
+
+    try {
+      const conversationHistory = Array.isArray(history) ? history : [];
+      const messages: ChatMessage[] = conversationHistory.map(h => ({
+        role: h.role === 'user' ? 'user' : 'model',
+        text: String(h.text || ''),
+      }));
+      messages.push({ role: 'user', text: String(message) });
+
+      const workspaceLabel =
+        typeof req.body?.workspaceName === 'string' && req.body.workspaceName.trim()
+          ? req.body.workspaceName.trim()
+          : 'your workspace';
+      const systemInstruction = `You are a helpful, professional Workspace Assistant named **MotionAI** for ${workspaceLabel}.
+- Answer user queries with professional poise and clarity in Markdown format.
+- Assist with content generation, summarization, general questions, and technical advice.
+- Keep your tone friendly, helpful, highly organized, and compact.`;
+
+      const text = await client.generateText(messages, { systemInstruction });
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      const tokens = text.match(/\S+\s*|\s+/g) || [text];
+      for (const token of tokens) {
+        res.write(`data: ${JSON.stringify({ delta: token })}\n\n`);
+        await new Promise((r) => setTimeout(r, 12));
+      }
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (err) {
+      console.error('MotionAI Chat stream error:', safeErrorMessage(err, [settings.apiKey]));
+      if (!res.headersSent) {
+        res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), keysReturned: false });
+      } else {
+        res.end();
+      }
     }
   });
 
@@ -514,6 +622,15 @@ async function startServer() {
 
       if (provider === 'local') {
         const endpoint = localEndpointUrl || process.env.LOCAL_TTS_URL || 'http://127.0.0.1:8888/v1/audio/speech';
+        try {
+          assertAllowedFetchUrl(endpoint, 'TTS local endpoint URL');
+        } catch (err) {
+          if (err instanceof SsrfBlockedError) {
+            res.status(400).json({ error: err.message, keysReturned: false });
+            return;
+          }
+          throw err;
+        }
         const isOpenAiCompatible = endpoint.includes('/audio/speech');
 
         let localResponse: globalThis.Response;
@@ -610,7 +727,7 @@ async function startServer() {
   });
 
   // POST /api/presence/signal — store a signal for the target peer (30s TTL)
-  app.post('/api/presence/signal', (req, res) => {
+  app.post('/api/presence/signal', rateLimitMiddleware, requireAuth, (req, res) => {
     const signal = req.body as OutgoingSignal;
     if (!signal || !signal.to || !signal.from || !signal.type || !signal.payload) {
       res.status(400).json({ error: 'Invalid signal body: expected OutgoingSignal' });

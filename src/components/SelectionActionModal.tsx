@@ -54,7 +54,8 @@ export function SelectionActionModal({ isOpen, onClose, selectedText }: Selectio
     setError(null);
     try {
       const today = new Date().toISOString().split('T')[0];
-      const res = await fetch('/api/ai/generate', {
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

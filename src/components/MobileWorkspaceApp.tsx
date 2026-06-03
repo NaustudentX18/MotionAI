@@ -43,6 +43,10 @@ import { cn } from '../lib/utils';
 import { getTrash, clearTrash } from '../lib/trashStore';
 import { useToast } from './ToastProvider';
 import { requestMicrophonePermission } from '../lib/device';
+import { motionAiFetch } from '../lib/apiClient';
+import { MobileRichPageFallback } from './mobile/MobileRichPageFallback';
+import { MobileBlockEditorView } from './mobile/MobileBlockEditorView';
+import { MotionAILogo } from './brand/MotionAILogo';
 
 interface MobileWorkspaceAppProps {
   pages: Page[];
@@ -56,9 +60,14 @@ interface MobileWorkspaceAppProps {
   onRestorePage: (page: Page) => void;
   onOpenSettings?: () => void;
   onOpenPages?: () => void;
+  onQuickCapture?: () => void;
+  onOpenDailyNote?: () => void;
+  focusBlockId?: string | null;
+  onFocusBlockUsed?: () => void;
   userEmail: string | null;
   /** True on real phones / installed PWA; false when previewing phone frame on desktop */
   isCompactDevice?: boolean;
+  onRequestDesktopView?: () => void;
 }
 
 export function MobileWorkspaceApp({
@@ -73,8 +82,13 @@ export function MobileWorkspaceApp({
   onRestorePage,
   onOpenSettings,
   onOpenPages,
+  onQuickCapture,
+  onOpenDailyNote,
+  focusBlockId,
+  onFocusBlockUsed,
   userEmail,
   isCompactDevice = true,
+  onRequestDesktopView,
 }: MobileWorkspaceAppProps) {
   const { showToast } = useToast();
   // Navigation tabs: 'home' | 'chats' | 'meeting' | 'inbox'
@@ -490,25 +504,20 @@ export function MobileWorkspaceApp({
         console.warn('Semantic search warning:', e);
       }
 
-      const res = await fetch('/api/ai/chat', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
-        body: JSON.stringify({
-          history: chatMessages.map(m => ({ role: m.role, text: m.text })),
-          message: query + extraContext,
-          workspaceName,
-        })
-      });
+      const streamId = uuidv4();
+      setChatMessages(prev => [...prev, { role: 'model', text: '', id: streamId }]);
 
-      if (res.ok) {
-        const data = await res.json();
-        setChatMessages(prev => [...prev, { role: 'model', text: data.text || 'No response from AI.', id: uuidv4() }]);
-      } else {
-        const errorText = await res.text();
-        setChatMessages(prev => [...prev, { role: 'model', text: `⚠️ Error generation: ${errorText || 'Server offline or API key missing.'}`, id: uuidv4() }]);
-      }
+      const { streamAiChat } = await import('../lib/ai/streamChat');
+      await streamAiChat({
+        history: chatMessages.map(m => ({ role: m.role, text: m.text })),
+        message: query + extraContext,
+        workspaceName,
+        onDelta: (chunk) => {
+          setChatMessages(prev =>
+            prev.map(m => (m.id === streamId ? { ...m, text: m.text + chunk } : m)),
+          );
+        },
+      });
     } catch (err: any) {
       setChatMessages(prev => [...prev, { role: 'model', text: `⚠️ Connection failure: ${err.message || 'Make sure the server is online.'}`, id: uuidv4() }]);
     } finally {
@@ -544,9 +553,8 @@ export function MobileWorkspaceApp({
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const res = await fetch('/api/ai/generate', {
+      const res = await motionAiFetch('/api/ai/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'custom',
           context: finalTranscriptText,
@@ -636,12 +644,27 @@ export function MobileWorkspaceApp({
   };
 
   useEffect(() => {
+    if (currentPageId) {
+      setMobileEditingPageId(currentPageId);
+    }
+  }, [currentPageId]);
+
+  useEffect(() => {
+    if (focusBlockId && mobileEditingPageId) {
+      onFocusBlockUsed?.();
+    }
+  }, [focusBlockId, mobileEditingPageId, onFocusBlockUsed]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
     if (action === 'ask-ai') {
       setIsAiChatOpen(true);
       setActiveTab('chats');
+    }
+    if (action === 'capture' && onQuickCapture) {
+      onQuickCapture();
     }
     if (action === 'new-page') {
       createNewMobilePage();
@@ -768,12 +791,13 @@ export function MobileWorkspaceApp({
                 {/* Home tab button */}
                 <button
                   onClick={() => { triggerHaptic(50); setActiveTab('home'); setMobileEditingPageId(null); }}
-                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-3 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'home'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
+                  {activeTab === 'home' ? <MotionAILogo size={18} /> : null}
                   <Home size={15} />
                   {activeTab === 'home' && <span>Home</span>}
                 </button>
@@ -1124,606 +1148,26 @@ export function MobileWorkspaceApp({
               </div>
 
             </div>
-          ) : (
-            
-            // VIEW: NESTED MOBILE EDITOR SUB-PAGE COMPONENT
-            <div 
-              onTouchStart={handleTouchStart}
-              onTouchEnd={handleTouchEnd}
-              className="flex-1 flex flex-col overflow-hidden bg-[#191919] animate-in slide-in-from-right duration-250 select-none"
-            >
-              
-              {/* Back & Title Header Row */}
-              <div 
-                style={{ paddingTop: 'calc(12px + env(safe-area-inset-top))' }}
-                className="pb-2 px-4 border-b border-stone-850 flex items-center justify-between shrink-0 select-none bg-stone-900/50 pt-safe"
-              >
-                <button 
-                  onClick={() => { setMobileEditingPageId(null); setAddingBlockType(null); }}
-                  className="flex items-center gap-1.5 px-2 py-1.5 bg-stone-850 hover:bg-stone-800 text-stone-300 font-bold text-xs rounded-lg transition-colors cursor-pointer"
-                >
-                  <ArrowLeft size={13} /> Home
-                </button>
-                
-                <div className="flex items-center gap-1">
-                  <span className="text-[18px] mr-1 flex-shrink-0">{activeMobilePage?.icon || '📄'}</span>
-                  <span className="text-xs font-bold text-stone-400 truncate max-w-28 font-mono">
-                    {activeMobilePage?.title || 'Editing...'}
-                  </span>
-                </div>
-
-                <button 
-                  onClick={() => {
-                    if (activeMobilePage) {
-                      onUpdatePage(activeMobilePage.id, {
-                        blocks: [...activeMobilePage.blocks, { id: uuidv4(), type: 'p', content: 'New text block via mobile edit' }]
-                      });
-                    }
-                  }}
-                  className="w-8 h-8 rounded-full hover:bg-stone-800 text-stone-400 hover:text-stone-200 flex items-center justify-center cursor-pointer transition-colors"
-                  title="Add Blocks"
-                >
-                  <Plus size={16} />
-                </button>
-              </div>
-
-              {/* Scrollable editor slate */}
-              <div className="flex-1 overflow-y-auto overscroll-contain scroll-smooth [webkit-overflow-scrolling:touch] px-5 py-4 space-y-4">
-                
-                {/* Editable Page Title and Icon */}
-                <div className="space-y-2 pb-2">
-                  {/* Emoji selection box */}
-                  <div className="text-4xl flex items-center gap-2 select-none">
-                    <button 
-                      onClick={() => {
-                        const emojis = ['📚', '👋', '💡', '🎨', '🚀', '📊', '⚡', '🤖', '📌', '🧠'];
-                        const nextEmoji = emojis[(emojis.indexOf(activeMobilePage?.icon || '') + 1) % emojis.length];
-                        if (activeMobilePage) onUpdatePage(activeMobilePage.id, { icon: nextEmoji });
-                      }}
-                      className="hover:scale-110 transition-transform cursor-pointer"
-                      title="Toggle Page Icon"
-                    >
-                      {activeMobilePage?.icon || '📄'}
-                    </button>
-                  </div>
-                  
-                  {/* TitleInput */}
-                  <input
-                    type="text"
-                    value={activeMobilePage?.title || ''}
-                    onChange={e => {
-                      if (activeMobilePage) onUpdatePage(activeMobilePage.id, { title: e.target.value });
-                    }}
-                    placeholder="Untitled Page"
-                    className="w-full text-2xl font-bold bg-transparent border-none text-white focus:ring-0 outline-none placeholder-stone-600 font-sans select-text"
-                  />
-                </div>
-
-                {/* Blocks rendering list */}
-                <div className="space-y-3 pr-1 text-left text-sm select-text">
-                  {activeMobilePage?.blocks.map((block) => (
-                    <div 
-                      key={block.id} 
-                      onTouchStart={(e) => handleBlockTouchStart(e, block.id)}
-                      onTouchEnd={(e) => handleBlockTouchEnd(e, block)}
-                      className={`relative group border border-transparent hover:border-[#2F2F2F] focus-within:border-[#2F2F2F] rounded-lg p-1.5 transition-all w-full ${
-                        swipedBlockId === block.id ? 'bg-stone-900/40 border-stone-805 pr-24' : ''
-                      }`}
-                    >
-                      {/* Swipe Quick Actions Tray for ultra-responsive mobile editing! */}
-                      {swipedBlockId === block.id && (
-                        <div className="absolute right-1 top-1 bottom-1 flex items-center gap-1 bg-[#1A1A1A] border border-purple-500/30 rounded-lg px-2 py-0.5 z-30 shadow-xl animate-in fade-in slide-in-from-right-12 duration-200">
-                          {/* Convert format block type button */}
-                          <button
-                            onClick={() => {
-                              if (activeMobilePage) {
-                                const types: Array<'p' | 'h1' | 'h2' | 'h3' | 'bullet' | 'todo' | 'quote' | 'callout'> = ['p', 'h1', 'h2', 'h3', 'bullet', 'todo', 'quote', 'callout'];
-                                const currTypeIdx = types.indexOf(block.type as any);
-                                const nextIndex = (currTypeIdx + 1) % types.length;
-                                const nextType = types[nextIndex];
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, type: nextType } : b)
-                                });
-                              }
-                            }}
-                            className="h-7 px-2 text-[10px] uppercase tracking-wider font-bold bg-purple-950/40 border border-purple-500/20 hover:bg-purple-800 text-purple-300 rounded flex items-center gap-1 transition-colors"
-                            title="Cycle format options"
-                          >
-                            <RefreshCw size={10} className="animate-spin-slow text-purple-400" />
-                            <span>Format</span>
-                          </button>
-
-                          {/* Delete Action button */}
-                          <button
-                            onClick={() => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.filter(b => b.id !== block.id)
-                                });
-                              }
-                              setSwipedBlockId(null);
-                            }}
-                            className="h-7 px-2.5 text-[10px] uppercase tracking-wider font-bold bg-red-950/40 border border-red-500/20 hover:bg-red-800 text-red-300 rounded flex items-center gap-1 transition-colors"
-                            title="Remove layout block"
-                          >
-                            <Trash2 size={10} />
-                            <span>Delete</span>
-                          </button>
-
-                          {/* Close button */}
-                          <button
-                            onClick={() => setSwipedBlockId(null)}
-                            className="h-7 w-7 bg-stone-800 hover:bg-stone-700 text-stone-400 hover:text-stone-200 rounded flex items-center justify-center transition-colors"
-                            title="Close tray"
-                          >
-                            <X size={11} />
-                          </button>
-                        </div>
-                      )}
-
-                      {/* Delete cross (fall-back mouse trigger) */}
-                      <button 
-                        onClick={() => {
-                          if (activeMobilePage) {
-                            onUpdatePage(activeMobilePage.id, {
-                              blocks: activeMobilePage.blocks.filter(b => b.id !== block.id)
-                            });
-                          }
-                        }}
-                        className="absolute right-1 top-2.5 opacity-0 group-hover:opacity-100 focus:opacity-100 text-stone-500 hover:text-stone-300 p-0.5 cursor-pointer rounded bg-stone-850 z-10 transition-opacity"
-                        title="Delete this block"
-                      >
-                        <X size={12} />
-                      </button>
-
-                      {/* Header 1 */}
-                      {block.type === 'h1' && (
-                        <div className="border-b border-stone-800/80 pb-0.5 w-full">
-                          <input
-                            type="text"
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="Heading 1"
-                            className="w-full bg-transparent border-none text-stone-100 font-bold text-[18px] focus:ring-0 outline-none placeholder-stone-700 font-sans p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                      {/* Header 2 */}
-                      {block.type === 'h2' && (
-                        <div className="w-full mt-1">
-                          <input
-                            type="text"
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="Heading 2"
-                            className="w-full bg-transparent border-none text-stone-200 font-semibold text-[16px] focus:ring-0 outline-none placeholder-stone-700 font-sans p-0 select-text"
-                          />
-                        </div>
-                      )}
-                      
-                      {/* Header 3 */}
-                      {block.type === 'h3' && (
-                        <div className="w-full mt-1.5">
-                          <input
-                            type="text"
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="Heading 3"
-                            className="w-full bg-transparent border-none text-purple-400 font-bold text-xs uppercase tracking-wider font-mono focus:ring-0 outline-none placeholder-stone-700 p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                      {/* Paragraph */}
-                      {block.type === 'p' && (
-                        <textarea
-                          value={block.content || ''}
-                          onChange={e => {
-                            if (activeMobilePage) {
-                              onUpdatePage(activeMobilePage.id, {
-                                blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                              });
-                            }
-                          }}
-                          placeholder="Tap to type text..."
-                          rows={Math.max(1, Math.ceil((block.content?.length || 0) / 36))}
-                          className="w-full bg-transparent border-none text-stone-300 text-sm leading-relaxed font-sans focus:ring-0 outline-none placeholder-stone-700 resize-none overflow-hidden p-0 select-text"
-                        />
-                      )}
-
-                      {/* Bulleted list element */}
-                      {block.type === 'bullet' && (
-                        <div className="flex items-start gap-2 w-full">
-                          <span className="text-purple-500 font-bold font-mono select-none pt-0.5">•</span>
-                          <textarea
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="Bulleted list item"
-                            rows={Math.max(1, Math.ceil((block.content?.length || 0) / 34))}
-                            className="flex-1 bg-transparent border-none text-stone-300 text-sm leading-normal focus:ring-0 outline-none placeholder-stone-700 resize-none overflow-hidden p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                      {/* Checked / To-do list item */}
-                      {block.type === 'todo' && (
-                        <div className="flex items-start gap-2.5 w-full">
-                          <button 
-                            onClick={() => {
-                              triggerHaptic(50);
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, checked: !b.checked } : b)
-                                });
-                              }
-                            }}
-                            className="cursor-pointer pt-0.5 select-none"
-                          >
-                            {block.checked ? (
-                              <CheckSquare size={16} className="text-purple-500 flex-shrink-0" />
-                            ) : (
-                              <Square size={16} className="text-stone-600 hover:text-stone-400 flex-shrink-0" />
-                            )}
-                          </button>
-                          <textarea
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            rows={Math.max(1, Math.ceil((block.content?.length || 0) / 32))}
-                            placeholder="To-do list item"
-                            className={`flex-1 bg-transparent border-none text-sm leading-normal focus:ring-0 outline-none placeholder-stone-700 resize-none overflow-hidden p-0 select-text ${block.checked ? 'text-stone-600 line-through' : 'text-stone-200'}`}
-                          />
-                        </div>
-                      )}
-
-                      {/* Callout box */}
-                      {block.type === 'callout' && (
-                        <div className="p-3 bg-purple-950/10 border border-purple-900/20 text-stone-300 text-xs rounded-xl flex gap-2.5 items-start w-full">
-                          <span className="text-sm select-none pt-0.5">⚡</span>
-                          <textarea
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="Callout info block text"
-                            rows={Math.max(1, Math.ceil((block.content?.length || 0) / 34))}
-                            className="flex-1 bg-transparent border-none font-mono text-xs text-stone-300 leading-relaxed focus:ring-0 outline-none placeholder-stone-700 resize-none overflow-hidden p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                      {/* Quote box */}
-                      {block.type === 'quote' && (
-                        <div className="border-l-2 border-purple-500 pl-3.5 my-1.5 flex items-start w-full">
-                          <textarea
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="Quote text block"
-                            rows={Math.max(1, Math.ceil((block.content?.length || 0) / 34))}
-                            className="flex-1 bg-transparent border-none font-sans text-xs italic text-stone-400 leading-relaxed focus:ring-0 outline-none placeholder-stone-705 resize-none overflow-hidden p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                      {/* Divider block */}
-                      {block.type === 'divider' && (
-                        <div className="h-px w-full bg-stone-850 my-2 select-none" />
-                      )}
-
-                      {/* Premium AI Blocks (ai-summary, ai-draft, ai-rewrite) */}
-                      {(block.type === 'ai-summary' || block.type === 'ai-draft' || block.type === 'ai-rewrite') && (
-                        <div className="w-full border border-purple-950/40 bg-purple-950/10 p-3 rounded-xl my-1.5 space-y-1.5 flex flex-col">
-                          <div className="flex items-center justify-between text-[10px] pb-1.5 border-b border-purple-900/20 select-none">
-                            <div className="flex items-center gap-1 text-purple-400 font-bold uppercase tracking-wider">
-                              <Sparkles size={11} className="animate-pulse" />
-                              <span>
-                                {block.type === 'ai-summary' && 'AI Summary'}
-                                {block.type === 'ai-draft' && 'AI Draft'}
-                                {block.type === 'ai-rewrite' && 'AI Rewrite'}
-                              </span>
-                            </div>
-                          </div>
-                          <textarea
-                            value={block.content || ''}
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                });
-                              }
-                            }}
-                            placeholder="AI Response Contents..."
-                            rows={Math.max(1, Math.ceil((block.content?.length || 0) / 34))}
-                            className="w-full bg-transparent border-none text-xs text-stone-300 leading-relaxed font-mono focus:ring-0 outline-none placeholder-stone-700 resize-none overflow-hidden p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                      {/* Code Block rendering on mobile */}
-                      {block.type === 'code' && (
-                        <div className="w-full bg-[#0D0D0E] border border-stone-800/80 rounded-xl p-3 my-2 font-mono text-xs text-stone-200">
-                          {/* Toolbar for language and copying */}
-                          <div className="flex items-center justify-between pb-2 mb-2 border-b border-stone-800/40 select-none">
-                            <select
-                              value={block.language || 'javascript'}
-                              onChange={e => {
-                                if (activeMobilePage) {
-                                  onUpdatePage(activeMobilePage.id, {
-                                    blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, language: e.target.value } : b)
-                                  });
-                                }
-                              }}
-                              className="bg-stone-900 border border-stone-850 text-[10px] text-stone-300 rounded px-1.5 py-1 outline-none font-sans font-bold cursor-pointer"
-                            >
-                              <option value="javascript">JavaScript</option>
-                              <option value="typescript">TypeScript</option>
-                              <option value="html">HTML/XML</option>
-                              <option value="css">CSS</option>
-                              <option value="python">Python</option>
-                              <option value="rust">Rust</option>
-                              <option value="go">Go</option>
-                              <option value="sql">SQL</option>
-                              <option value="bash">Bash/Shell</option>
-                              <option value="json">JSON</option>
-                              <option value="cpp">C++</option>
-                              <option value="java">Java</option>
-                              <option value="plaintext">Plain Text</option>
-                            </select>
-
-                            <button
-                              onClick={() => {
-                                navigator.clipboard.writeText(block.content || '');
-                              }}
-                              className="text-[10px] bg-stone-850 hover:bg-stone-850 border border-stone-800 px-2.5 py-1 rounded text-stone-400 active:bg-stone-900 transition-colors cursor-pointer font-sans font-bold uppercase tracking-wider flex items-center gap-1"
-                            >
-                              <Copy size={10} />
-                              <span>Copy Code</span>
-                            </button>
-                          </div>
-
-                          {/* Textarea Editor */}
-                          <textarea
-                            value={block.content || ''}
-                            placeholder="// Type code here..."
-                            onChange={e => {
-                              if (activeMobilePage) {
-                                    onUpdatePage(activeMobilePage.id, {
-                                      blocks: activeMobilePage.blocks.map(b => b.id === block.id ? { ...b, content: e.target.value } : b)
-                                    });
-                              }
-                            }}
-                            rows={Math.max(3, (block.content || '').split('\n').length)}
-                            className="w-full bg-transparent border-none text-xs text-stone-200 leading-relaxed font-mono focus:ring-0 outline-none placeholder-stone-700 resize-none p-0 select-text"
-                          />
-                        </div>
-                      )}
-
-                    </div>
-                  ))}
-                </div>
-
-                {/* Quick Add Custom Block Drawer inside Editor */}
-                <div className="pt-6 border-t border-stone-850">
-                  {!addingBlockType ? (
-                    <div className="flex flex-wrap items-center gap-2">
-                      <span className="text-[10px] text-stone-500 font-bold uppercase tracking-wider font-mono block w-full py-1">Quick Add:</span>
-                      <button
-                        onClick={() => setAddingBlockType('p')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Text
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('todo')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + To-do
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('bullet')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Bullet
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('h1')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Head 1
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('h2')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Head 2
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('h3')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Head 3
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('quote')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Quote
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('callout')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Callout
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (activeMobilePage) {
-                            onUpdatePage(activeMobilePage.id, {
-                              blocks: [...activeMobilePage.blocks, { id: uuidv4(), type: 'divider', content: '' }]
-                            });
-                          }
-                        }}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Divider
-                      </button>
-                      <button
-                        onClick={() => {
-                          if (activeMobilePage) {
-                            onUpdatePage(activeMobilePage.id, {
-                              blocks: [...activeMobilePage.blocks, { id: uuidv4(), type: 'code', content: '', language: 'javascript' }]
-                            });
-                          }
-                        }}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-stone-850 hover:bg-stone-800 text-[#E3E3E3] rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + Code
-                      </button>
-                      <button
-                        onClick={() => setAddingBlockType('ai-summary')}
-                        className="min-h-11 min-w-11 px-3 py-2 bg-purple-950/35 hover:bg-purple-950/50 border border-purple-900/30 text-purple-300 rounded-lg text-xs font-semibold cursor-pointer transition-colors flex items-center justify-center"
-                      >
-                        + AI Summary
-                      </button>
-                    </div>
-                  ) : (
-                    <div className="bg-stone-900 rounded-xl p-3 border border-stone-800 space-y-3 animate-in slide-in-from-bottom-2">
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs font-bold text-stone-400 uppercase font-mono">New {addingBlockType} block</span>
-                        <button onClick={() => setAddingBlockType(null)} className="text-stone-500 hover:text-stone-300 cursor-pointer">
-                          <X size={14} />
-                        </button>
-                      </div>
-                      
-                      <div className="relative flex items-center w-full">
-                        <input 
-                          type="text"
-                          value={mobileNewBlockText}
-                          onChange={e => setMobileNewBlockText(e.target.value)}
-                          placeholder={isEditorVoiceActive ? "🎙️ Dictating to block..." : "Type text contents..."}
-                          className="w-full bg-stone-800 border border-stone-700 outline-none rounded-lg p-2 pr-9 text-xs text-white placeholder-stone-500 font-sans"
-                          onKeyDown={e => {
-                            if (e.key === 'Enter') {
-                              if (activeMobilePage && mobileNewBlockText.trim()) {
-                                onUpdatePage(activeMobilePage.id, {
-                                  blocks: [...activeMobilePage.blocks, {
-                                    id: uuidv4(),
-                                    type: addingBlockType as any,
-                                    content: mobileNewBlockText,
-                                    checked: false
-                                  }]
-                                });
-                                setMobileNewBlockText("");
-                                setAddingBlockType(null);
-                              }
-                            }
-                          }}
-                        />
-                        <button
-                          type="button"
-                          onClick={handleEditorVoiceDictate}
-                          className={`absolute right-2 p-1.5 rounded-full transition-all cursor-pointer ${
-                            isEditorVoiceActive 
-                              ? "bg-red-500 text-white animate-pulse shadow-sm" 
-                              : "text-stone-450 hover:text-purple-400 hover:bg-stone-750"
-                          }`}
-                          title={isEditorVoiceActive ? "Stop transcription" : "Speak to editor block"}
-                        >
-                          <Mic size={13} />
-                        </button>
-                      </div>
-                      
-                      <div className="flex justify-end gap-1.5 pt-1">
-                        <button 
-                          onClick={() => setAddingBlockType(null)}
-                          className="px-2.5 py-1 bg-stone-800 hover:bg-stone-750 text-stone-400 text-[10.5px] rounded-md cursor-pointer"
-                        >
-                          Cancel
-                        </button>
-                        <button 
-                          onClick={() => {
-                            if (activeMobilePage && mobileNewBlockText.trim()) {
-                              onUpdatePage(activeMobilePage.id, {
-                                blocks: [...activeMobilePage.blocks, {
-                                  id: uuidv4(),
-                                  type: addingBlockType as any,
-                                  content: mobileNewBlockText,
-                                  checked: false
-                                }]
-                              });
-                              setMobileNewBlockText("");
-                              setAddingBlockType(null);
-                            }
-                          }}
-                          className="px-3 py-1 bg-purple-650 hover:bg-purple-700 text-white font-bold text-[10.5px] rounded-md cursor-pointer"
-                        >
-                          Save Block
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-              </div>
-
-              {/* Dedicated mobile back menu bar */}
-              <div 
-                style={{ paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}
-                className="pt-3 px-6 border-t border-stone-850 flex items-center justify-between bg-stone-900/80 shrink-0 pb-safe"
-              >
-                <button 
-                  onClick={() => { setMobileEditingPageId(null); setAddingBlockType(null); }}
-                  className="px-4 py-2 bg-stone-800 hover:bg-stone-750 font-bold text-xs text-stone-300 rounded-lg flex items-center gap-1.5 cursor-pointer"
-                >
-                  <ArrowLeft size={13} /> Exit Page to Menu
-                </button>
-                <div className="text-[10px] text-stone-500 font-mono font-bold uppercase select-none">
-                  autosaved
-                </div>
-              </div>
-
-            </div>
-          )}
+          ) : activeMobilePage?.pageType && activeMobilePage.pageType !== 'block' ? (
+            <MobileRichPageFallback
+              page={activeMobilePage}
+              onBack={() => {
+                setMobileEditingPageId(null);
+                setAddingBlockType(null);
+              }}
+              onOpenDesktopHint={onRequestDesktopView}
+            />
+          ) : activeMobilePage ? (
+            <MobileBlockEditorView
+              page={activeMobilePage}
+              onUpdatePage={onUpdatePage}
+              onBack={() => {
+                setMobileEditingPageId(null);
+                setAddingBlockType(null);
+              }}
+              onLockWorkspace={() => window.dispatchEvent(new CustomEvent('motionai-local-lock'))}
+            />
+          ) : null}
 
           {/* 2. OVERLAY: SWITCH WORKSPACE & PROFILE DROPDOWN (Image 2) */}
           {isWorkspaceMenuOpen && (
@@ -1851,12 +1295,9 @@ export function MobileWorkspaceApp({
                   <Clock size={16} />
                 </button>
 
-                {/* Center logo label */}
-                <div className="flex flex-col items-center select-none scale-102">
-                  <div className="w-7 h-7 bg-white text-black font-sans font-bold text-[13px] rounded-full flex items-center justify-center shadow-lg border border-white/20 select-none animate-bounce">
-                    👁
-                  </div>
-                  <span className="text-[11.5px] font-bold tracking-widest text-[#E3E3E3] uppercase font-mono mt-1 select-none">MotionAI</span>
+                <div className="flex flex-col items-center select-none">
+                  <MotionAILogo size={36} />
+                  <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase font-mono mt-1 select-none">MotionAI</span>
                 </div>
 
                 <button 
@@ -2376,14 +1817,52 @@ export function MobileWorkspaceApp({
 
         </div>
 
+        {!mobileEditingPageId && (
+          <nav
+            className="shrink-0 border-t border-stone-800 bg-stone-950/95 backdrop-blur-md flex items-stretch justify-around px-1 z-30"
+            style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+          >
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(40); setActiveTab('home'); setMobileEditingPageId(null); }}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === 'home' ? 'text-white' : 'text-stone-500'}`}
+            >
+              <Home size={20} />
+              Home
+            </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(40); setIsSearchOverlayOpen(true); }}
+              className="flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold text-stone-500"
+            >
+              <Search size={20} />
+              Search
+            </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(50); onQuickCapture?.(); }}
+              className="flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-bold text-purple-400"
+            >
+              <PlusCircle size={22} className="text-purple-500" />
+              Capture
+            </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(40); setIsAiChatOpen(true); setActiveTab('chats'); }}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${isAiChatOpen ? 'text-purple-300' : 'text-stone-500'}`}
+            >
+              <Sparkles size={20} />
+              AI
+            </button>
+          </nav>
+        )}
+
         {/* iOS standalone PWA installer instructions dialog overlay */}
         {showIOSInstallDialog && (
           <div className="absolute bottom-4 left-4 right-4 bg-stone-900 border border-stone-850 rounded-2xl p-4 shadow-2xl z-50 text-left space-y-3 animate-in slide-in-from-bottom-5 duration-300">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white font-sans font-extrabold text-[15px] select-none">
-                  M
-                </div>
+                <MotionAILogo size={32} />
                 <div>
                   <h4 className="text-xs font-bold text-stone-200">Install MotionAI</h4>
                   <p className="text-[10px] text-stone-500">Add to Home Screen for fullscreen + mic access</p>

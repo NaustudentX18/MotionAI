@@ -8,13 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Page, Block, PageType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { BlockEditor } from './components/BlockEditor';
-import { CanvasEditor } from './components/CanvasEditor';
 import { DatabaseBlock } from './components/blocks/DatabaseBlock';
 import { runAiFormula } from './lib/ai/AiFormulaEngine';
-import { CommandPalette } from './components/CommandPalette';
-import { DriveModal } from './components/DriveModal';
-import { TasksModal } from './components/TasksModal';
-import { MeetingParserModal } from './components/MeetingParserModal';
 import { PageAddons } from './components/PageAddons';
 import { SpaceFolderPicker } from './components/SpaceFolderPicker';
 import { WorkspaceTemplate, instantiateTemplate } from './lib/workspaceTemplates';
@@ -28,8 +23,27 @@ import { PwaCapabilityBanner } from './components/PwaCapabilityBanner';
 const MobileWorkspaceApp = lazy(() =>
   import('./components/MobileWorkspaceApp').then(m => ({ default: m.MobileWorkspaceApp }))
 );
-import { MotionAIHub } from './components/MotionAIHub';
-import { SettingsModal } from './components/SettingsModal';
+const MotionAIHub = lazy(() =>
+  import('./components/MotionAIHub').then(m => ({ default: m.MotionAIHub }))
+);
+const SettingsModal = lazy(() =>
+  import('./components/SettingsModal').then(m => ({ default: m.SettingsModal }))
+);
+const CommandPalette = lazy(() =>
+  import('./components/CommandPalette').then(m => ({ default: m.CommandPalette }))
+);
+const CanvasEditor = lazy(() =>
+  import('./components/CanvasEditor').then(m => ({ default: m.CanvasEditor }))
+);
+const DriveModal = lazy(() =>
+  import('./components/DriveModal').then(m => ({ default: m.DriveModal }))
+);
+const TasksModal = lazy(() =>
+  import('./components/TasksModal').then(m => ({ default: m.TasksModal }))
+);
+const MeetingParserModal = lazy(() =>
+  import('./components/MeetingParserModal').then(m => ({ default: m.MeetingParserModal }))
+);
 import { TaskPropertiesPanel } from './components/tasks/TaskPropertiesPanel';
 import { ReminderActionToast } from './components/tasks/ReminderActionToast';
 import { DashboardWidget } from './components/dashboard/DashboardWidget';
@@ -42,6 +56,7 @@ import { cn } from './lib/utils';
 import { loadWorkspace, saveWorkspace, isWorkspaceLocked, setWorkspaceKey, clearWorkspaceKey, savePage, deletePage as deletePageFromStore, addPage as addPageToStore, setCurrentPageId as setCurrentPageIdInStore, reloadWorkspaceFromLegacyStore, listWorkspaces, createWorkspace, deleteWorkspace, renameWorkspace, updateLastOpened, getDefaultWorkspace, WorkspaceMeta } from './lib/persistence';
 import { getYDoc, yDocToSnapshot, destroyYjs } from './lib/yjs';
 import { loadSettings } from './lib/settings';
+import { MotionAILogo } from './components/brand/MotionAILogo';
 import { backlinksIndex } from './lib/backlinksIndex';
 import { PresenceManager, type PresenceDiagnostics } from './lib/presence';
 import { PresenceIndicator } from './components/PresenceIndicator';
@@ -49,6 +64,12 @@ import { keychain } from './lib/keychain';
 import { DEFAULT_REMINDER_SNOOZE_MINUTES, snoozeReminderDate, useReminders, type ReminderEvent } from './hooks/useReminders';
 import { getInactivityTimeoutMs, hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
 import { LockScreen } from './components/LockScreen';
+import { appendBlockToDailyPage, getOrCreateDailyPage } from './lib/dailyNote';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
+import { SyncStatusDot } from './components/SyncStatusDot';
+import { ShortcutHelpModal } from './components/ShortcutHelpModal';
+import { BacklinksRail } from './components/BacklinksRail';
+import type { SearchResult } from './lib/vectorStore';
 
 function createDefaultPage(): Page {
   return {
@@ -189,33 +210,6 @@ export default function App() {
     };
   }, [localAppLocked, localAuthSettingsVersion]);
 
-  // y-webrtc: real-time cross-device CRDT sync
-  useEffect(() => {
-    if (!workspaceLoaded) return;
-
-    let rtcProvider: import('y-webrtc').WebrtcProvider | null = null;
-
-    import('y-webrtc').then(({ WebrtcProvider }) => {
-      // Signaling servers — first one is self-hosted (local), rest are fallbacks.
-      // y-webrtc tries them in order and automatically fails over if one is unreachable.
-      const signalingList = (
-        import.meta.env.VITE_SIGNALING_URLS ||
-        import.meta.env.VITE_SIGNALING_URL ||
-        'ws://localhost:3005'
-      ).split(',').map((s: string) => s.trim()).filter(Boolean);
-
-      rtcProvider = new WebrtcProvider('motionai-workspace-v1', getYDoc(), {
-        signaling: signalingList,
-      });
-    }).catch(err => {
-      console.warn('[y-webrtc] Failed to initialize:', err);
-    });
-
-    return () => {
-      rtcProvider?.destroy();
-    };
-  }, [workspaceLoaded]);
-
   // Y.Doc observer: sync remote changes (cross-tab / y-webrtc) back to React state
   useEffect(() => {
     if (!workspaceLoaded) return;
@@ -276,6 +270,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [linksRailOpen, setLinksRailOpen] = useState(true);
+  const [semanticHits, setSemanticHits] = useState<SearchResult[]>([]);
   const [driveModalOpen, setDriveModalOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [meetingParserOpen, setMeetingParserOpen] = useState(false);
@@ -317,6 +314,7 @@ export default function App() {
         document.documentElement.classList.remove('reduced-motion');
       }
     };
+    handleChange(mediaQuery);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
@@ -325,6 +323,39 @@ export default function App() {
     document.documentElement.classList.toggle('pwa-compact-shell', compactShell);
     return () => document.documentElement.classList.remove('pwa-compact-shell');
   }, [compactShell]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('Service worker registration failed:', err);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceLoaded) return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    if (!action) return;
+    if (action === 'new-page') {
+      addPage();
+      setViewMode(compactShell ? 'mobile' : 'desktop');
+    } else if (action === 'ask-ai') {
+      setPaletteOpen(true);
+    } else if (action === 'capture') {
+      const text = params.get('text') ?? '';
+      const { pageId, blockId } = appendBlockToDailyPage(
+        pages,
+        handleAddNewPageObj,
+        (id, blocks) => updatePageById(id, { blocks }),
+        text,
+      );
+      setCurrentPageId(pageId);
+      setCurrentPageIdInStore(pageId);
+      setFocusAfterInsert(blockId);
+      setViewMode(compactShell ? 'mobile' : 'desktop');
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }, [workspaceLoaded, compactShell, pages]);
 
   const handleReminderFired = useCallback((reminder: ReminderEvent) => {
     console.info('[reminder]', reminder.title, reminder.body);
@@ -357,6 +388,33 @@ export default function App() {
   // WebRTC presence state
   const [presencePeers, setPresencePeers] = useState<Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>>([]);
   const syncStatus = useSyncStatus();
+
+  // y-webrtc: real-time cross-device CRDT sync (disabled when E2EE locked — no shared key protocol yet)
+  useEffect(() => {
+    if (!workspaceLoaded || !collaborationActive) return;
+    if (workspaceLocked || syncStatus.encryptionLocked) return;
+
+    let rtcProvider: import('y-webrtc').WebrtcProvider | null = null;
+
+    import('y-webrtc').then(({ WebrtcProvider }) => {
+      const signalingList = (
+        import.meta.env.VITE_SIGNALING_URLS ||
+        import.meta.env.VITE_SIGNALING_URL ||
+        'ws://localhost:3005'
+      ).split(',').map((s: string) => s.trim()).filter(Boolean);
+
+      rtcProvider = new WebrtcProvider('motionai-workspace-v1', getYDoc(), {
+        signaling: signalingList,
+      });
+    }).catch(err => {
+      console.warn('[y-webrtc] Failed to initialize:', err);
+    });
+
+    return () => {
+      rtcProvider?.destroy();
+    };
+  }, [workspaceLoaded, collaborationActive, workspaceLocked, syncStatus.encryptionLocked]);
+
   const [movePageId, setMovePageId] = useState<string | null>(null);
   const [presenceAvailable, setPresenceAvailable] = useState(false);
   const [presenceDiagnostics, setPresenceDiagnostics] = useState<PresenceDiagnostics | null>(null);
@@ -423,18 +481,6 @@ export default function App() {
     if (!presenceManagerRef.current || !currentPageId) return;
     presenceManagerRef.current.updatePage(currentPageId);
   }, [currentPageId]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle Ctrl+K or Cmd+K
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setPaletteOpen(topLevel => !topLevel);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
 
   // Listen for open-settings event from BlockEditor error handling
   useEffect(() => {
@@ -538,6 +584,57 @@ export default function App() {
     setCurrentPageId(newPage.id);
     setCurrentPageIdInStore(newPage.id);
   };
+
+  const openDailyJournal = useCallback(() => {
+    const page = getOrCreateDailyPage(pages, handleAddNewPageObj);
+    setCurrentPageId(page.id);
+    setCurrentPageIdInStore(page.id);
+    if (viewMode === 'hub') setViewMode('desktop');
+    if (window.innerWidth < 768) setViewMode('mobile');
+    setSidebarOpen(false);
+  }, [pages, viewMode]);
+
+  const runQuickCapture = useCallback(() => {
+    const { pageId, blockId } = appendBlockToDailyPage(
+      pages,
+      handleAddNewPageObj,
+      (id, blocks) => updatePageById(id, { blocks }),
+      '',
+    );
+    setCurrentPageId(pageId);
+    setCurrentPageIdInStore(pageId);
+    setFocusAfterInsert(blockId);
+    setViewMode(compactShell ? 'mobile' : 'desktop');
+  }, [pages, compactShell, updatePageById]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((topLevel) => !topLevel);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        openDailyJournal();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        runQuickCapture();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setSettingsModalOpen(true);
+      }
+      if (!typing && e.key === '?' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openDailyJournal, runQuickCapture]);
 
   const movePageToTrash = useCallback((id: string) => {
     const page = pages.find(p => p.id === id);
@@ -659,28 +756,34 @@ export default function App() {
     }
   };
 
-  const handleSaveSnapshot = () => {
-    setLastSaveNow();
-
-  // Move page to new parent
   const handleMovePage = (pageId: string) => {
     setMovePageId(pageId);
   };
 
   const handleMoveConfirm = (pageId: string, newParentId: string | null) => {
-    setPages(prev => prev.map(p =>
-      p.id === pageId ? { ...p, parentId: newParentId, updatedAt: Date.now() } : p
-    ));
+    setPages(prev => {
+      const updated = prev.map(p =>
+        p.id === pageId ? { ...p, parentId: newParentId, updatedAt: Date.now() } : p
+      );
+      const changed = updated.find(p => p.id === pageId);
+      if (changed) savePage(changed);
+      return updated;
+    });
     setMovePageId(null);
   };
 
   const handleInstantiateTemplate = (template: WorkspaceTemplate) => {
     const newPages = instantiateTemplate(template);
     setPages(prev => [...prev, ...newPages]);
+    newPages.forEach(p => addPageToStore(p));
     if (newPages.length > 0) {
       setCurrentPageId(newPages[0].id);
+      setCurrentPageIdInStore(newPages[0].id);
     }
   };
+
+  const handleSaveSnapshot = () => {
+    setLastSaveNow();
     if (!currentPageId) return;
     const targetPage = pages.find(p => p.id === currentPageId);
     if (!targetPage) return;
@@ -918,11 +1021,25 @@ export default function App() {
     return <LockScreen onUnlocked={() => setLocalAppLocked(false)} />;
   }
 
+  const workspaceContextValue = useMemo(
+    () => ({
+      pages,
+      currentPageId,
+      currentPage: currentPage ?? null,
+      currentWorkspace,
+      setCurrentPageId,
+      updatePageById,
+    }),
+    [pages, currentPageId, currentPage, currentWorkspace, updatePageById],
+  );
+
   return (
     <SettingsProvider>
+    <WorkspaceProvider value={workspaceContextValue}>
     <OfflineBanner />
     {compactShell && <PwaCapabilityBanner />}
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
+      <Suspense fallback={null}>
       <CommandPalette
          isOpen={paletteOpen}
          onClose={() => setPaletteOpen(false)}
@@ -930,6 +1047,16 @@ export default function App() {
          onSelectPage={setCurrentPageId}
          currentPage={currentPage}
          activeBlockId={activeBlockId}
+         vectorSearchReady={vectorSearchReady}
+         semanticHits={semanticHits}
+         onSemanticQuery={async (q) => {
+           if (!vectorSearchReady || !q.trim()) {
+             setSemanticHits([]);
+             return;
+           }
+           const { semanticSearch } = await import('./lib/vectorStore');
+           setSemanticHits(await semanticSearch(q, 6));
+         }}
          onAiAction={(action) => {
            // Basic handle AI action by emitting a custom event the editor can listen to
            window.dispatchEvent(new CustomEvent('ai-command', { detail: { action } }));
@@ -966,6 +1093,7 @@ export default function App() {
            });
          }}
       />
+      </Suspense>
     
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && !compactShell && (
@@ -999,6 +1127,8 @@ export default function App() {
            }}
            onAddPage={addPage}
            onDeletePage={deletePageById}
+           onMovePage={handleMovePage}
+           onInstantiateTemplate={handleInstantiateTemplate}
            userEmail={user?.email || null}
            onLogin={handleLogin}
            onLogout={logout}
@@ -1009,6 +1139,7 @@ export default function App() {
            onCreateWorkspace={handleCreateWorkspace}
            onDeleteWorkspace={handleDeleteWorkspace}
            onRenameWorkspace={handleRenameWorkspace}
+           onOpenDailyNote={openDailyJournal}
          />
       </div>
       
@@ -1017,9 +1148,11 @@ export default function App() {
         {!compactShell && (
         <header className="sticky top-0 z-10 flex items-center px-4 bg-white/80 backdrop-blur-sm dark:bg-[#1C1C1C]/80 h-11 text-sm justify-between shrink-0 border-b border-gray-150 dark:border-stone-850">
            <div className="flex items-center space-x-2 text-[#37352f8c] dark:text-[#E3E3E3]/60">
-             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded mr-2">
+             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded mr-1">
                  <Menu size={16} />
              </button>
+             <MotionAILogo size={22} className="mr-1 hidden sm:block" />
+             <SyncStatusDot status={syncStatus} className="mr-2 hidden md:flex" />
              <span className="hidden sm:inline truncate max-w-[100px]">{user?.email || 'Local Workspace'}</span>
              <span className="hidden sm:inline">/</span>
              <span className="text-[#37352F] dark:text-[#E3E3E3] font-medium truncate max-w-[125px] mr-2">{currentPage?.title || 'Untitled'}</span>
@@ -1035,8 +1168,8 @@ export default function App() {
                  )}
                  title="MotionAI Repository Handbook & Workspace Gaps roadmap dashboard"
                >
-                 <Sparkles size={11} className={viewMode === 'hub' ? "text-yellow-300" : ""} />
-                 <span className="hidden md:inline font-sans text-[11px]">MotionAI Portal</span>
+                 <MotionAILogo size={14} className="shrink-0" />
+                 <span className="hidden md:inline font-sans text-[11px]">Portal</span>
                </button>
                <button 
                  onClick={() => setViewMode('desktop')}
@@ -1175,6 +1308,8 @@ export default function App() {
               <MobileWorkspaceApp
                 pages={pages}
                 currentPageId={currentPageId}
+                focusBlockId={focusAfterInsert}
+                onFocusBlockUsed={() => setFocusAfterInsert(null)}
                 workspaceId={currentWorkspace?.id ?? 'default'}
                 workspaceName={currentWorkspace?.name ?? 'Workspace'}
                 onSelectPage={(id) => {
@@ -1187,14 +1322,20 @@ export default function App() {
                 onRestorePage={restorePageFromTrash}
                 onOpenSettings={() => setSettingsModalOpen(true)}
                 onOpenPages={() => setSidebarOpen(true)}
+                onQuickCapture={runQuickCapture}
+                onOpenDailyNote={openDailyJournal}
                 userEmail={user?.email || null}
                 isCompactDevice={!phonePreview}
+                onRequestDesktopView={() => setViewMode('desktop')}
               />
             </Suspense>
           ) : viewMode === 'hub' ? (
-            <MotionAIHub />
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-stone-400 text-sm">Loading hub…</div>}>
+              <MotionAIHub />
+            </Suspense>
           ) : currentPage ? (
              currentPage.pageType === 'canvas' ? (
+               <Suspense fallback={<div className="flex h-full items-center justify-center text-stone-400 text-sm">Loading canvas…</div>}>
                <CanvasEditor 
                  key={currentPage.id} 
                  pageId={currentPage.id} 
@@ -1202,6 +1343,7 @@ export default function App() {
                  onSelectPage={setCurrentPageId}
                  onAddPage={handleAddNewPageObj}
                />
+               </Suspense>
              ) : currentPage.pageType === 'dashboard' ? (
                <div className="w-full px-6 sm:px-12 py-12 pb-48 font-sans max-w-5xl mx-auto overflow-y-auto h-full">
                  <DashboardWidget pages={pages} onSelectPage={setCurrentPageId} />
@@ -1242,7 +1384,8 @@ export default function App() {
                   )}
                 </div>
               ) : (
-                <>
+                <div className="flex flex-1 min-h-0 w-full">
+                <div className="flex-1 min-w-0 overflow-y-auto">
                   <div className="max-w-3xl mx-auto w-full px-6 sm:px-12 pt-8">
                     <TaskPropertiesPanel page={currentPage} onUpdatePage={updatePageById} />
                   </div>
@@ -1257,7 +1400,17 @@ export default function App() {
                     onFocusAfterInsertUsed={() => setFocusAfterInsert(null)}
                     onLockWorkspace={handleLockWorkspace}
                   />
-                </>
+                </div>
+                {linksRailOpen && currentBacklinks.length > 0 && (
+                  <BacklinksRail
+                    currentPage={currentPage}
+                    pages={pages}
+                    backlinks={currentBacklinks}
+                    onNavigateToPage={(id) => setCurrentPageId(id)}
+                    onClose={() => setLinksRailOpen(false)}
+                  />
+                )}
+                </div>
              )
           ) : (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-stone-500 dark:text-stone-400">
@@ -1313,6 +1466,7 @@ export default function App() {
         />
       )}
 
+      <Suspense fallback={null}>
       <DriveModal 
         isOpen={driveModalOpen} 
         onClose={() => setDriveModalOpen(false)} 
@@ -1337,7 +1491,21 @@ export default function App() {
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
       />
+      </Suspense>
+
+      <ShortcutHelpModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
+
+      {movePageId && currentPageId && (
+        <SpaceFolderPicker
+          pages={pages}
+          currentPageId={movePageId}
+          currentParentId={pages.find(p => p.id === movePageId)?.parentId}
+          onMove={handleMoveConfirm}
+          onClose={() => setMovePageId(null)}
+        />
+      )}
     </div>
+    </WorkspaceProvider>
     </SettingsProvider>
   );
 }

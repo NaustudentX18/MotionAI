@@ -299,7 +299,8 @@ function AiTab() {
     const config = settings.providers[id];
     setTestStates(prev => ({ ...prev, [id]: { status: 'testing', message: '' } }));
     try {
-      const res = await fetch('/api/ai/probe', {
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/probe', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({

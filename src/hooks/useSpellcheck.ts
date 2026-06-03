@@ -41,7 +41,8 @@ export function useSpellcheck(
     try {
       const currentBlocks = blocksRef.current;
       const cleanedBlocks = currentBlocks.filter(b => b.content && b.content.trim() && b.type !== 'divider').map(b => { const dummyText = b.content.replace(/<[^>]*>/g, ' '); return { id: b.id, content: dummyText, type: b.type }; });
-      const resp = await fetch('/api/ai/spellcheck', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ blocks: cleanedBlocks }) });
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const resp = await motionAiFetch('/api/ai/spellcheck', { method: 'POST', body: JSON.stringify({ blocks: cleanedBlocks }) });
       if (!resp.ok) throw new Error('Spellcheck failed');
       const data = await resp.json();
       setSpellingIssues(data.issues || []);

@@ -13,13 +13,13 @@
   "permissions": ["microphone", "notifications"],
   "icons": [
     {
-      "src": "/docs/media/motionai-logo.png",
+      "src": "/docs/media/motionai-icon-192.png",
       "sizes": "192x192",
       "type": "image/png",
       "purpose": "any"
     },
     {
-      "src": "/docs/media/motionai-logo.png",
+      "src": "/docs/media/motionai-icon-512.png",
       "sizes": "512x512",
       "type": "image/png",
       "purpose": "any maskable"
@@ -31,14 +31,21 @@
       "short_name": "New",
       "description": "Create a new workspace page",
       "url": "/?action=new-page",
-      "icons": [{ "src": "/docs/media/motionai-logo.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/docs/media/motionai-icon-192.png", "sizes": "192x192" }]
     },
     {
       "name": "Ask AI",
       "short_name": "AI",
       "description": "Open AI assistant",
       "url": "/?action=ask-ai",
-      "icons": [{ "src": "/docs/media/motionai-logo.png", "sizes": "192x192" }]
+      "icons": [{ "src": "/docs/media/motionai-icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Quick capture",
+      "short_name": "Capture",
+      "description": "Append to today's journal",
+      "url": "/?action=capture",
+      "icons": [{ "src": "/docs/media/motionai-icon-192.png", "sizes": "192x192" }]
     }
   ]
 }

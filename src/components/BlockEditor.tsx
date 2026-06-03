@@ -16,9 +16,9 @@ import { SpellcheckPanel } from './blocks/SpellcheckPanel';
 import { CommentPopup } from './blocks/CommentPopup';
 import { SlashMenu, slashMenuActions } from './blocks/SlashMenu';
 import { AiMenu } from './blocks/AiMenu';
+import { EditorEmptyState } from './EditorEmptyState';
+import { markSaveStarted, markSaveFinished, setLastSaveNow } from '../hooks/useSyncStatus';
 import { StylePopup } from './blocks/StylePopup';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export { parseMarkdownToHtml } from '../lib/blockUtils';
 
@@ -128,7 +128,8 @@ export function BlockEditor({
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = (reader.result as string).split(',')[1];
-          const res = await fetch('/api/upload/image', {
+          const { motionAiFetch } = await import('../lib/apiClient');
+          const res = await motionAiFetch('/api/upload/image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: file.name, type: file.type, data: base64 }),
@@ -229,27 +230,42 @@ export function BlockEditor({
   }, [blocks, title]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSaveStatus('saving');
-      try {
-        const payload = { title, blocks: blocksRef.current, timestamp: Date.now() };
-        localStorage.setItem(`motion_ai_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
-        onChangeRef.current(blocksRef.current);
-        setTimeout(() => { setSaveStatus('saved'); setLastSavedTime(new Date().toLocaleTimeString()); }, 800);
-      } catch (err) { console.error("Auto-save error:", err); setSaveStatus('error'); }
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [title]);
+    if (isFirstRender.current) return;
+    setSaveStatus('saving');
+    markSaveStarted();
+    const timer = window.setTimeout(() => {
+      onChangeRef.current(blocksRef.current);
+      setSaveStatus('saved');
+      setLastSavedTime(new Date().toLocaleTimeString());
+      setLastSaveNow();
+      markSaveFinished();
+    }, 350);
+    return () => {
+      window.clearTimeout(timer);
+      markSaveFinished();
+    };
+  }, [blocks, title]);
 
   const triggerManualSave = () => {
     setSaveStatus('saving');
+    markSaveStarted();
     try {
-      const payload = { title, blocks: blocksRef.current, timestamp: Date.now() };
-      localStorage.setItem(`motion_ai_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
       onChangeRef.current(blocksRef.current);
-      setTimeout(() => { setSaveStatus('saved'); setLastSavedTime(new Date().toLocaleTimeString()); }, 600);
-    } catch (err) { console.error("Manual save error:", err); setSaveStatus('error'); }
+      setSaveStatus('saved');
+      setLastSavedTime(new Date().toLocaleTimeString());
+      setLastSaveNow();
+    } catch (err) {
+      console.error('Manual save error:', err);
+      setSaveStatus('error');
+    } finally {
+      markSaveFinished();
+    }
   };
+
+  const isEmptyPage =
+    blocks.length <= 1 &&
+    (!blocks[0]?.content || (blocks[0].content || '').replace(/<[^>]*>/g, '').trim() === '') &&
+    !title?.trim();
 
   // ─── Slash menu filter ───────────────────────────────────────────────────────
   useEffect(() => { setSlashSelectedIndex(0); }, [slashQuery]);
@@ -273,6 +289,10 @@ export function BlockEditor({
   const exportPageAsPdf = async () => {
     setExportingPdf(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
       const element = document.getElementById('workspace-page-content');
       if (!element) return;
       const currentScrollY = window.scrollY;
@@ -440,8 +460,19 @@ export function BlockEditor({
             <input type="text" value={title || ''} onChange={e => onTitleChange(e.target.value)} placeholder="Untitled" className="w-full text-4xl font-bold bg-transparent border-none outline-none mb-8 placeholder-[#37352f4d] dark:placeholder-[#ffffff4d] resize-none text-[#37352F] dark:text-[#E3E3E3]" />
 
             {/* TipTap Editor Content */}
+            {isEmptyPage && isReady ? (
+              <EditorEmptyState
+                onApplyTemplate={(newBlocks, newTitle) => {
+                  onChange(newBlocks);
+                  setBlocks(newBlocks);
+                  if (newTitle) onTitleChange(newTitle);
+                }}
+              />
+            ) : null}
             {isReady && editor ? (
-              <EditorContent editor={editor} />
+              <div className={cn('motion-prose', isEmptyPage && 'opacity-40 pointer-events-none max-h-0 overflow-hidden')}>
+                <EditorContent editor={editor} />
+              </div>
             ) : (
               <div className="text-gray-400 text-sm py-8 text-center">Loading editor…</div>
             )}

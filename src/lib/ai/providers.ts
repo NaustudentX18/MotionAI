@@ -310,6 +310,10 @@ function timeoutMs(settings: AiRequestSettings): number {
 }
 
 async function fetchWithTimeout(url: string, init: RequestInit, timeout: number): Promise<Response> {
+  if (typeof window === 'undefined') {
+    const { assertAllowedFetchUrl } = await import('../ssrfGuard');
+    assertAllowedFetchUrl(url, 'AI provider base URL');
+  }
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeout);
   try {

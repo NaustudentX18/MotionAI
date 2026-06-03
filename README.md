@@ -1,219 +1,283 @@
 <div align="center">
 
-<!-- Responsive SVG Logo that dynamically adapts to GitHub Light/Dark Mode -->
-<img src="docs/media/motionai-logo.svg" width="600" alt="MotionAI Logo" style="max-width: 100%; height: auto;" />
+<img src="docs/media/motionai-wordmark.svg" width="480" alt="MotionAI" />
 
-<h3>✨ A self-hostable, local-first intelligent workspace for notes, tasks, docs, and automations. ✨</h3>
+<br /><br />
 
-<p>
-  MotionAI combines a polished block editor, BYO/local AI actions, Y.js-backed persistence, Google Workspace integrations, experimental collaboration, and a Tauri desktop build — without locking your workspace into a vendor cloud.
-</p>
+# Local-first workspace for notes, tasks, docs & AI
 
-[![CI Build](https://github.com/NaustudentX18/MotionAI/actions/workflows/ci.yml/badge.svg)](https://github.com/NaustudentX18/MotionAI/actions/workflows/ci.yml)
-[![License: Apache-2.0](https://img.shields.io/badge/License-Apache--2.0-blue.svg)](LICENSE)
-[![Local-first](https://img.shields.io/badge/local--first-Y.js%20%2B%20IndexedDB-22c55e?style=flat-square&logo=gitkraken)](https://github.com/yjs/yjs)
-[![AI Architecture](https://img.shields.io/badge/AI-BYO%2Flocal%20providers-8b5cf6?style=flat-square&logo=openai)](https://github.com/NaustudentX18/MotionAI)
-[![Status](https://img.shields.io/badge/status-single--user%20self--hosted-0ea5e9?style=flat-square)](KNOWN_LIMITATIONS.md)
+**Self-hostable · BYO/local AI · Y.js persistence · PWA-ready · Open source**
 
 <p>
-  <a href="#-why-motionai"><b>Why MotionAI?</b></a> •
-  <a href="#-see-it"><b>Visual Showcase</b></a> •
-  <a href="#-quick-start"><b>Quick Start</b></a> •
-  <a href="#-features"><b>Features</b></a> •
-  <a href="#-architecture"><b>Architecture</b></a> •
-  <a href="ROADMAP.md"><b>Roadmap</b></a> •
-  <a href="KNOWN_LIMITATIONS.md"><b>Limitations</b></a>
+  <a href="#-visual-showcase"><strong>See it in action</strong></a> ·
+  <a href="#-quick-start"><strong>Quick start</strong></a> ·
+  <a href="#-features"><strong>Features</strong></a> ·
+  <a href="#-install-on-your-phone"><strong>Add to home screen</strong></a> ·
+  <a href="ROADMAP.md"><strong>Roadmap</strong></a>
 </p>
 
----
+<p>
+  <a href="https://github.com/NaustudentX18/MotionAI/actions/workflows/ci.yml"><img src="https://github.com/NaustudentX18/MotionAI/actions/workflows/ci.yml/badge.svg" alt="CI" /></a>
+  <img src="https://img.shields.io/badge/License-Apache--2.0-blue.svg" alt="License" />
+  <img src="https://img.shields.io/badge/local--first-Y.js%20%2B%20IndexedDB-22c55e?style=flat-square" alt="Local-first" />
+  <img src="https://img.shields.io/badge/AI-BYO%20%2F%20local-8b5cf6?style=flat-square" alt="AI" />
+  <img src="https://img.shields.io/badge/PWA-installable-06b6d4?style=flat-square" alt="PWA" />
+  <a href="KNOWN_LIMITATIONS.md"><img src="https://img.shields.io/badge/status-single--user%20self--hosted-0ea5e9?style=flat-square" alt="Status" /></a>
+</p>
 
 </div>
 
-## 💡 Why MotionAI?
+---
 
-Most workspace tools force a trade-off: polished UX **or** local control, AI features **or** privacy, collaboration **or** portability. MotionAI is an open-source workspace built to ensure that a private, self-hosted option feels premium, modern, and highly interactive.
+## Hero
 
-* **🧠 Bring Your Own AI** — Seamlessly connect to Gemini, OpenAI-compatible endpoints, Ollama, LM Studio, vLLM, or disable it entirely.
-* **💾 Keep Data Local-First** — Powered by Y.js + IndexedDB persistence with automated schema migrations, easy import/export, and optional AES-GCM encryption-at-rest.
-* **✍️ Polished Block Editing** — A clean TipTap-powered editor featuring slash commands, backlinks, inline comments, image uploads, PDF export, audio dictation, and keyboard-first navigation.
-* **🐳 Run Anywhere** — Simple local Vite + Express server setups, ready-to-go Docker Compose configurations, and early-stage Tauri desktop builds.
-* **🛡️ Clear Boundaries** — Hardened security boundaries and experimental surfaces are clearly documented instead of marketed away.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/media/motionai-hero-cinematic.png" />
+  <img src="docs/media/motionai-hero-cinematic.png" alt="MotionAI — laptop and phone showing the intelligent workspace" width="100%" style="border-radius: 16px; box-shadow: 0 24px 80px rgba(0,0,0,0.45);" />
+</picture>
+
+<p align="center"><em>Notes, tasks, automations, and AI — on your hardware, under your rules.</em></p>
+
+---
+
+## Why MotionAI?
+
+Most workspace tools force a trade-off: polished UX **or** local control, AI **or** privacy, collaboration **or** portability. MotionAI is built so a **private, self-hosted** setup still feels premium — block editing, command palette, integrations, and optional sync without renting your brain to a vendor cloud.
+
+| | What you get |
+| --- | --- |
+| 🧠 | **Bring your own AI** — Gemini, OpenAI-compatible APIs, Ollama, LM Studio, vLLM, or off |
+| 💾 | **Local-first** — Y.js + IndexedDB, import/export, optional AES-GCM at rest |
+| ✍️ | **Polished editor** — TipTap slash commands, backlinks, comments, PDF export, dictation |
+| 📱 | **Mobile & PWA** — Responsive shell, mic permission, home-screen install |
+| 🛡️ | **Honest scope** — Experimental surfaces documented in [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) |
 
 > [!IMPORTANT]
-> **Current Project Status:** MotionAI is production-ready for private, single-user self-hosted environments. Multi-user cloud security, public-Internet hardening, encrypted network collaboration, signed desktop releases, and hosted cloud syncing are Not claimed. Refer to [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) and [`SECURITY.md`](SECURITY.md) for details.
+> MotionAI is **production-ready for private, single-user self-hosting**. Multi-tenant cloud security, public-internet hardening, and hosted sync are **not** claimed. See [`SECURITY.md`](SECURITY.md).
 
 ---
 
-## 📸 See It
+## Visual showcase
 
-### Workspace Dashboards
-| 🎛️ Hub Dashboard | 📝 Interactive Editor |
-| --- | --- |
-| ![MotionAI hub](docs/media/motionai-hub-live.png) | ![MotionAI editor](docs/media/motionai-editor-live.png) |
+### Command center & editor
 
-### Controls & Responsiveness
-| ⚙️ Settings Panel | 📱 Mobile View |
-| --- | --- |
-| ![MotionAI settings](docs/media/motionai-settings-live.png) | ![MotionAI mobile](docs/media/motionai-mobile-live.png) |
+<table>
+<tr>
+<td width="50%">
 
-🎥 **Video Demonstration:** [Watch the short live app walkthrough](docs/media/motionai-live-demo.webm)
+**MotionAI Portal** — roadmap, architecture, and deployment hub
+
+<img src="docs/media/motionai-hub-showcase.png" alt="MotionAI Portal hub dashboard" width="100%" />
+
+</td>
+<td width="50%">
+
+**Block editor** — headings, tasks, slash menu, AI inline actions
+
+<img src="docs/media/motionai-editor-showcase.png" alt="MotionAI block editor" width="100%" />
+
+</td>
+</tr>
+</table>
+
+### Settings & mobile
+
+<table>
+<tr>
+<td width="50%">
+
+**Settings** — AI providers, encryption, export, sync
+
+<img src="docs/media/motionai-settings-showcase.png" alt="MotionAI settings panel" width="100%" />
+
+</td>
+<td width="50%">
+
+**Mobile shell** — touch-first workspace with Ask AI
+
+<img src="docs/media/motionai-mobile-showcase.png" alt="MotionAI on mobile" width="100%" />
+
+</td>
+</tr>
+</table>
+
+🎬 **Walkthrough:** [Watch the live demo clip](docs/media/motionai-live-demo.webm) *(screen recording)*
+
+<details>
+<summary>Additional capture assets</summary>
+
+Live captures (when generated from a running dev server):  
+`docs/media/motionai-hub-live.png` · `docs/media/motionai-editor-live.png` · `docs/media/motionai-settings-live.png` · `docs/media/motionai-mobile-live.png`
+
+</details>
 
 ---
 
-## ⚡ Quick Start
+## Quick start
 
-### 1. Run Locally
-Get the application up and running on your local machine:
+### 1. Run locally
+
 ```bash
 git clone https://github.com/NaustudentX18/MotionAI.git
 cd MotionAI
 npm install
 npm run dev
 ```
-Open **[http://localhost:5173](http://localhost:5173)** in your browser. The Express API is served by the same dev entry point.
+
+Open **[http://localhost:5173](http://localhost:5173)** (or the port Vite prints). The Express API runs alongside the dev server.
 
 > [!NOTE]
-> If your local checkout directory is still named `OpenNotion`, run the commands from that directory. The public GitHub repository name is `MotionAI`.
+> If your checkout folder is still named `OpenNotion`, run commands from that directory. The GitHub repo is **MotionAI**.
 
-### 2. Production Build
-Prepare the project for production:
+### 2. Production build
+
 ```bash
 npm run build
 npm start
 ```
 
 ### 3. Docker Compose
-Deploy locally via containerization:
+
 ```bash
 docker compose up --build
 ```
 
-### 4. Codebase Verification
-Verify static structure and run tests without configuring credentials:
+### 4. Verify the tree
+
 ```bash
 npm install
 npm run build
 npm run verify
 ```
-`npm run build` bundles the server, and `npm run verify` checks TypeScript, documentation contracts, spellcheck schemas, AI provider adapters, import/export integrity, and large-workspace stress tests.
 
-**Targeted Verification Sub-commands:**
-```bash
-npm run verify:static       # Invariant & documentation checks
-npm run lint                # TypeScript type-checking & lint
-npm run test:ai             # Mocked multi-provider AI contracts
-npm run test:spellcheck     # Spellcheck response schema checks
-npm run test:workspace      # Google Workspace credentials/auth guards
-npm run test:import-export  # Workspace JSON/Y.js export/import round-trips
-npm run test:smoke          # Headless browser & API smoke tests
-npm run test:migration      # Persistence schema migration validations
-npm run test:reliability    # Heavy database stress testing
-```
+| Script | Purpose |
+| --- | --- |
+| `npm run verify:static` | Docs & invariant checks |
+| `npm run lint` | TypeScript |
+| `npm run test:server-integration` | API smoke on ephemeral port |
+| `npm run audit:secrets` | Block accidental secret commits |
 
 ---
 
-## 🚀 Features
+## Install on your phone
 
-### 🛠️ Workspace & Editor
-* **Block Editor:** Support for paragraphs, headings, task lists, blockquotes, callout blocks, custom dividers, code blocks (with syntax highlights), drag-and-drop handles, inline comments, image uploads, markdown shortcuts, auto-saving, and PDF export.
-* **Knowledge Graph:** Backlinks and wiki-links powered by real-time local indexing for fully connected notes.
-* **MotionAI Command Portal:** Interactive workspace hub, central command palette (`Cmd/Ctrl + K`), unified search, AI composer window, inline highlight-actions, and quick shortcuts.
-* **Spatial Canvas:** Early-stage infinite canvas page layout powered by `tldraw`.
-* **Mobile Shell:** Custom responsive workspace design optimization for reading/editing from any mobile web browser.
+MotionAI ships as a **Progressive Web App**:
 
-### 🤖 Intelligent AI Proxy & Integrations
-* **BYO/Local AI:** Built-in adapter layer for Gemini, OpenAI-compatible APIs, local Ollama endpoints, LM Studio, vLLM, and disabled mode.
-* **Contextual AI Actions:** Instant prompts to write, summarize, expand drafts, fix grammar/spelling, rewrite tone, or run custom prompts.
-* **Secrets Security:** AI API keys are stored solely in your local `.env` configuration or browser localStorage. The server ensures keys are never returned back to client sessions (`keysReturned: false`).
-* **Google Workspace:** Driver flows for Calendar, Drive, and Task lists isolated behind interactive authorization guards.
+1. Deploy over **HTTPS** (or use localhost for dev).
+2. Open the site in **Safari** (iOS) or **Chrome** (Android).
+3. **Add to Home Screen** / **Install app**.
+4. Grant **microphone** when prompted for voice capture.
 
-### 🔒 Local-First Foundation
-* **Y.js Engine:** Document state built on top of CRDTs with IndexedDB persistence and secure localStorage recovery fallbacks.
-* **Multi-workspace Support:** Easily create, delete, switch, export, or import clean JSON database dumps.
-* **Schema Migrations:** Integrated database version tracking with automated `WORKSPACE_SCHEMA_VERSION` invariant checks and backward-compatible fixture tests.
-* **Encryption at Rest:** Optional client-side AES-GCM database encryption (see limitations).
-* **Offline Support:** Service worker caches static assets for offline boot. Push notifications for reminders (requires HTTPS).
-* **WebRTC Sync:** ICE/STUN/TURN server configuration UI with connection tester. Degrades gracefully to single-user mode when signaling is unavailable.
-* **Automation Engine:** Rule builder (trigger → conditions → action) with persistent execution history, retry support, and diagnostics export.
-* **Desktop Packaging:** Local desktop builds utilizing Tauri with keychain-based secret storage.
+Shortcuts in `manifest.json` include quick capture (`/?action=capture`). See [`public/manifest.json`](public/manifest.json).
+
+---
+
+## Features
+
+### Workspace & editor
+
+- TipTap block editor: tasks, callouts, code, drag handles, wiki-links, PDF export
+- Command palette (`Cmd/Ctrl+K`), unified search, AI composer
+- MotionAI Portal hub, spatial canvas (tldraw prototype), mobile-optimized shell
+
+### AI & integrations
+
+- Multi-provider proxy: Gemini, OpenAI-compatible, Ollama, LM Studio, vLLM
+- Contextual actions: summarize, rewrite, grammar, custom prompts
+- Google Workspace helpers (Calendar, Drive, Tasks) behind auth guards
+
+### Local-first foundation
+
+- Y.js CRDTs + IndexedDB, multi-workspace import/export
+- Optional AES-GCM encryption, service worker offline boot
+- WebRTC sync (experimental), automation rules engine, Tauri desktop prototype
 
 ---
 
 ## Current status by capability
 
-| Capability | Status | Reference Code / Verification |
-| :--- | :--- | :--- |
-| **React/Vite Core & Express API** | Implemented | [App.tsx](file:///home/pi/OpenNotion/src/App.tsx), [server.ts](file:///home/pi/OpenNotion/server.ts), [vite.config.ts](file:///home/pi/OpenNotion/vite.config.ts) |
-| **TipTap & Y.js Block Editor** | Implemented | [BlockEditor.tsx](file:///home/pi/OpenNotion/src/components/BlockEditor.tsx), [useBlockEditor.ts](file:///home/pi/OpenNotion/src/hooks/useBlockEditor.ts) |
-| **IndexedDB & Migrations** | Implemented, still hardening | [persistence.ts](file:///home/pi/OpenNotion/src/lib/persistence.ts), [yjs-migration.ts](file:///home/pi/OpenNotion/src/lib/yjs-migration.ts) |
-| **Import & Export Round-trips** | Implemented | `scripts/import-export-tests.ts` |
-| **Multi-provider AI Proxy** | Implemented | [providers.ts](file:///home/pi/OpenNotion/src/lib/ai/providers.ts), `scripts/ai-contract-tests.ts` |
-| **Google Workspace Helper Guards**| Implemented | [workspace.ts](file:///home/pi/OpenNotion/src/lib/workspace.ts) |
-| **Backlinks & Wiki-links** | Implemented | [backlinks.ts](file:///home/pi/OpenNotion/src/lib/backlinks.ts), [BacklinksPanel.tsx](file:///home/pi/OpenNotion/src/components/BacklinksPanel.tsx) |
-| **AES-GCM Encryption-at-Rest** | Implemented, with caveats | [crypto.ts](file:///home/pi/OpenNotion/src/lib/crypto.ts) |
-| **WebRTC Document Synchronization**| Experimental | [signaling-server.js](file:///home/pi/OpenNotion/signaling-server.js) |
-| **tldraw Canvas Interface** | Early prototype | [CanvasEditor.tsx](file:///home/pi/OpenNotion/src/components/CanvasEditor.tsx) |
-| **Tauri Desktop Application** | Prototype | [tauri.conf.json](file:///home/pi/OpenNotion/src-tauri/tauri.conf.json) |
-| **Automation rules engine** | Implemented, still hardening | `src/lib/automations/ruleBuilder.ts`, `automationHistory.ts` |
-| **Offline PWA + push notifications** | Implemented | `public/sw.js`, `src/hooks/useServiceWorker.ts` |
-| **ICE/STUN/TURN config UI** | Implemented | `src/components/settings/StunTurnConfig.tsx`, `src/hooks/useWebRTCConfig.ts` |
-| **Local auth inactivity lock** | Implemented | `src/lib/localAuth.ts`, `scripts/local-auth-tests.ts` |
-| **AI meeting notes → tasks** | Implemented, still hardening | `src/components/MeetingParserModal.tsx`, `scripts/meeting-parser-contract-tests.ts` |
-| **Canvas selection → tasks** | Implemented | `src/components/CanvasEditor.tsx` |
-| **Production multi-user security** | Not claimed | [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md), [`SECURITY.md`](SECURITY.md) |
+| Capability | Status | Reference |
+| --- | --- | --- |
+| React/Vite + Express API | Implemented | [`src/App.tsx`](src/App.tsx), [`server.ts`](server.ts) |
+| TipTap + Y.js editor | Implemented | [`src/components/BlockEditor.tsx`](src/components/BlockEditor.tsx) |
+| IndexedDB migrations | Implemented, still hardening | [`src/lib/persistence.ts`](src/lib/persistence.ts) |
+| Multi-provider AI | Implemented | [`src/lib/ai/providers.ts`](src/lib/ai/providers.ts) |
+| Backlinks & wiki-links | Implemented | [`src/lib/backlinks.ts`](src/lib/backlinks.ts) |
+| PWA + offline SW | Implemented | [`public/sw.js`](public/sw.js) |
+| tldraw canvas | Early prototype | [`src/components/CanvasEditor.tsx`](src/components/CanvasEditor.tsx) |
+| WebRTC sync | Experimental | [`signaling-server.js`](signaling-server.js) |
+| Production multi-user security | Not claimed | [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) |
 
 ---
 
-## 🔌 Supported AI Providers
-You can configure your provider credentials directly in your local `.env` file or from the application settings page (**Settings → AI Providers**).
+## Supported AI providers
 
-| Provider | Setup Variable | Default Endpoint |
-| :--- | :--- | :--- |
-| **Google Gemini** | `GEMINI_API_KEY` | Native Google Vertex / GenAI URL |
-| **OpenAI-Compatible**| `OPENAI_API_KEY` | Customize via `OPENAI_BASE_URL` |
-| **Ollama** | — | `http://localhost:11434` |
-| **LM Studio** | — | `http://localhost:1234` |
-| **vLLM** | — | `http://localhost:8000` |
-| **Disabled Mode** | — | Fails safely with visual placeholders |
+Configure in **Settings → AI Providers** or `.env`:
+
+| Provider | Variable | Default endpoint |
+| --- | --- | --- |
+| Google Gemini | `GEMINI_API_KEY` | Google GenAI |
+| OpenAI-compatible | `OPENAI_API_KEY` | `OPENAI_BASE_URL` |
+| Ollama | — | `http://localhost:11434` |
+| LM Studio | — | `http://localhost:1234` |
+| vLLM | — | `http://localhost:8000` |
 
 ---
 
-## 🏗️ Architecture
+## Architecture
 
 ```text
 src/
-├── App.tsx                    # App shell, navigation routing, workspace state
-├── components/
-│   ├── BlockEditor.tsx        # TipTap + Y.js editor component
-│   ├── CanvasEditor.tsx       # tldraw spatial canvas prototype
-│   ├── CommandPalette.tsx     # Ctrl/Cmd+K search & quick actions
-│   ├── SettingsModal.tsx      # AI provider, export/import, and encryption config
-│   ├── Sidebar.tsx            # Pages, workspace switcher, and folder views
-│   └── blocks/                # Block UI components, AI prompts, and menus
-├── hooks/                     # Custom hooks (editor, comments, settings, spellcheck)
+├── App.tsx                 # Shell, routing, workspace state
+├── components/             # Editor, hub, palette, settings, mobile
+├── hooks/                  # Editor, PWA, WebRTC, settings
 ├── lib/
-│   ├── ai/providers.ts        # AI adapter layer & model credentials validation
-│   ├── crypto.ts              # Local AES-GCM database encryption helpers
-│   ├── persistence.ts         # IndexedDB operations and schema migrations
-│   ├── yjs.ts                 # CRDT state syncing and IndexedDB listeners
-│   ├── backlinks.ts           # Automatic wiki-link extractor
-│   └── workspace.ts           # Google calendar/tasks driver guards
-├── main.tsx                   # React client application entry
-└── index.css                  # Tailwind styles and dark mode themes
+│   ├── ai/providers.ts     # Provider adapters
+│   ├── persistence.ts      # IndexedDB + migrations
+│   └── yjs.ts              # CRDT sync
+├── contexts/               # Workspace context
+└── styles/tokens.css       # Design tokens
+server.ts                   # API proxy, uploads, health
+public/manifest.json        # PWA manifest
 ```
 
 ---
 
-## 📈 Contributing
+## Media assets
 
-We welcome community contributions, particularly around document editor stabilization, database performance, E2E browser testing coverage, desktop packaging, and security hardening.
+| File | Use |
+| --- | --- |
+| `docs/media/motionai-hero-cinematic.png` | README hero & splash background |
+| `docs/media/motionai-*-showcase.png` | README gallery & splash filmstrip |
+| `public/brand/motionai-mark.svg` | Primary app icon (Flux mark) |
+| `docs/media/motionai-wordmark.svg` | README / docs wordmark |
+| `docs/media/motionai-icon-512.png` | PWA & apple-touch raster |
+| `docs/media/motionai-live-demo.webm` | Demo video |
 
-1. Review the [`CONTRIBUTING.md`](CONTRIBUTING.md) guide.
-2. Read the [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md) list.
-3. Ensure the project builds and all tests pass with `npm run build` and `npm run verify` before submitting a Pull Request.
+Regenerate live app captures (dev server required):
+
+```bash
+PLAYWRIGHT_BASE_URL=http://localhost:3000 node scripts/capture-readme-media.mjs
+```
 
 ---
 
-## ⚖️ License
+## Contributing
 
-Distributed under the **Apache-2.0 License**. See [`LICENSE`](LICENSE) for details.
+1. Read [`CONTRIBUTING.md`](CONTRIBUTING.md) and [`KNOWN_LIMITATIONS.md`](KNOWN_LIMITATIONS.md).
+2. Run `npm run build && npm run verify` before opening a PR.
+3. Never commit real API keys — use `npm run audit:secrets`.
+
+---
+
+## License
+
+**Apache-2.0** — see [`LICENSE`](LICENSE).
+
+<div align="center">
+
+<br />
+
+**[⭐ Star on GitHub](https://github.com/NaustudentX18/MotionAI)** · Built for people who want a workspace that stays on their machine.
+
+</div>

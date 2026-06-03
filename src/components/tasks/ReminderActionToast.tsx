@@ -1,5 +1,6 @@
 import { Clock } from 'lucide-react';
 import type { ReminderEvent } from '../../hooks/useReminders';
+import { Button } from '../ui/Button';
 
 interface ReminderActionToastProps {
   reminder: ReminderEvent;
@@ -30,28 +31,28 @@ export function ReminderActionToast({
           <p className="truncate text-sm font-bold text-stone-850 dark:text-stone-100">{reminder.pageTitle}</p>
           <p className="mt-1 text-xs text-stone-600 dark:text-stone-400">{reminder.body}</p>
           <div className="mt-3 flex flex-wrap items-center gap-2">
-            <button
-              type="button"
+            <Button
+              variant="primary"
               onClick={() => onSnooze(reminder)}
-              className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-bold text-white shadow-xs transition-colors hover:bg-amber-600"
+              className="min-h-9 bg-amber-500 px-3 text-xs hover:opacity-100 hover:bg-amber-600"
             >
               Snooze {snoozeMinutes}m
-            </button>
-            <button
-              type="button"
+            </Button>
+            <Button
+              variant="secondary"
               onClick={() => onDismiss(reminder)}
-              className="rounded-lg border border-stone-200 px-3 py-1.5 text-xs font-semibold text-stone-700 transition-colors hover:bg-stone-50 dark:border-stone-700 dark:text-stone-300 dark:hover:bg-stone-800"
+              className="min-h-9 px-3 text-xs"
             >
               Dismiss
-            </button>
+            </Button>
             {onOpenPage && (
-              <button
-                type="button"
+              <Button
+                variant="ghost"
                 onClick={() => onOpenPage(reminder.pageId)}
-                className="rounded-lg px-3 py-1.5 text-xs font-semibold text-purple-700 transition-colors hover:bg-purple-50 dark:text-purple-300 dark:hover:bg-purple-950/30"
+                className="min-h-9 px-3 text-xs"
               >
                 Open task
-              </button>
+              </Button>
             )}
           </div>
         </div>

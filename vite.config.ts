@@ -8,6 +8,22 @@ import topLevelAwait from 'vite-plugin-top-level-await';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss(), wasm(), topLevelAwait()],
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks(id) {
+            if (!id.includes('node_modules')) return;
+            if (id.includes('@tiptap') || id.includes('prosemirror') || id.includes('lowlight')) return 'editor';
+            if (id.includes('@tldraw')) return 'canvas';
+            if (id.includes('firebase')) return 'firebase';
+            if (id.includes('jspdf') || id.includes('html2canvas')) return 'pdf';
+            if (id.includes('@xenova') || id.includes('onnxruntime')) return 'ml';
+            if (id.includes('yjs') || id.includes('y-webrtc') || id.includes('y-indexeddb')) return 'crdt';
+            return 'vendor';
+          },
+        },
+      },
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

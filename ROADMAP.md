@@ -68,6 +68,10 @@ Live GitHub was checked with `gh` on 2026-05-23 local time:
 - Project board: owner project **MotionAI Public Roadmap** exists with 35 items and `gh project list` reports `public: true`.
 - Details and issue mapping: [`docs/GITHUB_ROADMAP_STATUS.md`](docs/GITHUB_ROADMAP_STATUS.md).
 
+## Level-up research (2026)
+
+Full-stack audit and phased backlog: [`docs/LEVEL_UP_RESEARCH.md`](docs/LEVEL_UP_RESEARCH.md) — frontend, backend, UI polish, and competitive patterns (Notion, Obsidian, Affine, etc.). Phase A implementation targets trust, performance, and mobile parity foundations.
+
 ## Product principles
 
 1. **Fast core beats feature theater.** Every major capability needs a performance budget and repeatable proof.
