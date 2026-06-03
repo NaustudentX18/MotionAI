@@ -3,6 +3,7 @@ import { Page, PageType } from '../types';
 import {
   FileText,
   Plus,
+  BookOpen,
   LogOut,
   CheckSquare,
   HardDrive,
@@ -41,6 +42,7 @@ interface SidebarProps {
   onCreateWorkspace?: (name: string) => void;
   onDeleteWorkspace?: (id: string) => void;
   onRenameWorkspace?: (id: string, name: string) => void;
+  onOpenDailyNote?: () => void;
 }
 
 interface PageTreeNode {
@@ -225,7 +227,8 @@ export function Sidebar({
   onSwitchWorkspace,
   onCreateWorkspace,
   onDeleteWorkspace,
-  onRenameWorkspace
+  onRenameWorkspace,
+  onOpenDailyNote,
 }: SidebarProps) {
   const [workspaceDropdownOpen, setWorkspaceDropdownOpen] = useState(false);
   const [newWorkspaceName, setNewWorkspaceName] = useState('');
@@ -401,6 +404,15 @@ export function Sidebar({
 
       {/* Footer Add Buttons */}
       <div className="p-2 border-t border-[#EBEBE9] dark:border-[#2F2F2F] space-y-0.5 shrink-0 bg-stone-50/50 dark:bg-stone-900/10">
+         {onOpenDailyNote && (
+           <button
+             onClick={onOpenDailyNote}
+             className="w-full flex items-center px-2 py-1.5 text-xs font-semibold rounded bg-purple-50 hover:bg-purple-100 dark:bg-purple-950/30 dark:hover:bg-purple-950/50 text-purple-800 dark:text-purple-300 cursor-pointer mb-1"
+           >
+             <BookOpen size={13} className="mr-2 shrink-0" />
+             Today&apos;s journal
+           </button>
+         )}
          <button onClick={() => onAddPage('block')} className="w-full flex items-center px-2 py-1.5 text-xs font-semibold rounded hover:bg-[#EBEBE9] dark:hover:bg-[#2F2F2F] text-stone-650 dark:text-stone-400 hover:text-stone-900 dark:hover:text-stone-200 cursor-pointer">
            <span className="mr-2 text-sm">+</span> New Page
          </button>

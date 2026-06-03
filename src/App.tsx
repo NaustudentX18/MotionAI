@@ -64,8 +64,12 @@ import { keychain } from './lib/keychain';
 import { DEFAULT_REMINDER_SNOOZE_MINUTES, snoozeReminderDate, useReminders, type ReminderEvent } from './hooks/useReminders';
 import { getInactivityTimeoutMs, hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
 import { LockScreen } from './components/LockScreen';
-import { appendBlockToDailyPage } from './lib/dailyNote';
+import { appendBlockToDailyPage, getOrCreateDailyPage } from './lib/dailyNote';
 import { WorkspaceProvider } from './contexts/WorkspaceContext';
+import { SyncStatusDot } from './components/SyncStatusDot';
+import { ShortcutHelpModal } from './components/ShortcutHelpModal';
+import { BacklinksRail } from './components/BacklinksRail';
+import type { SearchResult } from './lib/vectorStore';
 
 function createDefaultPage(): Page {
   return {
@@ -266,6 +270,9 @@ export default function App() {
   const [user, setUser] = useState<User | null>(null);
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [paletteOpen, setPaletteOpen] = useState(false);
+  const [shortcutsOpen, setShortcutsOpen] = useState(false);
+  const [linksRailOpen, setLinksRailOpen] = useState(true);
+  const [semanticHits, setSemanticHits] = useState<SearchResult[]>([]);
   const [driveModalOpen, setDriveModalOpen] = useState(false);
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [meetingParserOpen, setMeetingParserOpen] = useState(false);
@@ -307,6 +314,7 @@ export default function App() {
         document.documentElement.classList.remove('reduced-motion');
       }
     };
+    handleChange(mediaQuery);
     mediaQuery.addEventListener('change', handleChange);
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
@@ -474,18 +482,6 @@ export default function App() {
     presenceManagerRef.current.updatePage(currentPageId);
   }, [currentPageId]);
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Handle Ctrl+K or Cmd+K
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault();
-        setPaletteOpen(topLevel => !topLevel);
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, []);
-
   // Listen for open-settings event from BlockEditor error handling
   useEffect(() => {
     const handleOpenSettings = (_e: Event) => {
@@ -588,6 +584,57 @@ export default function App() {
     setCurrentPageId(newPage.id);
     setCurrentPageIdInStore(newPage.id);
   };
+
+  const openDailyJournal = useCallback(() => {
+    const page = getOrCreateDailyPage(pages, handleAddNewPageObj);
+    setCurrentPageId(page.id);
+    setCurrentPageIdInStore(page.id);
+    if (viewMode === 'hub') setViewMode('desktop');
+    if (window.innerWidth < 768) setViewMode('mobile');
+    setSidebarOpen(false);
+  }, [pages, viewMode]);
+
+  const runQuickCapture = useCallback(() => {
+    const { pageId, blockId } = appendBlockToDailyPage(
+      pages,
+      handleAddNewPageObj,
+      (id, blocks) => updatePageById(id, { blocks }),
+      '',
+    );
+    setCurrentPageId(pageId);
+    setCurrentPageIdInStore(pageId);
+    setFocusAfterInsert(blockId);
+    setViewMode(compactShell ? 'mobile' : 'desktop');
+  }, [pages, compactShell, updatePageById]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement;
+      const typing = target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable;
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault();
+        setPaletteOpen((topLevel) => !topLevel);
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'j') {
+        e.preventDefault();
+        openDailyJournal();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key.toLowerCase() === 'c') {
+        e.preventDefault();
+        runQuickCapture();
+      }
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        setSettingsModalOpen(true);
+      }
+      if (!typing && e.key === '?' && !e.metaKey && !e.ctrlKey) {
+        e.preventDefault();
+        setShortcutsOpen(true);
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [openDailyJournal, runQuickCapture]);
 
   const movePageToTrash = useCallback((id: string) => {
     const page = pages.find(p => p.id === id);
@@ -1000,6 +1047,16 @@ export default function App() {
          onSelectPage={setCurrentPageId}
          currentPage={currentPage}
          activeBlockId={activeBlockId}
+         vectorSearchReady={vectorSearchReady}
+         semanticHits={semanticHits}
+         onSemanticQuery={async (q) => {
+           if (!vectorSearchReady || !q.trim()) {
+             setSemanticHits([]);
+             return;
+           }
+           const { semanticSearch } = await import('./lib/vectorStore');
+           setSemanticHits(await semanticSearch(q, 6));
+         }}
          onAiAction={(action) => {
            // Basic handle AI action by emitting a custom event the editor can listen to
            window.dispatchEvent(new CustomEvent('ai-command', { detail: { action } }));
@@ -1082,6 +1139,7 @@ export default function App() {
            onCreateWorkspace={handleCreateWorkspace}
            onDeleteWorkspace={handleDeleteWorkspace}
            onRenameWorkspace={handleRenameWorkspace}
+           onOpenDailyNote={openDailyJournal}
          />
       </div>
       
@@ -1094,6 +1152,7 @@ export default function App() {
                  <Menu size={16} />
              </button>
              <MotionAILogo size={22} className="mr-1 hidden sm:block" />
+             <SyncStatusDot status={syncStatus} className="mr-2 hidden md:flex" />
              <span className="hidden sm:inline truncate max-w-[100px]">{user?.email || 'Local Workspace'}</span>
              <span className="hidden sm:inline">/</span>
              <span className="text-[#37352F] dark:text-[#E3E3E3] font-medium truncate max-w-[125px] mr-2">{currentPage?.title || 'Untitled'}</span>
@@ -1249,6 +1308,8 @@ export default function App() {
               <MobileWorkspaceApp
                 pages={pages}
                 currentPageId={currentPageId}
+                focusBlockId={focusAfterInsert}
+                onFocusBlockUsed={() => setFocusAfterInsert(null)}
                 workspaceId={currentWorkspace?.id ?? 'default'}
                 workspaceName={currentWorkspace?.name ?? 'Workspace'}
                 onSelectPage={(id) => {
@@ -1261,6 +1322,8 @@ export default function App() {
                 onRestorePage={restorePageFromTrash}
                 onOpenSettings={() => setSettingsModalOpen(true)}
                 onOpenPages={() => setSidebarOpen(true)}
+                onQuickCapture={runQuickCapture}
+                onOpenDailyNote={openDailyJournal}
                 userEmail={user?.email || null}
                 isCompactDevice={!phonePreview}
                 onRequestDesktopView={() => setViewMode('desktop')}
@@ -1321,7 +1384,8 @@ export default function App() {
                   )}
                 </div>
               ) : (
-                <>
+                <div className="flex flex-1 min-h-0 w-full">
+                <div className="flex-1 min-w-0 overflow-y-auto">
                   <div className="max-w-3xl mx-auto w-full px-6 sm:px-12 pt-8">
                     <TaskPropertiesPanel page={currentPage} onUpdatePage={updatePageById} />
                   </div>
@@ -1336,7 +1400,17 @@ export default function App() {
                     onFocusAfterInsertUsed={() => setFocusAfterInsert(null)}
                     onLockWorkspace={handleLockWorkspace}
                   />
-                </>
+                </div>
+                {linksRailOpen && currentBacklinks.length > 0 && (
+                  <BacklinksRail
+                    currentPage={currentPage}
+                    pages={pages}
+                    backlinks={currentBacklinks}
+                    onNavigateToPage={(id) => setCurrentPageId(id)}
+                    onClose={() => setLinksRailOpen(false)}
+                  />
+                )}
+                </div>
              )
           ) : (
             <div className="flex h-full items-center justify-center p-6 text-center text-sm text-stone-500 dark:text-stone-400">
@@ -1418,6 +1492,8 @@ export default function App() {
         onClose={() => setSettingsModalOpen(false)}
       />
       </Suspense>
+
+      <ShortcutHelpModal open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
 
       {movePageId && currentPageId && (
         <SpaceFolderPicker

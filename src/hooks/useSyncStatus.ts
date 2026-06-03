@@ -3,22 +3,26 @@ import { isWorkspaceLocked } from '../lib/persistence';
 import { getYjsKey } from '../lib/yjs';
 
 export interface SyncStatus {
-  /** Whether the workspace encryption is currently locked */
   encryptionLocked: boolean;
-  /** Whether an encryption key is set at all */
   encryptionKeySet: boolean;
-  /** Timestamp of the last known save (from localStorage flag) */
   lastSavedAt: number | null;
-  /** Whether a save appears to be in-flight */
   saving: boolean;
+  offline: boolean;
 }
 
 const LAST_SAVE_KEY = 'motionai-last-save-ts';
+let savingCounter = 0;
+let savingListeners: Array<(saving: boolean) => void> = [];
 
 export function setLastSaveNow(): void {
   if (typeof localStorage !== 'undefined') {
-    try { localStorage.setItem(LAST_SAVE_KEY, String(Date.now())); } catch { /* ignore */ }
+    try {
+      localStorage.setItem(LAST_SAVE_KEY, String(Date.now()));
+    } catch {
+      /* ignore */
+    }
   }
+  notifySavingListeners(false);
 }
 
 export function getLastSavedAt(): number | null {
@@ -26,39 +30,68 @@ export function getLastSavedAt(): number | null {
   try {
     const raw = localStorage.getItem(LAST_SAVE_KEY);
     return raw ? Number(raw) : null;
-  } catch { return null; }
+  } catch {
+    return null;
+  }
 }
 
-/**
- * Hook that polls sync-relevant state: encryption, last save, save-in-flight.
- * Polls every 2 seconds so it stays reasonably fresh without excessive reads.
- */
+/** Call when a debounced persistence write starts. */
+export function markSaveStarted(): void {
+  savingCounter += 1;
+  notifySavingListeners(true);
+}
+
+/** Call when a persistence write completes (success or failure). */
+export function markSaveFinished(): void {
+  savingCounter = Math.max(0, savingCounter - 1);
+  if (savingCounter === 0) {
+    notifySavingListeners(false);
+  }
+}
+
+function notifySavingListeners(saving: boolean): void {
+  savingListeners.forEach((fn) => fn(saving));
+}
+
 export function useSyncStatus(): SyncStatus {
   const [status, setStatus] = useState<SyncStatus>(() => ({
     encryptionLocked: false,
     encryptionKeySet: false,
     lastSavedAt: getLastSavedAt(),
     saving: false,
+    offline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
   }));
 
   const refresh = useCallback(() => {
     const locked = isWorkspaceLocked();
     const keySet = getYjsKey() !== null;
-    setStatus({
+    setStatus((prev) => ({
       encryptionLocked: locked,
       encryptionKeySet: keySet,
       lastSavedAt: getLastSavedAt(),
-      saving: false,
-    });
+      saving: prev.saving,
+      offline: typeof navigator !== 'undefined' ? !navigator.onLine : false,
+    }));
   }, []);
 
   useEffect(() => {
     refresh();
     const interval = setInterval(refresh, 2000);
-    return () => clearInterval(interval);
+    const onSaving = (saving: boolean) => {
+      setStatus((prev) => ({ ...prev, saving }));
+    };
+    savingListeners.push(onSaving);
+    const onOnline = () => refresh();
+    const onOffline = () => refresh();
+    window.addEventListener('online', onOnline);
+    window.addEventListener('offline', onOffline);
+    return () => {
+      clearInterval(interval);
+      savingListeners = savingListeners.filter((fn) => fn !== onSaving);
+      window.removeEventListener('online', onOnline);
+      window.removeEventListener('offline', onOffline);
+    };
   }, [refresh]);
 
-  // Expose refresh so saves can update the timestamp immediately
-  (status as any)._refresh = refresh;
   return status;
 }

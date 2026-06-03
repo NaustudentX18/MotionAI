@@ -16,6 +16,8 @@ import { SpellcheckPanel } from './blocks/SpellcheckPanel';
 import { CommentPopup } from './blocks/CommentPopup';
 import { SlashMenu, slashMenuActions } from './blocks/SlashMenu';
 import { AiMenu } from './blocks/AiMenu';
+import { EditorEmptyState } from './EditorEmptyState';
+import { markSaveStarted, markSaveFinished, setLastSaveNow } from '../hooks/useSyncStatus';
 import { StylePopup } from './blocks/StylePopup';
 
 export { parseMarkdownToHtml } from '../lib/blockUtils';
@@ -230,25 +232,40 @@ export function BlockEditor({
   useEffect(() => {
     if (isFirstRender.current) return;
     setSaveStatus('saving');
+    markSaveStarted();
     const timer = window.setTimeout(() => {
       onChangeRef.current(blocksRef.current);
       setSaveStatus('saved');
       setLastSavedTime(new Date().toLocaleTimeString());
+      setLastSaveNow();
+      markSaveFinished();
     }, 350);
-    return () => window.clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      markSaveFinished();
+    };
   }, [blocks, title]);
 
   const triggerManualSave = () => {
     setSaveStatus('saving');
+    markSaveStarted();
     try {
       onChangeRef.current(blocksRef.current);
       setSaveStatus('saved');
       setLastSavedTime(new Date().toLocaleTimeString());
+      setLastSaveNow();
     } catch (err) {
       console.error('Manual save error:', err);
       setSaveStatus('error');
+    } finally {
+      markSaveFinished();
     }
   };
+
+  const isEmptyPage =
+    blocks.length <= 1 &&
+    (!blocks[0]?.content || (blocks[0].content || '').replace(/<[^>]*>/g, '').trim() === '') &&
+    !title?.trim();
 
   // ─── Slash menu filter ───────────────────────────────────────────────────────
   useEffect(() => { setSlashSelectedIndex(0); }, [slashQuery]);
@@ -443,8 +460,19 @@ export function BlockEditor({
             <input type="text" value={title || ''} onChange={e => onTitleChange(e.target.value)} placeholder="Untitled" className="w-full text-4xl font-bold bg-transparent border-none outline-none mb-8 placeholder-[#37352f4d] dark:placeholder-[#ffffff4d] resize-none text-[#37352F] dark:text-[#E3E3E3]" />
 
             {/* TipTap Editor Content */}
+            {isEmptyPage && isReady ? (
+              <EditorEmptyState
+                onApplyTemplate={(newBlocks, newTitle) => {
+                  onChange(newBlocks);
+                  setBlocks(newBlocks);
+                  if (newTitle) onTitleChange(newTitle);
+                }}
+              />
+            ) : null}
             {isReady && editor ? (
-              <EditorContent editor={editor} />
+              <div className={cn('motion-prose', isEmptyPage && 'opacity-40 pointer-events-none max-h-0 overflow-hidden')}>
+                <EditorContent editor={editor} />
+              </div>
             ) : (
               <div className="text-gray-400 text-sm py-8 text-center">Loading editor…</div>
             )}

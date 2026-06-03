@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Page, PageVersion, PageType } from '../types';
 import type { PresenceDiagnostics } from '../lib/presence';
 import { History, RotateCcw, Users, Link2, Sparkles, Lock, ShieldCheck, Save, Clock, AlertTriangle, GitGraph } from 'lucide-react';
@@ -55,6 +55,12 @@ export function PageAddons({
 }: PageAddonsProps) {
   const [activeTab, setActiveTab] = useState<'history' | 'collab' | 'links' | 'brain'>('history');
   const [showGraph, setShowGraph] = useState(false);
+
+  useEffect(() => {
+    if (backlinks.length > 0) {
+      setActiveTab('links');
+    }
+  }, [currentPage?.id, backlinks.length]);
 
   if (!currentPage) return null;
 

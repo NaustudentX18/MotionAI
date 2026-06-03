@@ -509,6 +509,63 @@ async function startServer() {
     }
   });
 
+  app.post('/api/ai/chat/stream', rateLimitMiddleware, requireAuth, async (req, res) => {
+    const settings = extractAiSettings(req.body || {});
+    const client = createAiClient(settings);
+    if (!client.info.enabled || !client.info.configured) {
+      return res.status(503).json({ error: providerUnavailableMessage(client.info), provider: client.info, keysReturned: false });
+    }
+
+    const { history, message } = req.body || {};
+    if (!message) {
+      return res.status(400).json({ error: 'Missing chat message' });
+    }
+    const lengthError = chatPromptLengthExceeded(message, history);
+    if (lengthError) {
+      return res.status(413).json({ error: lengthError, keysReturned: false });
+    }
+
+    try {
+      const conversationHistory = Array.isArray(history) ? history : [];
+      const messages: ChatMessage[] = conversationHistory.map(h => ({
+        role: h.role === 'user' ? 'user' : 'model',
+        text: String(h.text || ''),
+      }));
+      messages.push({ role: 'user', text: String(message) });
+
+      const workspaceLabel =
+        typeof req.body?.workspaceName === 'string' && req.body.workspaceName.trim()
+          ? req.body.workspaceName.trim()
+          : 'your workspace';
+      const systemInstruction = `You are a helpful, professional Workspace Assistant named **MotionAI** for ${workspaceLabel}.
+- Answer user queries with professional poise and clarity in Markdown format.
+- Assist with content generation, summarization, general questions, and technical advice.
+- Keep your tone friendly, helpful, highly organized, and compact.`;
+
+      const text = await client.generateText(messages, { systemInstruction });
+
+      res.setHeader('Content-Type', 'text/event-stream; charset=utf-8');
+      res.setHeader('Cache-Control', 'no-cache');
+      res.setHeader('Connection', 'keep-alive');
+      res.flushHeaders?.();
+
+      const tokens = text.match(/\S+\s*|\s+/g) || [text];
+      for (const token of tokens) {
+        res.write(`data: ${JSON.stringify({ delta: token })}\n\n`);
+        await new Promise((r) => setTimeout(r, 12));
+      }
+      res.write('data: [DONE]\n\n');
+      res.end();
+    } catch (err) {
+      console.error('MotionAI Chat stream error:', safeErrorMessage(err, [settings.apiKey]));
+      if (!res.headersSent) {
+        res.status(502).json({ error: safeErrorMessage(err, [settings.apiKey]), keysReturned: false });
+      } else {
+        res.end();
+      }
+    }
+  });
+
   app.post('/api/ai/tts', rateLimitMiddleware, requireAuth, async (req, res) => {
     const { text, provider, voice, speed, localEndpointUrl, model } = req.body || {};
     const settings = extractAiSettings(req.body || {});
