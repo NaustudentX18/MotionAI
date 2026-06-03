@@ -189,7 +189,11 @@ export function initTauriAiProxy() {
         }));
         messages.push({ role: 'user' as const, text: String(message) });
 
-        const systemInstruction = `You are a helpful, professional, and elite Workspace Assistant named **MotionAI**. You live in the mobile workspace of Jake Malby.\n- Answer user queries with professional poise and clarity in Markdown format.\n- Assist with content generation, summarization, general questions, and technical advice.\n- Keep your tone friendly, helpful, highly organized, and compact. Match the beautiful minimalist Workspace aesthetic.\n- Avoid preachy or overly verbose intros unless necessary. Deliver exact solutions directly.`;
+        const workspaceLabel =
+          typeof body?.workspaceName === 'string' && body.workspaceName.trim()
+            ? body.workspaceName.trim()
+            : 'your workspace';
+        const systemInstruction = `You are a helpful, professional Workspace Assistant named **MotionAI** for ${workspaceLabel}.\n- Answer user queries with professional poise and clarity in Markdown format.\n- Assist with content generation, summarization, general questions, and technical advice.\n- Keep your tone friendly, helpful, highly organized, and compact. Match the minimalist workspace aesthetic.\n- Avoid preachy or overly verbose intros unless necessary. Deliver exact solutions directly.`;
 
         const text = await client.generateText(messages, { systemInstruction });
         return new Response(JSON.stringify({ text, provider: client.info, keysReturned: false }), {
