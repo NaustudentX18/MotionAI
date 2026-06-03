@@ -282,7 +282,8 @@ export function useTTS(initialConfig?: Partial<TTSConfig>): UseTTSResult {
             const localUrl = localEndpointUrl || activeAiSettings?.baseUrl;
             const apiKey = activeAiSettings?.apiKey;
 
-            const response = await fetch('/api/ai/tts', {
+            const { motionAiFetch } = await import('../lib/apiClient');
+            const response = await motionAiFetch('/api/ai/tts', {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',

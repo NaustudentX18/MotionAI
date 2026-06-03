@@ -17,8 +17,6 @@ import { CommentPopup } from './blocks/CommentPopup';
 import { SlashMenu, slashMenuActions } from './blocks/SlashMenu';
 import { AiMenu } from './blocks/AiMenu';
 import { StylePopup } from './blocks/StylePopup';
-import jsPDF from 'jspdf';
-import html2canvas from 'html2canvas';
 
 export { parseMarkdownToHtml } from '../lib/blockUtils';
 
@@ -230,26 +228,26 @@ export function BlockEditor({
   }, [blocks, title]);
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setSaveStatus('saving');
-      try {
-        const payload = { title, blocks: blocksRef.current, timestamp: Date.now() };
-        localStorage.setItem(`motion_ai_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
-        onChangeRef.current(blocksRef.current);
-        setTimeout(() => { setSaveStatus('saved'); setLastSavedTime(new Date().toLocaleTimeString()); }, 800);
-      } catch (err) { console.error("Auto-save error:", err); setSaveStatus('error'); }
-    }, 5000);
-    return () => clearInterval(timer);
-  }, [title]);
+    if (isFirstRender.current) return;
+    setSaveStatus('saving');
+    const timer = window.setTimeout(() => {
+      onChangeRef.current(blocksRef.current);
+      setSaveStatus('saved');
+      setLastSavedTime(new Date().toLocaleTimeString());
+    }, 350);
+    return () => window.clearTimeout(timer);
+  }, [blocks, title]);
 
   const triggerManualSave = () => {
     setSaveStatus('saving');
     try {
-      const payload = { title, blocks: blocksRef.current, timestamp: Date.now() };
-      localStorage.setItem(`motion_ai_autosave_${title || 'Untitled'}`, JSON.stringify(payload));
       onChangeRef.current(blocksRef.current);
-      setTimeout(() => { setSaveStatus('saved'); setLastSavedTime(new Date().toLocaleTimeString()); }, 600);
-    } catch (err) { console.error("Manual save error:", err); setSaveStatus('error'); }
+      setSaveStatus('saved');
+      setLastSavedTime(new Date().toLocaleTimeString());
+    } catch (err) {
+      console.error('Manual save error:', err);
+      setSaveStatus('error');
+    }
   };
 
   // ─── Slash menu filter ───────────────────────────────────────────────────────
@@ -274,6 +272,10 @@ export function BlockEditor({
   const exportPageAsPdf = async () => {
     setExportingPdf(true);
     try {
+      const [{ default: html2canvas }, { default: jsPDF }] = await Promise.all([
+        import('html2canvas'),
+        import('jspdf'),
+      ]);
       const element = document.getElementById('workspace-page-content');
       if (!element) return;
       const currentScrollY = window.scrollY;

@@ -63,6 +63,8 @@ import { keychain } from './lib/keychain';
 import { DEFAULT_REMINDER_SNOOZE_MINUTES, snoozeReminderDate, useReminders, type ReminderEvent } from './hooks/useReminders';
 import { getInactivityTimeoutMs, hasPin, isLocked as isLocalAuthLocked, lock as lockLocalAuth } from './lib/localAuth';
 import { LockScreen } from './components/LockScreen';
+import { appendBlockToDailyPage } from './lib/dailyNote';
+import { WorkspaceProvider } from './contexts/WorkspaceContext';
 
 function createDefaultPage(): Page {
   return {
@@ -203,33 +205,6 @@ export default function App() {
     };
   }, [localAppLocked, localAuthSettingsVersion]);
 
-  // y-webrtc: real-time cross-device CRDT sync
-  useEffect(() => {
-    if (!workspaceLoaded) return;
-
-    let rtcProvider: import('y-webrtc').WebrtcProvider | null = null;
-
-    import('y-webrtc').then(({ WebrtcProvider }) => {
-      // Signaling servers — first one is self-hosted (local), rest are fallbacks.
-      // y-webrtc tries them in order and automatically fails over if one is unreachable.
-      const signalingList = (
-        import.meta.env.VITE_SIGNALING_URLS ||
-        import.meta.env.VITE_SIGNALING_URL ||
-        'ws://localhost:3005'
-      ).split(',').map((s: string) => s.trim()).filter(Boolean);
-
-      rtcProvider = new WebrtcProvider('motionai-workspace-v1', getYDoc(), {
-        signaling: signalingList,
-      });
-    }).catch(err => {
-      console.warn('[y-webrtc] Failed to initialize:', err);
-    });
-
-    return () => {
-      rtcProvider?.destroy();
-    };
-  }, [workspaceLoaded]);
-
   // Y.Doc observer: sync remote changes (cross-tab / y-webrtc) back to React state
   useEffect(() => {
     if (!workspaceLoaded) return;
@@ -357,9 +332,21 @@ export default function App() {
       setViewMode(compactShell ? 'mobile' : 'desktop');
     } else if (action === 'ask-ai') {
       setPaletteOpen(true);
+    } else if (action === 'capture') {
+      const text = params.get('text') ?? '';
+      const { pageId, blockId } = appendBlockToDailyPage(
+        pages,
+        handleAddNewPageObj,
+        (id, blocks) => updatePageById(id, { blocks }),
+        text,
+      );
+      setCurrentPageId(pageId);
+      setCurrentPageIdInStore(pageId);
+      setFocusAfterInsert(blockId);
+      setViewMode(compactShell ? 'mobile' : 'desktop');
     }
     window.history.replaceState({}, '', window.location.pathname);
-  }, [workspaceLoaded, compactShell]);
+  }, [workspaceLoaded, compactShell, pages]);
 
   const handleReminderFired = useCallback((reminder: ReminderEvent) => {
     console.info('[reminder]', reminder.title, reminder.body);
@@ -392,6 +379,33 @@ export default function App() {
   // WebRTC presence state
   const [presencePeers, setPresencePeers] = useState<Array<{ peerId: string; userId: string; userName: string; pageId: string; lastSeen: number }>>([]);
   const syncStatus = useSyncStatus();
+
+  // y-webrtc: real-time cross-device CRDT sync (disabled when E2EE locked — no shared key protocol yet)
+  useEffect(() => {
+    if (!workspaceLoaded || !collaborationActive) return;
+    if (workspaceLocked || syncStatus.encryptionLocked) return;
+
+    let rtcProvider: import('y-webrtc').WebrtcProvider | null = null;
+
+    import('y-webrtc').then(({ WebrtcProvider }) => {
+      const signalingList = (
+        import.meta.env.VITE_SIGNALING_URLS ||
+        import.meta.env.VITE_SIGNALING_URL ||
+        'ws://localhost:3005'
+      ).split(',').map((s: string) => s.trim()).filter(Boolean);
+
+      rtcProvider = new WebrtcProvider('motionai-workspace-v1', getYDoc(), {
+        signaling: signalingList,
+      });
+    }).catch(err => {
+      console.warn('[y-webrtc] Failed to initialize:', err);
+    });
+
+    return () => {
+      rtcProvider?.destroy();
+    };
+  }, [workspaceLoaded, collaborationActive, workspaceLocked, syncStatus.encryptionLocked]);
+
   const [movePageId, setMovePageId] = useState<string | null>(null);
   const [presenceAvailable, setPresenceAvailable] = useState(false);
   const [presenceDiagnostics, setPresenceDiagnostics] = useState<PresenceDiagnostics | null>(null);
@@ -959,8 +973,21 @@ export default function App() {
     return <LockScreen onUnlocked={() => setLocalAppLocked(false)} />;
   }
 
+  const workspaceContextValue = useMemo(
+    () => ({
+      pages,
+      currentPageId,
+      currentPage: currentPage ?? null,
+      currentWorkspace,
+      setCurrentPageId,
+      updatePageById,
+    }),
+    [pages, currentPageId, currentPage, currentWorkspace, updatePageById],
+  );
+
   return (
     <SettingsProvider>
+    <WorkspaceProvider value={workspaceContextValue}>
     <OfflineBanner />
     {compactShell && <PwaCapabilityBanner />}
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
@@ -1400,6 +1427,7 @@ export default function App() {
         />
       )}
     </div>
+    </WorkspaceProvider>
     </SettingsProvider>
   );
 }

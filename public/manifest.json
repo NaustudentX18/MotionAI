@@ -39,6 +39,13 @@
       "description": "Open AI assistant",
       "url": "/?action=ask-ai",
       "icons": [{ "src": "/docs/media/motionai-logo.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Quick capture",
+      "short_name": "Capture",
+      "description": "Append to today's journal",
+      "url": "/?action=capture",
+      "icons": [{ "src": "/docs/media/motionai-logo.png", "sizes": "192x192" }]
     }
   ]
 }

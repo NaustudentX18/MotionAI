@@ -111,7 +111,8 @@ export function MeetingParserModal({
     setSource(null);
 
     try {
-      const res = await fetch('/api/ai/meeting-parser', {
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/meeting-parser', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(buildAiPayload(trimmed)),

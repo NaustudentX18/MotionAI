@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Block } from '../../types';
 import { cn } from '../../lib/utils';
+import { AiCitationBar } from '../ai/AiCitationBar';
 
 interface AiMenuProps {
   aiMenuPos: { top: number; left: number };
@@ -67,6 +68,13 @@ export function AiMenu({
           </button>
         </div>
 
+        {(selectedText || focusedId) && !aiLoading && !aiResult && (
+          <AiCitationBar
+            sourceLabel={focusedId ? `Block in document` : 'Selection'}
+            excerpt={selectedText ? selectedText.slice(0, 120) : undefined}
+          />
+        )}
+
         {aiLoading ? (
           <div className="p-4 space-y-3">
             <div className="h-4 bg-purple-100 dark:bg-purple-900/30 rounded w-3/4 animate-pulse" />
@@ -79,6 +87,11 @@ export function AiMenu({
             </div>
           </div>
         ) : aiResult ? (
+          <>
+          <AiCitationBar
+            sourceLabel={selectedText ? 'Your selection' : 'Document context'}
+            excerpt={selectedText ? selectedText.slice(0, 120) : undefined}
+          />
           <div className="p-4">
             <div className="text-sm text-[#37352F] mb-4 whitespace-pre-wrap max-h-60 overflow-y-auto font-sans leading-relaxed">
               {aiResult}
@@ -106,6 +119,7 @@ export function AiMenu({
               </button>
             </div>
           </div>
+          </>
         ) : (
           <div className="p-1">
             {selectedText && (

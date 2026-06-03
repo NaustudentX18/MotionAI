@@ -120,7 +120,8 @@ export function AiComposerModal({ isOpen, onClose, block, blocks, onSave }: AiCo
         requestPrompt = `Please rewrite the following content to fit these criteria: ${prompt}. Keep it structurally sound and clean. Target Content:\n${context}`;
       }
 
-      const res = await fetch('/api/ai/generate', {
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/generate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
