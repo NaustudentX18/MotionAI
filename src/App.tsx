@@ -56,6 +56,7 @@ import { cn } from './lib/utils';
 import { loadWorkspace, saveWorkspace, isWorkspaceLocked, setWorkspaceKey, clearWorkspaceKey, savePage, deletePage as deletePageFromStore, addPage as addPageToStore, setCurrentPageId as setCurrentPageIdInStore, reloadWorkspaceFromLegacyStore, listWorkspaces, createWorkspace, deleteWorkspace, renameWorkspace, updateLastOpened, getDefaultWorkspace, WorkspaceMeta } from './lib/persistence';
 import { getYDoc, yDocToSnapshot, destroyYjs } from './lib/yjs';
 import { loadSettings } from './lib/settings';
+import { MotionAILogo } from './components/brand/MotionAILogo';
 import { backlinksIndex } from './lib/backlinksIndex';
 import { PresenceManager, type PresenceDiagnostics } from './lib/presence';
 import { PresenceIndicator } from './components/PresenceIndicator';
@@ -1089,9 +1090,10 @@ export default function App() {
         {!compactShell && (
         <header className="sticky top-0 z-10 flex items-center px-4 bg-white/80 backdrop-blur-sm dark:bg-[#1C1C1C]/80 h-11 text-sm justify-between shrink-0 border-b border-gray-150 dark:border-stone-850">
            <div className="flex items-center space-x-2 text-[#37352f8c] dark:text-[#E3E3E3]/60">
-             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded mr-2">
+             <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded mr-1">
                  <Menu size={16} />
              </button>
+             <MotionAILogo size={22} className="mr-1 hidden sm:block" />
              <span className="hidden sm:inline truncate max-w-[100px]">{user?.email || 'Local Workspace'}</span>
              <span className="hidden sm:inline">/</span>
              <span className="text-[#37352F] dark:text-[#E3E3E3] font-medium truncate max-w-[125px] mr-2">{currentPage?.title || 'Untitled'}</span>
@@ -1107,8 +1109,8 @@ export default function App() {
                  )}
                  title="MotionAI Repository Handbook & Workspace Gaps roadmap dashboard"
                >
-                 <Sparkles size={11} className={viewMode === 'hub' ? "text-yellow-300" : ""} />
-                 <span className="hidden md:inline font-sans text-[11px]">MotionAI Portal</span>
+                 <MotionAILogo size={14} className="shrink-0" />
+                 <span className="hidden md:inline font-sans text-[11px]">Portal</span>
                </button>
                <button 
                  onClick={() => setViewMode('desktop')}

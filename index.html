@@ -6,7 +6,9 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MotionAI" />
-    <link rel="apple-touch-icon" href="/docs/media/motionai-logo.png" />
+    <link rel="icon" type="image/svg+xml" href="/brand/motionai-mark.svg" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/docs/media/motionai-icon-512.png" />
+    <link rel="apple-touch-icon" href="/docs/media/motionai-icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>MotionAI — Local-First Intelligent Workspace</title>
     <meta name="description" content="MotionAI is a free, open-source, self-hostable local-first workspace for documents, tasks, and AI actions." />
@@ -132,19 +134,16 @@
       }
 
       .logo-mark {
-        width: 72px;
-        height: 72px;
+        width: 88px;
+        height: 88px;
         margin: 0 auto 20px;
-        border-radius: 20px;
-        overflow: hidden;
-        box-shadow: 0 12px 40px rgba(139, 92, 246, 0.35);
+        filter: drop-shadow(0 12px 40px rgba(139, 92, 246, 0.45));
         animation: logoPulse 3s ease-in-out infinite;
       }
 
       .logo-mark img {
         width: 100%;
         height: 100%;
-        object-fit: cover;
         display: block;
       }
 
@@ -366,7 +365,7 @@
       <div class="splash-main">
         <div class="splash-card">
           <div class="logo-mark">
-            <img src="/docs/media/motionai-logo.png" alt="MotionAI" width="72" height="72" />
+            <img src="/brand/motionai-mark.svg" alt="MotionAI" width="88" height="88" />
           </div>
           <h1 class="brand-title">MotionAI</h1>
           <p class="brand-sub">Your local-first command center for notes, tasks, AI, and automations — private by default.</p>

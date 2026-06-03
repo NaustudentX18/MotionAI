@@ -1,6 +1,6 @@
 <div align="center">
 
-<img src="docs/media/motionai-logo.svg" width="520" alt="MotionAI" />
+<img src="docs/media/motionai-wordmark.svg" width="480" alt="MotionAI" />
 
 <br /><br />
 
@@ -249,7 +249,9 @@ public/manifest.json        # PWA manifest
 | --- | --- |
 | `docs/media/motionai-hero-cinematic.png` | README hero & splash background |
 | `docs/media/motionai-*-showcase.png` | README gallery & splash filmstrip |
-| `docs/media/motionai-logo.svg` | Brand mark (light/dark friendly) |
+| `public/brand/motionai-mark.svg` | Primary app icon (Flux mark) |
+| `docs/media/motionai-wordmark.svg` | README / docs wordmark |
+| `docs/media/motionai-icon-512.png` | PWA & apple-touch raster |
 | `docs/media/motionai-live-demo.webm` | Demo video |
 
 Regenerate live app captures (dev server required):

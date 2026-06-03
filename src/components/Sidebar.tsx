@@ -20,6 +20,7 @@ import {
 } from 'lucide-react';
 import { WorkspaceMeta } from '../lib/persistence';
 import { WORKSPACE_TEMPLATES, instantiateTemplate, WorkspaceTemplate } from '../lib/workspaceTemplates';
+import { MotionAILogo } from './brand/MotionAILogo';
 
 interface SidebarProps {
   pages: Page[];
@@ -262,6 +263,13 @@ export function Sidebar({
 
   return (
     <div className="w-[240px] h-screen bg-[#F7F6F3] dark:bg-[#151515] border-r border-[#EBEBE9] dark:border-[#2F2F2F] flex flex-col shrink-0 text-[#37352F] dark:text-stone-300 transition-colors">
+      <div className="flex items-center gap-2.5 px-3 py-3 border-b border-[#EBEBE9] dark:border-[#2F2F2F] shrink-0">
+        <MotionAILogo size={30} />
+        <div className="min-w-0">
+          <div className="text-sm font-bold tracking-tight text-[#37352F] dark:text-stone-100 leading-tight">MotionAI</div>
+          <div className="text-[10px] font-medium text-stone-500 dark:text-stone-500 truncate">Local-first workspace</div>
+        </div>
+      </div>
       {/* Workspace Switcher */}
       {workspaces && workspaces.length > 0 && onSwitchWorkspace ? (
         <div className="p-2 mb-1 relative">

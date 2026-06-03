@@ -46,6 +46,7 @@ import { requestMicrophonePermission } from '../lib/device';
 import { motionAiFetch } from '../lib/apiClient';
 import { MobileRichPageFallback } from './mobile/MobileRichPageFallback';
 import { MobileBlockEditorView } from './mobile/MobileBlockEditorView';
+import { MotionAILogo } from './brand/MotionAILogo';
 
 interface MobileWorkspaceAppProps {
   pages: Page[];
@@ -769,12 +770,13 @@ export function MobileWorkspaceApp({
                 {/* Home tab button */}
                 <button
                   onClick={() => { triggerHaptic(50); setActiveTab('home'); setMobileEditingPageId(null); }}
-                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-3 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'home'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
+                  {activeTab === 'home' ? <MotionAILogo size={18} /> : null}
                   <Home size={15} />
                   {activeTab === 'home' && <span>Home</span>}
                 </button>
@@ -1272,12 +1274,9 @@ export function MobileWorkspaceApp({
                   <Clock size={16} />
                 </button>
 
-                {/* Center logo label */}
-                <div className="flex flex-col items-center select-none scale-102">
-                  <div className="w-7 h-7 bg-white text-black font-sans font-bold text-[13px] rounded-full flex items-center justify-center shadow-lg border border-white/20 select-none animate-bounce">
-                    👁
-                  </div>
-                  <span className="text-[11.5px] font-bold tracking-widest text-[#E3E3E3] uppercase font-mono mt-1 select-none">MotionAI</span>
+                <div className="flex flex-col items-center select-none">
+                  <MotionAILogo size={36} />
+                  <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase font-mono mt-1 select-none">MotionAI</span>
                 </div>
 
                 <button 
