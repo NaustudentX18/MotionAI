@@ -128,7 +128,8 @@ export function BlockEditor({
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = (reader.result as string).split(',')[1];
-          const res = await fetch('/api/upload/image', {
+          const { motionAiFetch } = await import('../lib/apiClient');
+          const res = await motionAiFetch('/api/upload/image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ name: file.name, type: file.type, data: base64 }),

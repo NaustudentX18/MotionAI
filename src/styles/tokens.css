@@ -1,0 +1,75 @@
+/**
+ * MotionAI design tokens — semantic surfaces for light/dark without hex overrides.
+ */
+:root {
+  --motion-font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --motion-font-serif: ui-serif, Georgia, 'Times New Roman', serif;
+
+  --motion-prose-size: 1.0625rem;
+  --motion-prose-leading: 1.65;
+  --motion-label-size: 0.6875rem;
+
+  --motion-radius-sm: 0.375rem;
+  --motion-radius-md: 0.75rem;
+  --motion-radius-lg: 1.25rem;
+  --motion-radius-full: 9999px;
+
+  --motion-duration-fast: 150ms;
+  --motion-duration-normal: 220ms;
+  --motion-ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+
+  --motion-surface-base: #ffffff;
+  --motion-surface-raised: #fbfbfa;
+  --motion-surface-muted: #f7f6f3;
+  --motion-surface-hover: #f1f1f0;
+  --motion-border: #ebebe9;
+  --motion-text: #37352f;
+  --motion-text-muted: rgba(55, 53, 47, 0.55);
+  --motion-accent: #7c3aed;
+  --motion-accent-muted: #ede9fe;
+}
+
+html.dark {
+  --motion-surface-base: #191919;
+  --motion-surface-raised: #1c1c1c;
+  --motion-surface-muted: #202020;
+  --motion-surface-hover: #2f2f2f;
+  --motion-border: #373737;
+  --motion-text: #e3e3e3;
+  --motion-text-muted: rgba(227, 227, 227, 0.55);
+  --motion-accent: #a78bfa;
+  --motion-accent-muted: rgba(124, 58, 237, 0.2);
+}
+
+.motion-prose {
+  font-family: var(--motion-font-sans);
+  font-size: var(--motion-prose-size);
+  line-height: var(--motion-prose-leading);
+  color: var(--motion-text);
+  max-width: 42rem;
+}
+
+.motion-label {
+  font-size: var(--motion-label-size);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--motion-text-muted);
+}
+
+.motion-surface {
+  background: var(--motion-surface-base);
+  color: var(--motion-text);
+}
+
+.motion-panel {
+  background: var(--motion-surface-raised);
+  border: 1px solid var(--motion-border);
+  border-radius: var(--motion-radius-lg);
+  transition: box-shadow var(--motion-duration-fast) var(--motion-ease-out);
+}
+
+.reduced-motion .motion-panel,
+.reduced-motion * {
+  transition-duration: 0.001ms !important;
+}

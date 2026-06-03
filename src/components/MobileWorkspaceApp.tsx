@@ -43,6 +43,8 @@ import { cn } from '../lib/utils';
 import { getTrash, clearTrash } from '../lib/trashStore';
 import { useToast } from './ToastProvider';
 import { requestMicrophonePermission } from '../lib/device';
+import { motionAiFetch } from '../lib/apiClient';
+import { MobileRichPageFallback } from './mobile/MobileRichPageFallback';
 
 interface MobileWorkspaceAppProps {
   pages: Page[];
@@ -59,6 +61,7 @@ interface MobileWorkspaceAppProps {
   userEmail: string | null;
   /** True on real phones / installed PWA; false when previewing phone frame on desktop */
   isCompactDevice?: boolean;
+  onRequestDesktopView?: () => void;
 }
 
 export function MobileWorkspaceApp({
@@ -75,6 +78,7 @@ export function MobileWorkspaceApp({
   onOpenPages,
   userEmail,
   isCompactDevice = true,
+  onRequestDesktopView,
 }: MobileWorkspaceAppProps) {
   const { showToast } = useToast();
   // Navigation tabs: 'home' | 'chats' | 'meeting' | 'inbox'
@@ -490,11 +494,8 @@ export function MobileWorkspaceApp({
         console.warn('Semantic search warning:', e);
       }
 
-      const res = await fetch('/api/ai/chat', {
+      const res = await motionAiFetch('/api/ai/chat', {
         method: 'POST',
-        headers: {
-          'Content-Type': 'application/json'
-        },
         body: JSON.stringify({
           history: chatMessages.map(m => ({ role: m.role, text: m.text })),
           message: query + extraContext,
@@ -544,9 +545,8 @@ export function MobileWorkspaceApp({
 
     try {
       const today = new Date().toISOString().split('T')[0];
-      const res = await fetch('/api/ai/generate', {
+      const res = await motionAiFetch('/api/ai/generate', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           command: 'custom',
           context: finalTranscriptText,
@@ -1124,6 +1124,15 @@ export function MobileWorkspaceApp({
               </div>
 
             </div>
+          ) : activeMobilePage?.pageType && activeMobilePage.pageType !== 'block' ? (
+            <MobileRichPageFallback
+              page={activeMobilePage}
+              onBack={() => {
+                setMobileEditingPageId(null);
+                setAddingBlockType(null);
+              }}
+              onOpenDesktopHint={onRequestDesktopView}
+            />
           ) : (
             
             // VIEW: NESTED MOBILE EDITOR SUB-PAGE COMPONENT

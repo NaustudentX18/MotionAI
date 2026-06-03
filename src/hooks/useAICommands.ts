@@ -104,7 +104,8 @@ export function useAICommands(editor: Editor | null, blocksRef: React.MutableRef
       }
       let semanticContext = '';
       try { const { semanticSearch } = await import('../lib/vectorStore'); const results = await semanticSearch(prompt || context || 'general content', 3); if (results && results.length > 0) semanticContext = '\n\n[RELEVANT LOCAL CHUNKS]\n' + results.map((r: any) => `- "${r.text}"`).join('\n'); } catch (e) { console.warn('Semantic search failed:', e); }
-      const res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, context: context + semanticContext, prompt }) });
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/generate', { method: 'POST', body: JSON.stringify({ command, context: context + semanticContext, prompt }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       const htmlContent = sanitizeHtml(parseMarkdownToHtml(data.text || ''));
@@ -121,7 +122,8 @@ export function useAICommands(editor: Editor | null, blocksRef: React.MutableRef
     try {
       let semanticContext = '';
       try { const { semanticSearch } = await import('../lib/vectorStore'); const results = await semanticSearch(customPrompt || aiPrompt || selectedText || 'general content', 3); if (results && results.length > 0) semanticContext = '\n\n[RELEVANT LOCAL CHUNKS]\n' + results.map((r: any) => `- "${r.text}"`).join('\n'); } catch (e) { console.warn('Semantic search failed:', e); }
-      const res = await fetch('/api/ai/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ command, context: (selectedText || blocksRef.current.map(b => b.content).join('\n')) + semanticContext, prompt: customPrompt || aiPrompt }) });
+      const { motionAiFetch } = await import('../lib/apiClient');
+      const res = await motionAiFetch('/api/ai/generate', { method: 'POST', body: JSON.stringify({ command, context: (selectedText || blocksRef.current.map(b => b.content).join('\n')) + semanticContext, prompt: customPrompt || aiPrompt }) });
       const data = await res.json();
       if (data.error) throw new Error(data.error);
       if (command === 'extract') {

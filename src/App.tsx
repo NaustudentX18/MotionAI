@@ -8,13 +8,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { Page, Block, PageType } from './types';
 import { Sidebar } from './components/Sidebar';
 import { BlockEditor } from './components/BlockEditor';
-import { CanvasEditor } from './components/CanvasEditor';
 import { DatabaseBlock } from './components/blocks/DatabaseBlock';
 import { runAiFormula } from './lib/ai/AiFormulaEngine';
-import { CommandPalette } from './components/CommandPalette';
-import { DriveModal } from './components/DriveModal';
-import { TasksModal } from './components/TasksModal';
-import { MeetingParserModal } from './components/MeetingParserModal';
 import { PageAddons } from './components/PageAddons';
 import { SpaceFolderPicker } from './components/SpaceFolderPicker';
 import { WorkspaceTemplate, instantiateTemplate } from './lib/workspaceTemplates';
@@ -28,8 +23,27 @@ import { PwaCapabilityBanner } from './components/PwaCapabilityBanner';
 const MobileWorkspaceApp = lazy(() =>
   import('./components/MobileWorkspaceApp').then(m => ({ default: m.MobileWorkspaceApp }))
 );
-import { MotionAIHub } from './components/MotionAIHub';
-import { SettingsModal } from './components/SettingsModal';
+const MotionAIHub = lazy(() =>
+  import('./components/MotionAIHub').then(m => ({ default: m.MotionAIHub }))
+);
+const SettingsModal = lazy(() =>
+  import('./components/SettingsModal').then(m => ({ default: m.SettingsModal }))
+);
+const CommandPalette = lazy(() =>
+  import('./components/CommandPalette').then(m => ({ default: m.CommandPalette }))
+);
+const CanvasEditor = lazy(() =>
+  import('./components/CanvasEditor').then(m => ({ default: m.CanvasEditor }))
+);
+const DriveModal = lazy(() =>
+  import('./components/DriveModal').then(m => ({ default: m.DriveModal }))
+);
+const TasksModal = lazy(() =>
+  import('./components/TasksModal').then(m => ({ default: m.TasksModal }))
+);
+const MeetingParserModal = lazy(() =>
+  import('./components/MeetingParserModal').then(m => ({ default: m.MeetingParserModal }))
+);
 import { TaskPropertiesPanel } from './components/tasks/TaskPropertiesPanel';
 import { ReminderActionToast } from './components/tasks/ReminderActionToast';
 import { DashboardWidget } from './components/dashboard/DashboardWidget';
@@ -325,6 +339,27 @@ export default function App() {
     document.documentElement.classList.toggle('pwa-compact-shell', compactShell);
     return () => document.documentElement.classList.remove('pwa-compact-shell');
   }, [compactShell]);
+
+  useEffect(() => {
+    if (!('serviceWorker' in navigator)) return;
+    navigator.serviceWorker.register('/sw.js').catch(err => {
+      console.warn('Service worker registration failed:', err);
+    });
+  }, []);
+
+  useEffect(() => {
+    if (!workspaceLoaded) return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    if (!action) return;
+    if (action === 'new-page') {
+      addPage();
+      setViewMode(compactShell ? 'mobile' : 'desktop');
+    } else if (action === 'ask-ai') {
+      setPaletteOpen(true);
+    }
+    window.history.replaceState({}, '', window.location.pathname);
+  }, [workspaceLoaded, compactShell]);
 
   const handleReminderFired = useCallback((reminder: ReminderEvent) => {
     console.info('[reminder]', reminder.title, reminder.body);
@@ -659,28 +694,34 @@ export default function App() {
     }
   };
 
-  const handleSaveSnapshot = () => {
-    setLastSaveNow();
-
-  // Move page to new parent
   const handleMovePage = (pageId: string) => {
     setMovePageId(pageId);
   };
 
   const handleMoveConfirm = (pageId: string, newParentId: string | null) => {
-    setPages(prev => prev.map(p =>
-      p.id === pageId ? { ...p, parentId: newParentId, updatedAt: Date.now() } : p
-    ));
+    setPages(prev => {
+      const updated = prev.map(p =>
+        p.id === pageId ? { ...p, parentId: newParentId, updatedAt: Date.now() } : p
+      );
+      const changed = updated.find(p => p.id === pageId);
+      if (changed) savePage(changed);
+      return updated;
+    });
     setMovePageId(null);
   };
 
   const handleInstantiateTemplate = (template: WorkspaceTemplate) => {
     const newPages = instantiateTemplate(template);
     setPages(prev => [...prev, ...newPages]);
+    newPages.forEach(p => addPageToStore(p));
     if (newPages.length > 0) {
       setCurrentPageId(newPages[0].id);
+      setCurrentPageIdInStore(newPages[0].id);
     }
   };
+
+  const handleSaveSnapshot = () => {
+    setLastSaveNow();
     if (!currentPageId) return;
     const targetPage = pages.find(p => p.id === currentPageId);
     if (!targetPage) return;
@@ -923,6 +964,7 @@ export default function App() {
     <OfflineBanner />
     {compactShell && <PwaCapabilityBanner />}
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
+      <Suspense fallback={null}>
       <CommandPalette
          isOpen={paletteOpen}
          onClose={() => setPaletteOpen(false)}
@@ -966,6 +1008,7 @@ export default function App() {
            });
          }}
       />
+      </Suspense>
     
       {/* Mobile Sidebar Overlay */}
       {sidebarOpen && !compactShell && (
@@ -999,6 +1042,8 @@ export default function App() {
            }}
            onAddPage={addPage}
            onDeletePage={deletePageById}
+           onMovePage={handleMovePage}
+           onInstantiateTemplate={handleInstantiateTemplate}
            userEmail={user?.email || null}
            onLogin={handleLogin}
            onLogout={logout}
@@ -1189,12 +1234,16 @@ export default function App() {
                 onOpenPages={() => setSidebarOpen(true)}
                 userEmail={user?.email || null}
                 isCompactDevice={!phonePreview}
+                onRequestDesktopView={() => setViewMode('desktop')}
               />
             </Suspense>
           ) : viewMode === 'hub' ? (
-            <MotionAIHub />
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-stone-400 text-sm">Loading hub…</div>}>
+              <MotionAIHub />
+            </Suspense>
           ) : currentPage ? (
              currentPage.pageType === 'canvas' ? (
+               <Suspense fallback={<div className="flex h-full items-center justify-center text-stone-400 text-sm">Loading canvas…</div>}>
                <CanvasEditor 
                  key={currentPage.id} 
                  pageId={currentPage.id} 
@@ -1202,6 +1251,7 @@ export default function App() {
                  onSelectPage={setCurrentPageId}
                  onAddPage={handleAddNewPageObj}
                />
+               </Suspense>
              ) : currentPage.pageType === 'dashboard' ? (
                <div className="w-full px-6 sm:px-12 py-12 pb-48 font-sans max-w-5xl mx-auto overflow-y-auto h-full">
                  <DashboardWidget pages={pages} onSelectPage={setCurrentPageId} />
@@ -1313,6 +1363,7 @@ export default function App() {
         />
       )}
 
+      <Suspense fallback={null}>
       <DriveModal 
         isOpen={driveModalOpen} 
         onClose={() => setDriveModalOpen(false)} 
@@ -1337,6 +1388,17 @@ export default function App() {
         isOpen={settingsModalOpen}
         onClose={() => setSettingsModalOpen(false)}
       />
+      </Suspense>
+
+      {movePageId && currentPageId && (
+        <SpaceFolderPicker
+          pages={pages}
+          currentPageId={movePageId}
+          currentParentId={pages.find(p => p.id === movePageId)?.parentId}
+          onMove={handleMoveConfirm}
+          onClose={() => setMovePageId(null)}
+        />
+      )}
     </div>
     </SettingsProvider>
   );

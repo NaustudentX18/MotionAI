@@ -396,7 +396,7 @@ async function startServer() {
   });
 
   // Image Upload Endpoint
-  app.post('/api/upload/image', async (req, res) => {
+  app.post('/api/upload/image', rateLimitMiddleware, requireAuth, async (req, res) => {
     const { name, type, data } = req.body as { name?: string; type?: string; data?: string };
     if (!name || !type || !data) {
       res.status(400).json({ error: 'Missing name, type, or data' });
@@ -407,11 +407,16 @@ async function startServer() {
       res.status(400).json({ error: 'Invalid image type' });
       return;
     }
-    const ext = type.split('/')[1];
-    const filename = `${crypto.randomUUID()}.${ext}`;
-    const filepath = path.join(UPLOADS_DIR, filename);
+    const maxBytes = 4 * 1024 * 1024;
     try {
       const buffer = Buffer.from(data, 'base64');
+      if (buffer.length > maxBytes) {
+        res.status(413).json({ error: 'Image exceeds 4MB limit' });
+        return;
+      }
+      const ext = type.split('/')[1];
+      const filename = `${crypto.randomUUID()}.${ext}`;
+      const filepath = path.join(UPLOADS_DIR, filename);
       fs.writeFileSync(filepath, buffer);
       res.json({ url: `/uploads/${filename}`, filename });
     } catch (err) {
