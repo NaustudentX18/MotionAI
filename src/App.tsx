@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback, lazy, Suspense } from 'react';
 import { v4 as uuidv4 } from 'uuid';
 import { Page, Block, PageType } from './types';
 import { Sidebar } from './components/Sidebar';
@@ -19,7 +19,15 @@ import { PageAddons } from './components/PageAddons';
 import { SpaceFolderPicker } from './components/SpaceFolderPicker';
 import { WorkspaceTemplate, instantiateTemplate } from './lib/workspaceTemplates';
 import { useSyncStatus, setLastSaveNow } from './hooks/useSyncStatus';
-import { MobileWorkspaceApp } from './components/MobileWorkspaceApp';
+import { useMediaQuery } from './hooks/useMediaQuery';
+import { useViewMode } from './hooks/useViewMode';
+import { shouldUseCompactShell, isPhonePreviewOnDesktop } from './lib/device';
+import { addToTrash, removeFromTrash } from './lib/trashStore';
+import { PwaCapabilityBanner } from './components/PwaCapabilityBanner';
+
+const MobileWorkspaceApp = lazy(() =>
+  import('./components/MobileWorkspaceApp').then(m => ({ default: m.MobileWorkspaceApp }))
+);
 import { MotionAIHub } from './components/MotionAIHub';
 import { SettingsModal } from './components/SettingsModal';
 import { TaskPropertiesPanel } from './components/tasks/TaskPropertiesPanel';
@@ -272,7 +280,10 @@ export default function App() {
   const [tasksModalOpen, setTasksModalOpen] = useState(false);
   const [meetingParserOpen, setMeetingParserOpen] = useState(false);
   const [settingsModalOpen, setSettingsModalOpen] = useState(false);
-  const [viewMode, setViewMode] = useState<'desktop' | 'mobile' | 'hub'>('hub');
+  const [viewMode, setViewMode] = useViewMode();
+  const isNarrowViewport = useMediaQuery('(max-width: 767px)');
+  const compactShell = shouldUseCompactShell(viewMode, isNarrowViewport);
+  const phonePreview = isPhonePreviewOnDesktop(viewMode, isNarrowViewport);
   const [activeBlockId, setActiveBlockId] = useState<string | null>(null);
   const [focusAfterInsert, setFocusAfterInsert] = useState<string | null>(null);
   const [scrollPositions, setScrollPositions] = useState<Record<string, number>>({});
@@ -310,13 +321,10 @@ export default function App() {
     return () => mediaQuery.removeEventListener('change', handleChange);
   }, []);
 
-  // Mobile device auto-detection to set default viewMode
   useEffect(() => {
-    const isMobileDevice = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || window.innerWidth < 768;
-    if (isMobileDevice) {
-      setViewMode('mobile');
-    }
-  }, []);
+    document.documentElement.classList.toggle('pwa-compact-shell', compactShell);
+    return () => document.documentElement.classList.remove('pwa-compact-shell');
+  }, [compactShell]);
 
   const handleReminderFired = useCallback((reminder: ReminderEvent) => {
     console.info('[reminder]', reminder.title, reminder.body);
@@ -530,6 +538,21 @@ export default function App() {
     setCurrentPageId(newPage.id);
     setCurrentPageIdInStore(newPage.id);
   };
+
+  const movePageToTrash = useCallback((id: string) => {
+    const page = pages.find(p => p.id === id);
+    if (page && currentWorkspace) {
+      addToTrash(currentWorkspace.id, page);
+    }
+    deletePageById(id);
+  }, [pages, currentWorkspace, currentPageId]);
+
+  const restorePageFromTrash = useCallback((page: Page) => {
+    if (currentWorkspace) {
+      removeFromTrash(currentWorkspace.id, page.id);
+    }
+    handleAddNewPageObj(page);
+  }, [currentWorkspace, pages]);
 
   const handleImportDrivePage = (title: string, blocks: Block[]) => {
     const newPage: Page = {
@@ -898,6 +921,7 @@ export default function App() {
   return (
     <SettingsProvider>
     <OfflineBanner />
+    {compactShell && <PwaCapabilityBanner />}
     <div className="flex h-[100dvh] bg-[#FFFFFF] text-[#37352F] overflow-hidden font-sans relative">
       <CommandPalette
          isOpen={paletteOpen}
@@ -944,13 +968,23 @@ export default function App() {
       />
     
       {/* Mobile Sidebar Overlay */}
-      {sidebarOpen && (
+      {sidebarOpen && !compactShell && (
          <div className="fixed inset-0 bg-black/20 z-40 md:hidden" onClick={() => setSidebarOpen(false)} />
+      )}
+      {sidebarOpen && compactShell && (
+         <div className="fixed inset-0 bg-black/50 z-40" onClick={() => setSidebarOpen(false)} />
       )}
       
       <div className={cn(
-        "fixed md:static inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-in-out md:transform-none md:flex",
-        sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+        compactShell
+          ? cn(
+              "fixed inset-y-0 left-0 z-50 w-[min(100vw,320px)] transform transition-transform duration-200 ease-in-out flex",
+              sidebarOpen ? "translate-x-0" : "-translate-x-full"
+            )
+          : cn(
+              "fixed md:static inset-y-0 left-0 z-50 transform transition-transform duration-200 ease-in-out md:transform-none md:flex",
+              sidebarOpen ? "translate-x-0" : "-translate-x-full md:translate-x-0"
+            )
       )}>
          <Sidebar
            pages={pages}
@@ -979,7 +1013,8 @@ export default function App() {
       </div>
       
       <div className="flex-1 flex overflow-hidden w-full relative">
-        <main ref={scrollContainerRef} className={cn("flex-1 relative flex flex-col min-w-0 w-full", viewMode === 'desktop' ? "overflow-y-auto" : "overflow-hidden")}>
+        <main ref={scrollContainerRef} className={cn("flex-1 relative flex flex-col min-w-0 w-full", compactShell || viewMode !== 'desktop' ? "overflow-hidden" : "overflow-y-auto")}>
+        {!compactShell && (
         <header className="sticky top-0 z-10 flex items-center px-4 bg-white/80 backdrop-blur-sm dark:bg-[#1C1C1C]/80 h-11 text-sm justify-between shrink-0 border-b border-gray-150 dark:border-stone-850">
            <div className="flex items-center space-x-2 text-[#37352f8c] dark:text-[#E3E3E3]/60">
              <button onClick={() => setSidebarOpen(!sidebarOpen)} className="p-1 hover:bg-[#F1F1F0] dark:hover:bg-[#2F2F2F] rounded mr-2">
@@ -1118,24 +1153,46 @@ export default function App() {
                 </div>
               )}
              {!user ? (
-               <button onClick={handleLogin} className="text-sm bg-[#F7F6F3] border border-[#EBEBE9] text-[#37352F] hover:bg-[#EBEBE9] px-2 py-1 rounded">Link Workspace</button>
+               <button onClick={handleLogin} className="min-h-11 text-sm bg-[#F7F6F3] border border-[#EBEBE9] text-[#37352F] hover:bg-[#EBEBE9] px-3 py-2 rounded">Link Workspace</button>
              ) : null}
            </div>
         </header>
+        )}
+
+        {compactShell && phonePreview && (
+          <div className="shrink-0 flex items-center justify-between gap-2 px-3 py-2 border-b border-stone-800 bg-stone-950/90 text-stone-300 text-xs">
+            <span className="font-semibold">Mobile preview</span>
+            <div className="flex gap-1">
+              <button type="button" onClick={() => setViewMode('desktop')} className="min-h-9 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 font-medium">Desktop</button>
+              <button type="button" onClick={() => setSidebarOpen(true)} className="min-h-9 px-3 rounded-lg bg-stone-800 hover:bg-stone-700 font-medium">Pages</button>
+            </div>
+          </div>
+        )}
 
         <div className="flex-1 w-full relative bg-gray-50 dark:bg-stone-900">
-          {viewMode === 'hub' ? (
+          {compactShell ? (
+            <Suspense fallback={<div className="flex h-full items-center justify-center text-stone-400 text-sm">Loading mobile workspace…</div>}>
+              <MobileWorkspaceApp
+                pages={pages}
+                currentPageId={currentPageId}
+                workspaceId={currentWorkspace?.id ?? 'default'}
+                workspaceName={currentWorkspace?.name ?? 'Workspace'}
+                onSelectPage={(id) => {
+                  setCurrentPageIdInStore(id);
+                  setCurrentPageId(id);
+                }}
+                onAddPage={handleAddNewPageObj}
+                onUpdatePage={updatePageById}
+                onDeletePage={movePageToTrash}
+                onRestorePage={restorePageFromTrash}
+                onOpenSettings={() => setSettingsModalOpen(true)}
+                onOpenPages={() => setSidebarOpen(true)}
+                userEmail={user?.email || null}
+                isCompactDevice={!phonePreview}
+              />
+            </Suspense>
+          ) : viewMode === 'hub' ? (
             <MotionAIHub />
-          ) : viewMode === 'mobile' ? (
-            <MobileWorkspaceApp 
-              pages={pages}
-              currentPageId={currentPageId}
-              onSelectPage={setCurrentPageId}
-              onAddPage={handleAddNewPageObj}
-              onUpdatePage={updatePageById}
-              onDeletePage={deletePageById}
-              userEmail={user?.email || null}
-            />
           ) : currentPage ? (
              currentPage.pageType === 'canvas' ? (
                <CanvasEditor 

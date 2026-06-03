@@ -440,10 +440,14 @@ async function startServer() {
       }));
       messages.push({ role: 'user', text: String(message) });
 
-      const systemInstruction = `You are a helpful, professional, and elite Workspace Assistant named **MotionAI**. You live in the mobile workspace of Jake Malby.
+      const workspaceLabel =
+        typeof req.body?.workspaceName === 'string' && req.body.workspaceName.trim()
+          ? req.body.workspaceName.trim()
+          : 'your workspace';
+      const systemInstruction = `You are a helpful, professional Workspace Assistant named **MotionAI** for ${workspaceLabel}.
 - Answer user queries with professional poise and clarity in Markdown format.
 - Assist with content generation, summarization, general questions, and technical advice.
-- Keep your tone friendly, helpful, highly organized, and compact. Match the beautiful minimalist Workspace aesthetic.
+- Keep your tone friendly, helpful, highly organized, and compact. Match the minimalist workspace aesthetic.
 - Avoid preachy or overly verbose intros unless necessary. Deliver exact solutions directly.`;
 
       const text = await client.generateText(messages, { systemInstruction });

@@ -39,26 +39,44 @@ import 'highlight.js/styles/github-dark.css';
 import { Page, Block } from '../types';
 import { v4 as uuidv4 } from 'uuid';
 import { addGoogleTask } from '../lib/workspace';
+import { cn } from '../lib/utils';
+import { getTrash, clearTrash } from '../lib/trashStore';
+import { useToast } from './ToastProvider';
+import { requestMicrophonePermission } from '../lib/device';
 
 interface MobileWorkspaceAppProps {
   pages: Page[];
   currentPageId: string | null;
+  workspaceId: string;
+  workspaceName: string;
   onSelectPage: (id: string) => void;
   onAddPage: (page: Page) => void;
   onUpdatePage: (id: string, updates: Partial<Page>) => void;
   onDeletePage: (id: string) => void;
+  onRestorePage: (page: Page) => void;
+  onOpenSettings?: () => void;
+  onOpenPages?: () => void;
   userEmail: string | null;
+  /** True on real phones / installed PWA; false when previewing phone frame on desktop */
+  isCompactDevice?: boolean;
 }
 
 export function MobileWorkspaceApp({
   pages,
   currentPageId,
+  workspaceId,
+  workspaceName,
   onSelectPage,
   onAddPage,
   onUpdatePage,
   onDeletePage,
-  userEmail
+  onRestorePage,
+  onOpenSettings,
+  onOpenPages,
+  userEmail,
+  isCompactDevice = true,
 }: MobileWorkspaceAppProps) {
+  const { showToast } = useToast();
   // Navigation tabs: 'home' | 'chats' | 'meeting' | 'inbox'
   const [activeTab, setActiveTab] = useState<'home' | 'chats' | 'meeting' | 'inbox'>('home');
   
@@ -79,14 +97,15 @@ export function MobileWorkspaceApp({
   
   // AI Chat states
   const [chatMessages, setChatMessages] = useState<Array<{ role: 'user' | 'model'; text: string; id: string }>>([
-    { role: 'model', text: 'Hi! I am **MotionAI**. Ask me anything inside Jake Malby\'s space! I can draft documents, brainstorm items, or rewrite notes.', id: 'initial-ai' }
+    {
+      role: 'model',
+      text: `Hi! I am **MotionAI**. Ask me anything in **${workspaceName}** — I can draft documents, brainstorm, or rewrite notes.`,
+      id: 'initial-ai',
+    },
   ]);
   const [chatInput, setChatInput] = useState('');
   const [isAiTyping, setIsAiTyping] = useState(false);
   const [taskStatus, setTaskStatus] = useState<Record<string, 'idle' | 'loading' | 'success' | 'error'>>({});
-
-  // Active workspace metadata
-  const [workspaceName, setWorkspaceName] = useState("Jake Malby's space");
 
   // Meeting notes screen state
   const [isRecordingMeeting, setIsRecordingMeeting] = useState(false);
@@ -108,8 +127,11 @@ export function MobileWorkspaceApp({
     }
   }, []);
 
-  // Deleted pages (Bin)
-  const [deletedPages, setDeletedPages] = useState<Page[]>([]);
+  const [trashEntries, setTrashEntries] = useState(() => getTrash(workspaceId));
+
+  useEffect(() => {
+    setTrashEntries(getTrash(workspaceId));
+  }, [workspaceId, pages.length]);
 
   // Page level editing states inside mobile view
   const [addingBlockType, setAddingBlockType] = useState<string | null>(null);
@@ -126,10 +148,10 @@ export function MobileWorkspaceApp({
     const isStandalone = ('standalone' in window.navigator && (window.navigator as any).standalone) || 
       window.matchMedia('(display-mode: standalone)').matches;
 
-    if (isIOS && isSafari && !isStandalone) {
+    if (isIOS && isSafari && !isStandalone && isCompactDevice) {
       setShowIOSInstallDialog(true);
     }
-  }, []);
+  }, [isCompactDevice]);
 
   // --- GESTURE & RESPONSE OPTIMIZATION STATES & LOGIC ---
   const [swipedBlockId, setSwipedBlockId] = useState<string | null>(null);
@@ -292,7 +314,7 @@ export function MobileWorkspaceApp({
             if (latestResult && latestResult[0]) {
               const resultMsg = latestResult[0].transcript.trim();
               if (resultMsg) {
-                setMeetingTranscript(prev => [...prev, `[Jake (My Voice)]: ${resultMsg}`]);
+                setMeetingTranscript(prev => [...prev, `[You]: ${resultMsg}`]);
               }
             }
           };
@@ -345,7 +367,7 @@ export function MobileWorkspaceApp({
     triggerHaptic(50);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition isn't supported inside this browser context. Please use Safari on iOS or Google Chrome.");
+      showToast("Speech recognition isn't supported in this browser. Try Safari on iOS or Chrome.", 'error');
       return;
     }
 
@@ -398,7 +420,7 @@ export function MobileWorkspaceApp({
     triggerHaptic(50);
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
     if (!SpeechRecognition) {
-      alert("Speech recognition isn't supported inside this browser context. Please use Safari on iOS or Google Chrome.");
+      showToast("Speech recognition isn't supported in this browser. Try Safari on iOS or Chrome.", 'error');
       return;
     }
 
@@ -475,7 +497,8 @@ export function MobileWorkspaceApp({
         },
         body: JSON.stringify({
           history: chatMessages.map(m => ({ role: m.role, text: m.text })),
-          message: query + extraContext
+          message: query + extraContext,
+          workspaceName,
         })
       });
 
@@ -502,7 +525,7 @@ export function MobileWorkspaceApp({
     } catch (err: any) {
       console.error('Failed to add Google task:', err);
       setTaskStatus(prev => ({ ...prev, [taskKey]: 'error' }));
-      alert(`Could not add task: ${err.message || 'Unknown error'}`);
+      showToast(`Could not add task: ${err.message || 'Unknown error'}`, 'error');
     }
   };
 
@@ -612,6 +635,37 @@ export function MobileWorkspaceApp({
     setActiveTab('home');
   };
 
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(window.location.search);
+    const action = params.get('action');
+    if (action === 'ask-ai') {
+      setIsAiChatOpen(true);
+      setActiveTab('chats');
+    }
+    if (action === 'new-page') {
+      createNewMobilePage();
+    }
+    if (action) {
+      window.history.replaceState({}, '', window.location.pathname);
+    }
+  }, []);
+
+  const startMeetingRecording = async () => {
+    triggerHaptic(50);
+    const mic = await requestMicrophonePermission();
+    if (mic === 'denied') {
+      showToast('Allow microphone access in Settings to record meetings.', 'error');
+      return;
+    }
+    if (mic === 'unsupported') {
+      showToast('Microphone capture is not supported in this browser.', 'error');
+    }
+    setActiveTab('meeting');
+    setIsRecordingMeeting(true);
+    setMeetingTranscript(['[Init]: Listening — speak clearly near your device.']);
+  };
+
   // Search filter
   const filteredSearchPages = searchQuery.trim() === ''
     ? pages
@@ -631,18 +685,25 @@ export function MobileWorkspaceApp({
   ];
 
   return (
-    <div className="w-full h-full bg-[#141414] text-gray-100 flex flex-col items-center justify-center font-sans select-none overflow-hidden p-0 md:p-4">
-      {/* Outer physical telephone wrapper - Responsive Full Screen when rendered on real Mobile PWA */}
-      <div className="w-full h-full md:h-auto md:max-w-[420px] md:aspect-[9/19.5] md:min-h-[700px] md:max-h-[calc(100vh-32px)] bg-[#0E0E0E] md:rounded-[48px] p-0 md:p-2.5 shadow-2xl md:border-[5px] md:border-[#2B2B2B] relative flex flex-col overflow-hidden md:ring-1 md:ring-white/15">
+    <div className={cn(
+      "w-full h-full text-gray-100 flex flex-col font-sans select-none overflow-hidden",
+      isCompactDevice ? "bg-[#0E0E0E] p-0" : "bg-[#141414] items-center justify-center p-0 md:p-4"
+    )}>
+      <div className={cn(
+        "w-full h-full relative flex flex-col overflow-hidden",
+        isCompactDevice
+          ? "bg-[#0E0E0E]"
+          : "md:h-auto md:max-w-[420px] md:aspect-[9/19.5] md:min-h-[700px] md:max-h-[calc(100vh-32px)] bg-[#0E0E0E] md:rounded-[48px] p-0 md:p-2.5 shadow-2xl md:border-[5px] md:border-[#2B2B2B] md:ring-1 md:ring-white/15"
+      )}>
         
-        {/* Dynamic camera notch / Island element (Hidden on real mobile viewports) */}
-        <div className="hidden md:flex absolute top-2.5 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-full z-50 items-center justify-between px-3.5">
+        {/* Phone preview chrome (desktop preview only) */}
+        <div className={cn("absolute top-2.5 left-1/2 -translate-x-1/2 w-32 h-6 bg-black rounded-full z-50 items-center justify-between px-3.5", isCompactDevice ? "hidden" : "hidden md:flex")}>
           <div className="w-2.5 h-2.5 rounded-full bg-[#1C1C1C] border border-[#2E2E2E]" />
           <div className="w-12 h-1 bg-[#1A1A1A] rounded-full" />
         </div>
 
-        {/* 1. Phone native Status Bar (Hidden on real mobile PWAs to prevent double battery clutter) */}
-        <div className="hidden md:flex h-10 pt-2 px-6 justify-between items-center text-xs text-stone-200 mt-1 select-none z-40 bg-transparent shrink-0">
+        {/* Phone preview status bar (desktop preview only) */}
+        <div className={cn("h-10 pt-2 px-6 justify-between items-center text-xs text-stone-200 mt-1 select-none z-40 bg-transparent shrink-0", isCompactDevice ? "hidden" : "hidden md:flex")}>
           {/* Time with silent badge */}
           <div className="flex items-center gap-1.5 font-bold font-mono text-[13px] tracking-tight text-white select-none">
             <span>{simTime}</span>
@@ -676,7 +737,10 @@ export function MobileWorkspaceApp({
         </div>
 
         {/* Internal body container */}
-        <div className="flex-1 overflow-hidden relative flex flex-col bg-[#191919] text-[#E3E3E3] md:rounded-t-[32px] md:rounded-b-[38px] border border-white/5 shadow-inner">
+        <div className={cn(
+          "flex-1 overflow-hidden relative flex flex-col bg-[#191919] text-[#E3E3E3] border border-white/5 shadow-inner",
+          !isCompactDevice && "md:rounded-t-[32px] md:rounded-b-[38px]"
+        )}>
           
           {/* VIEW: MAIN CLIENT VIEW SCENE */}
           {!mobileEditingPageId ? (
@@ -693,10 +757,11 @@ export function MobileWorkspaceApp({
               >
                 {/* J Profile circle */}
                 <button
-                  onClick={() => { triggerHaptic(50); setIsWorkspaceMenuOpen(true); }}
+                  onClick={() => { triggerHaptic(50); onOpenPages ? onOpenPages() : setIsWorkspaceMenuOpen(true); }}
                   className="w-11 h-11 min-w-11 rounded-full bg-stone-800 border border-stone-700 font-bold font-mono text-stone-300 text-sm flex items-center justify-center hover:bg-stone-700 transition-colors shrink-0 mr-1.5 cursor-pointer relative"
+                  aria-label="Open pages menu"
                 >
-                  J
+                  {(workspaceName.trim()[0] || 'W').toUpperCase()}
                   <span className="absolute bottom-0 right-0 w-2.5 h-2.5 bg-green-500 border-2 border-[#191919] rounded-full animate-ping" />
                 </button>
 
@@ -923,14 +988,9 @@ export function MobileWorkspaceApp({
                         </div>
 
                         <button 
-                          onClick={() => {
-                            triggerHaptic(50);
-                            setIsRecordingMeeting(true);
-                            setMeetingTranscript([
-                              "[Init]: Audio synchronization active... Ready to transcribe."
-                            ]);
-                          }}
-                          className="text-[#007AFF] text-[15px] font-bold hover:underline cursor-pointer transition-all pt-1"
+                          type="button"
+                          onClick={() => void startMeetingRecording()}
+                          className="text-[#007AFF] text-[15px] font-bold hover:underline cursor-pointer transition-all pt-1 min-h-11"
                         >
                           Start new meeting
                         </button>
@@ -1013,7 +1073,7 @@ export function MobileWorkspaceApp({
                       </div>
 
                       <button 
-                        onClick={() => alert("Standard filters matching. Dynamic notifications connected.")}
+                        onClick={() => showToast('Inbox filters will sync with workspace activity in a future update.', 'info')}
                         className="text-[#007AFF] text-[15px] font-bold hover:underline cursor-pointer transition-all pt-1"
                       >
                         Change filter
@@ -1679,11 +1739,11 @@ export function MobileWorkspaceApp({
                   {/* Header profile details */}
                   <div className="flex items-center gap-3 pt-2">
                     <div className="w-10 h-10 rounded-full bg-stone-800 border border-stone-700 text-stone-200 text-sm font-bold font-mono flex items-center justify-center">
-                      J
+                      {(workspaceName.trim()[0] || 'W').toUpperCase()}
                     </div>
                     <div>
                       <h4 className="text-[15px] font-bold text-white">{workspaceName}</h4>
-                      <p className="text-[11px] text-stone-500">{userEmail || 'JakeMalby@gmail.com'}</p>
+                      <p className="text-[11px] text-stone-500">{userEmail || 'Local workspace'}</p>
                     </div>
                   </div>
 
@@ -1693,14 +1753,13 @@ export function MobileWorkspaceApp({
                     {/* Item A: Switch Workspace */}
                     <button 
                       onClick={() => {
-                        const nextName = workspaceName === "Jake Malby's space" ? "Guest Sandbox Core" : "Jake Malby's space";
-                        setWorkspaceName(nextName);
                         setIsWorkspaceMenuOpen(false);
+                        onOpenPages?.();
                       }}
                       className="w-full flex items-center gap-3.5 px-3.5 py-3 text-left hover:bg-stone-850 rounded-xl transition-colors cursor-pointer"
                     >
                       <ArrowRightLeft size={16} className="text-stone-400" />
-                      <span className="text-[14px] font-semibold text-stone-200">Switch Workspace</span>
+                      <span className="text-[14px] font-semibold text-stone-200">All pages</span>
                     </button>
 
 
@@ -1709,7 +1768,11 @@ export function MobileWorkspaceApp({
                     <button 
                       onClick={() => {
                         setIsWorkspaceMenuOpen(false);
-                        setActiveSubDialog('settings');
+                        if (onOpenSettings) {
+                          onOpenSettings();
+                        } else {
+                          setActiveSubDialog('settings');
+                        }
                       }}
                       className="w-full flex items-center gap-3.5 px-3.5 py-3 text-left hover:bg-stone-850 rounded-xl transition-colors cursor-pointer"
                     >
@@ -1915,7 +1978,7 @@ export function MobileWorkspaceApp({
               >
                 <div className="bg-[#242424] rounded-2xl border border-stone-800 p-2 flex items-center gap-2">
                   <button 
-                    onClick={() => alert("Shortcut additions sync successfully.")}
+                    onClick={() => showToast('Shortcuts are saved to this device.', 'success')}
                     className="w-8 h-8 rounded-full bg-stone-850 text-stone-400 hover:text-stone-200 flex items-center justify-center cursor-pointer shrink-0 transition-colors"
                   >
                     <Plus size={16} />
@@ -2028,7 +2091,7 @@ export function MobileWorkspaceApp({
                 <div className="flex items-center justify-between shrink-0">
                   <div className="flex items-center gap-1.5 select-none text-left">
                     <span className="text-xl">👁</span>
-                    <h3 className="text-xs font-bold text-stone-400 uppercase font-mono tracking-wider">Ask AI in Jake Malby's space</h3>
+                    <h3 className="text-xs font-bold text-stone-400 uppercase font-mono tracking-wider">Ask AI in {workspaceName}</h3>
                   </div>
                   <button 
                     onClick={() => setIsSearchOverlayOpen(false)}
@@ -2142,15 +2205,12 @@ export function MobileWorkspaceApp({
                   
                   {/* Option A: AI Meeting Notes */}
                   <button 
+                    type="button"
                     onClick={() => {
                       setIsComposeMenuOpen(false);
-                      setActiveTab('meeting');
-                      setIsRecordingMeeting(true);
-                      setMeetingTranscript([
-                        "[Init]: Real-time audio parsing synced successfully."
-                      ]);
+                      void startMeetingRecording();
                     }}
-                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-stone-800 rounded-lg text-stone-200 transition-colors cursor-pointer group"
+                    className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-stone-800 rounded-lg text-stone-200 transition-colors cursor-pointer group min-h-11"
                   >
                     <Mic size={15} className="text-purple-400 group-hover:scale-110 transition-transform flex-shrink-0" />
                     <span className="text-[13.5px] font-bold">AI Meeting Notes</span>
@@ -2225,9 +2285,7 @@ export function MobileWorkspaceApp({
                     
                     <div className="space-y-2 max-h-40 overflow-y-auto">
                       {[
-                        { name: "Jake Malby (Owner)", role: "Admin", active: true },
-                        { name: "Sarah (PM)", role: "Developer", active: false },
-                        { name: "Alex (DevOps)", role: "Deployer", active: true }
+                        { name: userEmail ? `${userEmail} (you)` : 'You (local)', role: 'Owner', active: true },
                       ].map((m, i) => (
                         <div key={i} className="flex justify-between items-center p-2 bg-stone-900 rounded-lg border border-stone-850 text-xs">
                           <div className="flex items-center gap-1.5">
@@ -2249,9 +2307,41 @@ export function MobileWorkspaceApp({
                       Deleted documents are stored here. Restoring adds them back instantly.
                     </p>
                     
-                    <div className="p-4 text-center text-xs text-stone-600 bg-stone-900 rounded-lg border border-stone-850">
-                      Your recycle bin is clean and empty!
-                    </div>
+                    {trashEntries.length === 0 ? (
+                      <div className="p-4 text-center text-xs text-stone-600 bg-stone-900 rounded-lg border border-stone-850">
+                        Your recycle bin is empty.
+                      </div>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {trashEntries.map(entry => (
+                          <div key={entry.page.id} className="flex items-center justify-between gap-2 p-2 bg-stone-900 rounded-lg border border-stone-850 text-xs">
+                            <span className="truncate font-medium text-stone-200">{entry.page.icon} {entry.page.title || 'Untitled'}</span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                onRestorePage(entry.page);
+                                setTrashEntries(getTrash(workspaceId));
+                                showToast('Page restored', 'success');
+                              }}
+                              className="shrink-0 min-h-9 px-3 rounded-lg bg-emerald-700 text-white font-bold"
+                            >
+                              Restore
+                            </button>
+                          </div>
+                        ))}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            clearTrash(workspaceId);
+                            setTrashEntries([]);
+                            showToast('Bin emptied', 'info');
+                          }}
+                          className="w-full min-h-9 text-[10px] font-bold text-red-400 hover:text-red-300"
+                        >
+                          Empty bin permanently
+                        </button>
+                      </div>
+                    )}
                   </div>
                 )}
 
@@ -2291,12 +2381,12 @@ export function MobileWorkspaceApp({
           <div className="absolute bottom-4 left-4 right-4 bg-stone-900 border border-stone-850 rounded-2xl p-4 shadow-2xl z-50 text-left space-y-3 animate-in slide-in-from-bottom-5 duration-300">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-white flex items-center justify-center text-black font-sans font-extrabold text-[15px] select-none">
-                  O
+                <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white font-sans font-extrabold text-[15px] select-none">
+                  M
                 </div>
                 <div>
-                  <h4 className="text-xs font-bold text-stone-200">Install OpenNotion App</h4>
-                  <p className="text-[10px] text-stone-500">Run standalone on your iOS device</p>
+                  <h4 className="text-xs font-bold text-stone-200">Install MotionAI</h4>
+                  <p className="text-[10px] text-stone-500">Add to Home Screen for fullscreen + mic access</p>
                 </div>
               </div>
               <button 
@@ -2326,11 +2416,13 @@ export function MobileWorkspaceApp({
 
       </div>
 
-      <div className="mt-4 flex flex-wrap items-center justify-center gap-2 max-w-md text-center">
-        <p className="text-stone-500 text-xs font-mono select-none">
-          📱 Workspace active inside fluid viewport. Click any top/bottom action menu bar.
-        </p>
-      </div>
+      {!isCompactDevice && (
+        <div className="mt-4 flex flex-wrap items-center justify-center gap-2 max-w-md text-center">
+          <p className="text-stone-500 text-xs font-mono select-none">
+            Desktop mobile preview — open on your phone and Add to Home Screen for the full PWA.
+          </p>
+        </div>
+      )}
 
     </div>
   );
