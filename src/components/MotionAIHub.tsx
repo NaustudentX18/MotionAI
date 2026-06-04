@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from "react";
+import { MotionAILogo } from "./brand/MotionAILogo";
 import {
   Sparkles,
   CheckCircle2,
@@ -236,63 +237,6 @@ export function MotionAIHub() {
     setTimeout(() => setCopiedText(null), 2000);
   };
 
-  // SVG Custom MotionAI logo block
-  const MotionAiLogo = ({ size = 64, isDark = true }) => (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 100 100"
-      fill="none"
-      xmlns="http://www.w3.org/2000/svg"
-      className="drop-shadow-lg"
-    >
-      {/* Structural Isometric Background cube/card */}
-      <rect
-        x="10"
-        y="10"
-        width="80"
-        height="80"
-        rx="18"
-        fill={isDark ? "#121212" : "#FFFFFF"}
-        stroke={isDark ? "#FFFFFF" : "#121212"}
-        strokeWidth="6"
-      />
-
-      {/* Left Column of 'M' */}
-      <path
-        d="M26 72V28"
-        stroke={isDark ? "#FFFFFF" : "#121212"}
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-      {/* Isometric angled folding elements inside M */}
-      <path
-        d="M26 28L50 54"
-        stroke={isDark ? "#FFFFFF" : "#121212"}
-        strokeWidth="7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      <path
-        d="M50 54L74 28"
-        stroke={isDark ? "#FFFFFF" : "#121212"}
-        strokeWidth="7"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-      {/* Right Column of 'M' */}
-      <path
-        d="M74 28V72"
-        stroke={isDark ? "#FFFFFF" : "#121212"}
-        strokeWidth="7"
-        strokeLinecap="round"
-      />
-
-      {/* Isometric hand drawn stylistic hatch overlap aesthetic style */}
-      <circle cx="50" cy="54" r="3.5" fill={isDark ? "#9333EA" : "#7C3AED"} />
-    </svg>
-  );
-
   const envContent = `# .env.example - MotionAI Deployment Configuration
 PORT=3000
 NODE_ENV=production
@@ -340,7 +284,7 @@ services:
 
         <div className="max-w-4xl mx-auto flex flex-col items-center space-y-4">
           <div className="flex items-center gap-4">
-            <MotionAiLogo size={68} isDark={true} />
+            <MotionAILogo size={68} />
             <div className="text-left">
               <span className="bg-purple-950/40 text-purple-400 border border-purple-900/40 text-[10px] font-bold px-2.5 py-0.5 rounded-full uppercase tracking-widest font-mono">
                 Repository Grounding Active
@@ -817,26 +761,25 @@ service cloud.firestore {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   {/* Brand logo card 1 */}
                   <div className="bg-[#121212] p-5 rounded-xl border border-stone-800/80 flex flex-col items-center justify-center text-center space-y-4">
-                    <MotionAiLogo size={80} isDark={true} />
+                    <MotionAILogo size={80} />
                     <div>
                       <h4 className="text-white font-bold text-sm">
-                        MotionAI Slate Logo
+                        Flux Mark (primary)
                       </h4>
                       <p className="text-[11px] text-stone-500 mt-0.5">
-                        High definition, modern tech-slate theme.
+                        Gradient squircle with kinetic M and orbital spark.
                       </p>
                     </div>
                   </div>
 
-                  {/* Brand logo card 2 */}
                   <div className="bg-white p-5 rounded-xl border border-stone-200 flex flex-col items-center justify-center text-center space-y-4">
-                    <MotionAiLogo size={80} isDark={false} />
+                    <MotionAILogo size={80} theme="mono-dark" />
                     <div>
                       <h4 className="text-stone-900 font-extrabold text-sm">
-                        MotionAI Classic Light
+                        Mono on light
                       </h4>
                       <p className="text-[11px] text-stone-500 mt-0.5">
-                        Minimal off-white layout profile.
+                        For print, light UI chrome, and documents.
                       </p>
                     </div>
                   </div>

@@ -1,0 +1,35 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 80" role="img" aria-label="MotionAI">
+  <defs>
+    <linearGradient id="mw-bg" x1="0" y1="0" x2="80" y2="80" gradientUnits="userSpaceOnUse">
+      <stop offset="0%" stop-color="#a78bfa"/>
+      <stop offset="45%" stop-color="#7c3aed"/>
+      <stop offset="100%" stop-color="#06b6d4"/>
+    </linearGradient>
+    <linearGradient id="mw-spark" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="100%" stop-color="#67e8f9"/>
+    </linearGradient>
+    <linearGradient id="mw-text" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#fafafa"/>
+      <stop offset="55%" stop-color="#e9d5ff"/>
+      <stop offset="100%" stop-color="#67e8f9"/>
+    </linearGradient>
+    <style>
+      .mw-title { fill: #111827; }
+      .mw-ai { fill: #7c3aed; }
+      @media (prefers-color-scheme: dark) {
+        .mw-title { fill: url(#mw-text); }
+        .mw-ai { fill: #c4b5fd; }
+      }
+    </style>
+  </defs>
+  <g transform="translate(4 4) scale(0.5625)">
+    <rect x="4" y="4" width="120" height="120" rx="28" fill="url(#mw-bg)"/>
+    <path d="M 78 26 A 42 42 0 0 1 108 58" fill="none" stroke="rgba(255,255,255,0.42)" stroke-width="3" stroke-linecap="round"/>
+    <circle cx="108" cy="58" r="3.5" fill="#a5f3fc" opacity="0.95"/>
+    <path fill="#ffffff" d="M 30 94 V 38 L 52 66 L 64 50 L 76 66 L 98 38 V 94 H 88 V 54 L 64 78 L 40 54 V 94 Z"/>
+    <path fill="url(#mw-spark)" d="M 64 24 L 66.2 30.8 L 73 33 L 66.2 35.2 L 64 42 L 61.8 35.2 L 55 33 L 61.8 30.8 Z"/>
+  </g>
+  <text x="92" y="52" class="mw-title" font-family="system-ui, -apple-system, 'Segoe UI', Inter, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.04em">Motion</text>
+  <text x="218" y="52" class="mw-ai" font-family="system-ui, -apple-system, 'Segoe UI', Inter, sans-serif" font-size="34" font-weight="800" letter-spacing="-0.04em">AI</text>
+</svg>

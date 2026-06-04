@@ -6,258 +6,429 @@
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
     <meta name="apple-mobile-web-app-title" content="MotionAI" />
-    <link rel="apple-touch-icon" href="/docs/media/motionai-logo.png" />
+    <link rel="icon" type="image/svg+xml" href="/brand/motionai-mark.svg" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/docs/media/motionai-icon-512.png" />
+    <link rel="apple-touch-icon" href="/docs/media/motionai-icon-192.png" />
     <link rel="manifest" href="/manifest.json" />
     <title>MotionAI — Local-First Intelligent Workspace</title>
     <meta name="description" content="MotionAI is a free, open-source, self-hostable local-first workspace for documents, tasks, and AI actions." />
-    <meta name="theme-color" content="#09090B" />
+    <meta name="theme-color" content="#050508" />
+    <link rel="preload" href="/docs/media/motionai-hero-cinematic.png" as="image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..800;1,14..32,400..600&family=Instrument+Sans:wght@500;600;700&display=swap" rel="stylesheet" />
     <style>
       *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
+      :root {
+        --bg: #050508;
+        --glass: rgba(12, 12, 18, 0.72);
+        --glass-border: rgba(255, 255, 255, 0.08);
+        --text: #f4f4f5;
+        --muted: #a1a1aa;
+        --accent: #8b5cf6;
+        --accent-2: #06b6d4;
+        --glow: rgba(139, 92, 246, 0.35);
+      }
+
+      html, body {
+        height: 100%;
+        font-family: 'Inter', system-ui, sans-serif;
+        background: var(--bg);
+        color: var(--text);
+        -webkit-font-smoothing: antialiased;
+      }
+
       body {
-        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-        background: #09090B;
-        color: #E4E4E7;
-        min-height: 100vh;
+        overflow: hidden;
+      }
+
+      .splash-root {
+        position: fixed;
+        inset: 0;
+        z-index: 50;
         display: flex;
         flex-direction: column;
-        overflow: hidden;
-        -webkit-font-smoothing: antialiased;
-        -moz-osx-font-smoothing: grayscale;
+        transition: opacity 0.55s ease, visibility 0.55s ease;
       }
 
-      .grid-bg {
-        position: fixed; inset: 0; pointer-events: none; z-index: 0;
+      body:has(#root:not(:empty)) .splash-root {
+        opacity: 0;
+        visibility: hidden;
+        pointer-events: none;
+      }
+
+      .splash-bg {
+        position: absolute;
+        inset: 0;
+        z-index: 0;
+      }
+
+      .splash-bg img {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center 40%;
+        transform: scale(1.04);
+        animation: kenBurns 22s ease-in-out infinite alternate;
+      }
+
+      @keyframes kenBurns {
+        from { transform: scale(1.04) translateY(0); }
+        to { transform: scale(1.1) translateY(-1.5%); }
+      }
+
+      .splash-bg::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background:
+          radial-gradient(ellipse 80% 60% at 50% 0%, rgba(139, 92, 246, 0.22), transparent 55%),
+          radial-gradient(ellipse 60% 50% at 100% 100%, rgba(6, 182, 212, 0.12), transparent 50%),
+          linear-gradient(180deg, rgba(5, 5, 8, 0.35) 0%, rgba(5, 5, 8, 0.88) 55%, rgba(5, 5, 8, 0.97) 100%);
+      }
+
+      .splash-grid {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        opacity: 0.35;
         background-image:
-          linear-gradient(rgba(124, 58, 237, 0.03) 1px, transparent 1px),
-          linear-gradient(90deg, rgba(124, 58, 237, 0.03) 1px, transparent 1px);
-        background-size: 64px 64px;
+          linear-gradient(rgba(255,255,255,0.03) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(255,255,255,0.03) 1px, transparent 1px);
+        background-size: 48px 48px;
+        mask-image: linear-gradient(180deg, black 20%, transparent 90%);
       }
 
-      .orbs {
-        position: fixed; inset: 0; pointer-events: none; z-index: 0; overflow: hidden;
-      }
-      .orb {
-        position: absolute; border-radius: 50%; filter: blur(140px); opacity: 0.15;
-      }
-      .orb-1 {
-        width: 700px; height: 700px; background: #7C3AED;
-        top: -300px; right: -200px;
-        animation: orbFloat1 18s ease-in-out infinite;
-      }
-      .orb-2 {
-        width: 550px; height: 550px; background: #06B6D4;
-        bottom: -250px; left: -150px;
-        animation: orbFloat2 22s ease-in-out infinite;
-      }
-      .orb-3 {
-        width: 400px; height: 400px; background: #8B5CF6;
-        top: 50%; left: 60%;
-        animation: orbFloat3 14s ease-in-out infinite;
-      }
-
-      @keyframes orbFloat1 {
-        0%, 100% { transform: translate(0, 0); }
-        50% { transform: translate(60px, 80px); }
-      }
-      @keyframes orbFloat2 {
-        0%, 100% { transform: translate(0, 0); }
-        50% { transform: translate(-80px, -60px); }
-      }
-      @keyframes orbFloat3 {
-        0%, 100% { transform: translate(0, 0); }
-        33% { transform: translate(40px, -50px); }
-        66% { transform: translate(-30px, 30px); }
-      }
-
-      .splash {
-        position: relative; z-index: 1;
-        display: flex; flex-direction: column;
-        align-items: center; justify-content: center;
-        flex: 1; padding: 40px 24px;
-      }
-
-      .logo-wrap {
-        position: relative; width: 88px; height: 88px; margin-bottom: 32px;
-      }
-      .logo-ring {
-        position: absolute; inset: 0; border-radius: 50%;
-        border: 3px solid transparent;
-        background: conic-gradient(from 0deg, #7C3AED, #A78BFA, #06B6D4, #7C3AED) border-box;
-        -webkit-mask: linear-gradient(#fff 0 0) padding-box, linear-gradient(#fff 0 0);
-        -webkit-mask-composite: xor; mask-composite: exclude;
-        animation: ringSpin 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-      }
-      @keyframes ringSpin { to { transform: rotate(360deg); } }
-
-      .logo-center {
-        position: absolute; top: 50%; left: 50%;
-        transform: translate(-50%, -50%);
-        display: flex; align-items: center; justify-content: center;
-      }
-      .logo-icon {
-        width: 36px; height: 36px;
-        background: linear-gradient(135deg, #7C3AED 0%, #A78BFA 50%, #06B6D4 100%);
-        border-radius: 10px;
-        animation: iconMorph 3s ease-in-out infinite;
+      .splash-main {
         position: relative;
-      }
-      .logo-icon::after {
-        content: ''; position: absolute; inset: -4px; border-radius: 14px;
-        background: linear-gradient(135deg, rgba(124,58,237,0.2), rgba(6,182,212,0.2));
-        z-index: -1;
-        animation: glowPulse 3s ease-in-out infinite;
-      }
-      @keyframes iconMorph {
-        0%, 100% { border-radius: 10px; transform: scale(1) rotate(0deg); }
-        33% { border-radius: 14px; transform: scale(1.05) rotate(3deg); }
-        66% { border-radius: 8px; transform: scale(0.97) rotate(-2deg); }
-      }
-      @keyframes glowPulse {
-        0%, 100% { opacity: 0.5; transform: scale(1); }
-        50% { opacity: 1; transform: scale(1.15); }
+        z-index: 2;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        padding: max(24px, env(safe-area-inset-top)) 20px 16px;
+        gap: 28px;
       }
 
-      .brand-area { text-align: center; margin-bottom: 44px; }
-      .brand-name {
-        font-size: 36px; font-weight: 800; letter-spacing: -1px; line-height: 1.1;
-        background: linear-gradient(135deg, #FAFAFA 0%, #A1A1AA 100%);
-        -webkit-background-clip: text; -webkit-text-fill-color: transparent;
-        background-clip: text; margin-bottom: 10px;
-      }
-      .brand-tagline {
-        font-size: 15px; font-weight: 400; color: #71717A;
-        letter-spacing: 0.2px; line-height: 1.5;
+      .splash-card {
+        width: min(440px, 100%);
+        padding: 32px 28px 28px;
+        border-radius: 24px;
+        background: var(--glass);
+        border: 1px solid var(--glass-border);
+        backdrop-filter: blur(24px) saturate(1.4);
+        -webkit-backdrop-filter: blur(24px) saturate(1.4);
+        box-shadow:
+          0 0 0 1px rgba(139, 92, 246, 0.08) inset,
+          0 24px 80px rgba(0, 0, 0, 0.55),
+          0 0 60px var(--glow);
+        text-align: center;
+        animation: cardIn 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
       }
 
-      .load-section {
-        display: flex; flex-direction: column; align-items: center;
-        gap: 20px; width: 100%; max-width: 280px;
+      @keyframes cardIn {
+        from { opacity: 0; transform: translateY(20px) scale(0.98); }
+        to { opacity: 1; transform: translateY(0) scale(1); }
       }
+
+      .logo-mark {
+        width: 88px;
+        height: 88px;
+        margin: 0 auto 20px;
+        filter: drop-shadow(0 12px 40px rgba(139, 92, 246, 0.45));
+        animation: logoPulse 3s ease-in-out infinite;
+      }
+
+      .logo-mark img {
+        width: 100%;
+        height: 100%;
+        display: block;
+      }
+
+      @keyframes logoPulse {
+        0%, 100% { box-shadow: 0 12px 40px rgba(139, 92, 246, 0.35); }
+        50% { box-shadow: 0 16px 56px rgba(6, 182, 212, 0.28); }
+      }
+
+      .brand-title {
+        font-family: 'Instrument Sans', 'Inter', sans-serif;
+        font-size: clamp(28px, 6vw, 34px);
+        font-weight: 700;
+        letter-spacing: -0.03em;
+        line-height: 1.1;
+        background: linear-gradient(135deg, #fff 0%, #c4b5fd 45%, #67e8f9 100%);
+        -webkit-background-clip: text;
+        background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 8px;
+      }
+
+      .brand-sub {
+        font-size: 14px;
+        color: var(--muted);
+        line-height: 1.5;
+        max-width: 320px;
+        margin: 0 auto 24px;
+      }
+
+      .progress-wrap {
+        width: 100%;
+        margin-bottom: 14px;
+      }
+
       .progress-track {
-        width: 100%; height: 4px; background: #27272A;
-        border-radius: 99px; overflow: hidden;
-      }
-      .progress-bar {
-        height: 100%; width: 100%;
-        background: linear-gradient(90deg, #7C3AED, #A78BFA, #06B6D4, #7C3AED);
-        background-size: 300% 100%; border-radius: 99px;
-        animation: barSweep 2.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
-      }
-      @keyframes barSweep {
-        0% { transform: scaleX(0); transform-origin: left; }
-        25% { transform: scaleX(0.3); transform-origin: left; }
-        50% { transform: scaleX(0.6); transform-origin: left; }
-        65% { transform: scaleX(0.6); transform-origin: right; }
-        100% { transform: scaleX(0); transform-origin: right; }
+        height: 3px;
+        border-radius: 99px;
+        background: rgba(255, 255, 255, 0.08);
+        overflow: hidden;
       }
 
-      .status {
-        display: flex; align-items: center; gap: 10px;
-        font-size: 13px; color: #52525B; font-weight: 450;
-      }
-      .status-dots { display: flex; gap: 4px; }
-      .status-dot {
-        width: 5px; height: 5px; border-radius: 50%; background: #7C3AED;
-        animation: dotPulse 1.6s ease-in-out infinite;
-      }
-      .status-dot:nth-child(2) { animation-delay: 0.25s; }
-      .status-dot:nth-child(3) { animation-delay: 0.5s; }
-      @keyframes dotPulse {
-        0%, 80%, 100% { opacity: 0.25; transform: scale(0.75); }
-        40% { opacity: 1; transform: scale(1); }
+      .progress-fill {
+        height: 100%;
+        width: 0%;
+        border-radius: 99px;
+        background: linear-gradient(90deg, var(--accent), #c4b5fd, var(--accent-2));
+        background-size: 200% 100%;
+        animation: progressGrow 4.5s cubic-bezier(0.4, 0, 0.2, 1) forwards,
+                   shimmer 2s linear infinite;
       }
 
-      .features {
-        display: flex; flex-wrap: wrap; justify-content: center;
-        gap: 8px; margin-top: 44px; max-width: 420px;
+      @keyframes progressGrow {
+        0% { width: 0%; }
+        40% { width: 52%; }
+        75% { width: 78%; }
+        100% { width: 92%; }
       }
-      .feature-chip {
-        padding: 6px 14px; border-radius: 99px;
-        background: rgba(255,255,255,0.04);
-        border: 1px solid rgba(255,255,255,0.06);
-        font-size: 11px; font-weight: 500; color: #71717A;
-        letter-spacing: 0.2px;
-        animation: chipFade 0.8s ease-out both;
-        animation-delay: calc(var(--i, 0) * 80ms + 400ms);
+
+      @keyframes shimmer {
+        0% { background-position: 100% 0; }
+        100% { background-position: -100% 0; }
       }
-      @keyframes chipFade {
-        from { opacity: 0; transform: translateY(8px); }
+
+      .status-line {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        font-size: 12px;
+        color: #71717a;
+        min-height: 18px;
+      }
+
+      .status-line span.msg {
+        transition: opacity 0.35s ease;
+      }
+
+      .pulse-dot {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        box-shadow: 0 0 12px var(--accent);
+        animation: pulse 1.4s ease-in-out infinite;
+      }
+
+      @keyframes pulse {
+        0%, 100% { opacity: 0.4; transform: scale(0.85); }
+        50% { opacity: 1; transform: scale(1); }
+      }
+
+      .chip-row {
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 8px;
+        margin-top: 20px;
+      }
+
+      .chip {
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        padding: 5px 10px;
+        border-radius: 99px;
+        color: #d4d4d8;
+        background: rgba(255, 255, 255, 0.05);
+        border: 1px solid rgba(255, 255, 255, 0.07);
+        animation: chipIn 0.6s ease both;
+        animation-delay: calc(var(--i) * 60ms + 0.3s);
+      }
+
+      @keyframes chipIn {
+        from { opacity: 0; transform: translateY(6px); }
         to { opacity: 1; transform: translateY(0); }
       }
 
-      .footer {
-        position: relative; z-index: 1;
-        text-align: center; padding: 20px 24px 28px;
-        font-size: 11px; color: #3F3F46;
-        letter-spacing: 0.6px; text-transform: uppercase;
+      .showcase-strip {
+        position: relative;
+        z-index: 2;
+        padding: 0 16px max(20px, env(safe-area-inset-bottom));
+        animation: stripIn 1s ease 0.2s both;
       }
-      .footer a { color: #52525B; text-decoration: none; transition: color 0.2s; }
-      .footer a:hover { color: #A1A1AA; }
 
-      #root:not(:empty) ~ .splash,
-      #root:not(:empty) ~ .footer,
-      #root:not(:empty) ~ .grid-bg,
-      #root:not(:empty) ~ .orbs {
-        display: none;
+      @keyframes stripIn {
+        from { opacity: 0; transform: translateY(16px); }
+        to { opacity: 1; transform: translateY(0); }
       }
-      #root:not(:empty) { position: relative; z-index: 10; }
+
+      .strip-label {
+        text-align: center;
+        font-size: 10px;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #52525b;
+        margin-bottom: 10px;
+      }
+
+      .strip-track {
+        display: flex;
+        gap: 12px;
+        overflow-x: auto;
+        scroll-snap-type: x mandatory;
+        padding: 4px 4px 12px;
+        scrollbar-width: none;
+        -ms-overflow-style: none;
+      }
+
+      .strip-track::-webkit-scrollbar { display: none; }
+
+      .strip-item {
+        flex: 0 0 auto;
+        width: min(200px, 42vw);
+        scroll-snap-align: center;
+        border-radius: 12px;
+        overflow: hidden;
+        border: 1px solid rgba(255, 255, 255, 0.1);
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.45);
+        opacity: 0.92;
+        transition: transform 0.25s ease, opacity 0.25s ease;
+      }
+
+      .strip-item:hover {
+        transform: translateY(-3px) scale(1.02);
+        opacity: 1;
+      }
+
+      .strip-item img {
+        display: block;
+        width: 100%;
+        aspect-ratio: 16 / 10;
+        object-fit: cover;
+      }
+
+      .splash-footer {
+        position: relative;
+        z-index: 2;
+        text-align: center;
+        padding-bottom: 8px;
+        font-size: 10px;
+        letter-spacing: 0.12em;
+        text-transform: uppercase;
+        color: #3f3f46;
+      }
+
+      .splash-footer a {
+        color: #71717a;
+        text-decoration: none;
+        transition: color 0.2s;
+      }
+
+      .splash-footer a:hover { color: #e4e4e7; }
+
+      #root {
+        position: relative;
+        z-index: 100;
+        min-height: 100vh;
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        .splash-bg img,
+        .progress-fill,
+        .logo-mark,
+        .splash-card,
+        .strip-item { animation: none !important; }
+        .progress-fill { width: 70%; }
+      }
     </style>
   </head>
   <body>
-    <div class="grid-bg"></div>
-    <div class="orbs">
-      <div class="orb orb-1"></div>
-      <div class="orb orb-2"></div>
-      <div class="orb orb-3"></div>
-    </div>
-
-    <div class="splash">
-      <div class="logo-wrap">
-        <div class="logo-ring"></div>
-        <div class="logo-center">
-          <div class="logo-icon"></div>
-        </div>
+    <div class="splash-root" id="splash" aria-live="polite" aria-busy="true">
+      <div class="splash-bg" aria-hidden="true">
+        <img src="/docs/media/motionai-hero-cinematic.png" alt="" width="1920" height="823" fetchpriority="high" decoding="async" />
       </div>
+      <div class="splash-grid" aria-hidden="true"></div>
 
-      <div class="brand-area">
-        <div class="brand-name">MotionAI</div>
-        <div class="brand-tagline">Local-First Intelligent Workspace</div>
-      </div>
-
-      <div class="load-section">
-        <div class="progress-track">
-          <div class="progress-bar"></div>
-        </div>
-
-        <div class="status">
-          <div class="status-dots">
-            <span class="status-dot"></span>
-            <span class="status-dot"></span>
-            <span class="status-dot"></span>
+      <div class="splash-main">
+        <div class="splash-card">
+          <div class="logo-mark">
+            <img src="/brand/motionai-mark.svg" alt="MotionAI" width="88" height="88" />
           </div>
-          <span>Initialising workspace…</span>
+          <h1 class="brand-title">MotionAI</h1>
+          <p class="brand-sub">Your local-first command center for notes, tasks, AI, and automations — private by default.</p>
+
+          <div class="progress-wrap">
+            <div class="progress-track">
+              <div class="progress-fill" id="progress-fill"></div>
+            </div>
+          </div>
+
+          <div class="status-line">
+            <span class="pulse-dot" aria-hidden="true"></span>
+            <span class="msg" id="status-msg">Waking up your workspace…</span>
+          </div>
+
+          <div class="chip-row" aria-hidden="true">
+            <span class="chip" style="--i:0">Block editor</span>
+            <span class="chip" style="--i:1">BYO AI</span>
+            <span class="chip" style="--i:2">Offline-first</span>
+            <span class="chip" style="--i:3">PWA ready</span>
+          </div>
         </div>
       </div>
 
-      <div class="features">
-        <span class="feature-chip" style="--i:0">Block Editor</span>
-        <span class="feature-chip" style="--i:1">Multi-Provider AI</span>
-        <span class="feature-chip" style="--i:2">Local-First</span>
-        <span class="feature-chip" style="--i:3">Offline Persistence</span>
-        <span class="feature-chip" style="--i:4">Backlinks</span>
-        <span class="feature-chip" style="--i:5">Canvas</span>
+      <div class="showcase-strip">
+        <p class="strip-label">Built for focus</p>
+        <div class="strip-track">
+          <figure class="strip-item"><img src="/docs/media/motionai-hub-showcase.png" alt="MotionAI Portal hub" loading="lazy" width="400" height="250" /></figure>
+          <figure class="strip-item"><img src="/docs/media/motionai-editor-showcase.png" alt="Block editor" loading="lazy" width="400" height="250" /></figure>
+          <figure class="strip-item"><img src="/docs/media/motionai-settings-showcase.png" alt="Settings and AI providers" loading="lazy" width="400" height="250" /></figure>
+          <figure class="strip-item"><img src="/docs/media/motionai-mobile-showcase.png" alt="Mobile workspace" loading="lazy" width="400" height="250" /></figure>
+        </div>
       </div>
-    </div>
 
-    <div class="footer">
-      <a href="https://github.com/NaustudentX18/MotionAI" target="_blank" rel="noopener">MotionAI &mdash; Open Source</a>
+      <footer class="splash-footer">
+        <a href="https://github.com/NaustudentX18/MotionAI" target="_blank" rel="noopener noreferrer">Open source · Apache 2.0</a>
+      </footer>
     </div>
 
     <div id="root"></div>
+
+    <script>
+      (function () {
+        var messages = [
+          'Waking up your workspace…',
+          'Loading block editor…',
+          'Connecting local persistence…',
+          'Preparing AI providers…',
+          'Almost there…'
+        ];
+        var el = document.getElementById('status-msg');
+        var i = 0;
+        setInterval(function () {
+          if (!el) return;
+          i = (i + 1) % messages.length;
+          el.style.opacity = '0';
+          setTimeout(function () {
+            el.textContent = messages[i];
+            el.style.opacity = '1';
+          }, 200);
+        }, 2200);
+      })();
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

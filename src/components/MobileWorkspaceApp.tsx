@@ -46,6 +46,7 @@ import { requestMicrophonePermission } from '../lib/device';
 import { motionAiFetch } from '../lib/apiClient';
 import { MobileRichPageFallback } from './mobile/MobileRichPageFallback';
 import { MobileBlockEditorView } from './mobile/MobileBlockEditorView';
+import { MotionAILogo } from './brand/MotionAILogo';
 
 interface MobileWorkspaceAppProps {
   pages: Page[];
@@ -59,6 +60,10 @@ interface MobileWorkspaceAppProps {
   onRestorePage: (page: Page) => void;
   onOpenSettings?: () => void;
   onOpenPages?: () => void;
+  onQuickCapture?: () => void;
+  onOpenDailyNote?: () => void;
+  focusBlockId?: string | null;
+  onFocusBlockUsed?: () => void;
   userEmail: string | null;
   /** True on real phones / installed PWA; false when previewing phone frame on desktop */
   isCompactDevice?: boolean;
@@ -77,6 +82,10 @@ export function MobileWorkspaceApp({
   onRestorePage,
   onOpenSettings,
   onOpenPages,
+  onQuickCapture,
+  onOpenDailyNote,
+  focusBlockId,
+  onFocusBlockUsed,
   userEmail,
   isCompactDevice = true,
   onRequestDesktopView,
@@ -495,22 +504,20 @@ export function MobileWorkspaceApp({
         console.warn('Semantic search warning:', e);
       }
 
-      const res = await motionAiFetch('/api/ai/chat', {
-        method: 'POST',
-        body: JSON.stringify({
-          history: chatMessages.map(m => ({ role: m.role, text: m.text })),
-          message: query + extraContext,
-          workspaceName,
-        })
-      });
+      const streamId = uuidv4();
+      setChatMessages(prev => [...prev, { role: 'model', text: '', id: streamId }]);
 
-      if (res.ok) {
-        const data = await res.json();
-        setChatMessages(prev => [...prev, { role: 'model', text: data.text || 'No response from AI.', id: uuidv4() }]);
-      } else {
-        const errorText = await res.text();
-        setChatMessages(prev => [...prev, { role: 'model', text: `⚠️ Error generation: ${errorText || 'Server offline or API key missing.'}`, id: uuidv4() }]);
-      }
+      const { streamAiChat } = await import('../lib/ai/streamChat');
+      await streamAiChat({
+        history: chatMessages.map(m => ({ role: m.role, text: m.text })),
+        message: query + extraContext,
+        workspaceName,
+        onDelta: (chunk) => {
+          setChatMessages(prev =>
+            prev.map(m => (m.id === streamId ? { ...m, text: m.text + chunk } : m)),
+          );
+        },
+      });
     } catch (err: any) {
       setChatMessages(prev => [...prev, { role: 'model', text: `⚠️ Connection failure: ${err.message || 'Make sure the server is online.'}`, id: uuidv4() }]);
     } finally {
@@ -637,12 +644,27 @@ export function MobileWorkspaceApp({
   };
 
   useEffect(() => {
+    if (currentPageId) {
+      setMobileEditingPageId(currentPageId);
+    }
+  }, [currentPageId]);
+
+  useEffect(() => {
+    if (focusBlockId && mobileEditingPageId) {
+      onFocusBlockUsed?.();
+    }
+  }, [focusBlockId, mobileEditingPageId, onFocusBlockUsed]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(window.location.search);
     const action = params.get('action');
     if (action === 'ask-ai') {
       setIsAiChatOpen(true);
       setActiveTab('chats');
+    }
+    if (action === 'capture' && onQuickCapture) {
+      onQuickCapture();
     }
     if (action === 'new-page') {
       createNewMobilePage();
@@ -769,12 +791,13 @@ export function MobileWorkspaceApp({
                 {/* Home tab button */}
                 <button
                   onClick={() => { triggerHaptic(50); setActiveTab('home'); setMobileEditingPageId(null); }}
-                  className={`h-11 min-w-11 rounded-full px-4 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
+                  className={`h-11 min-w-11 rounded-full px-3 flex items-center gap-1.5 transition-all duration-200 shrink-0 text-sm font-semibold cursor-pointer ${
                     activeTab === 'home'
                       ? 'bg-stone-800 text-white shadow-md font-bold border border-stone-700'
                       : 'bg-stone-900/40 text-stone-400 hover:text-stone-200'
                   }`}
                 >
+                  {activeTab === 'home' ? <MotionAILogo size={18} /> : null}
                   <Home size={15} />
                   {activeTab === 'home' && <span>Home</span>}
                 </button>
@@ -1272,12 +1295,9 @@ export function MobileWorkspaceApp({
                   <Clock size={16} />
                 </button>
 
-                {/* Center logo label */}
-                <div className="flex flex-col items-center select-none scale-102">
-                  <div className="w-7 h-7 bg-white text-black font-sans font-bold text-[13px] rounded-full flex items-center justify-center shadow-lg border border-white/20 select-none animate-bounce">
-                    👁
-                  </div>
-                  <span className="text-[11.5px] font-bold tracking-widest text-[#E3E3E3] uppercase font-mono mt-1 select-none">MotionAI</span>
+                <div className="flex flex-col items-center select-none">
+                  <MotionAILogo size={36} />
+                  <span className="text-[10px] font-bold tracking-widest text-stone-400 uppercase font-mono mt-1 select-none">MotionAI</span>
                 </div>
 
                 <button 
@@ -1797,14 +1817,52 @@ export function MobileWorkspaceApp({
 
         </div>
 
+        {!mobileEditingPageId && (
+          <nav
+            className="shrink-0 border-t border-stone-800 bg-stone-950/95 backdrop-blur-md flex items-stretch justify-around px-1 z-30"
+            style={{ paddingBottom: 'max(8px, env(safe-area-inset-bottom))' }}
+          >
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(40); setActiveTab('home'); setMobileEditingPageId(null); }}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${activeTab === 'home' ? 'text-white' : 'text-stone-500'}`}
+            >
+              <Home size={20} />
+              Home
+            </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(40); setIsSearchOverlayOpen(true); }}
+              className="flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold text-stone-500"
+            >
+              <Search size={20} />
+              Search
+            </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(50); onQuickCapture?.(); }}
+              className="flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-bold text-purple-400"
+            >
+              <PlusCircle size={22} className="text-purple-500" />
+              Capture
+            </button>
+            <button
+              type="button"
+              onClick={() => { triggerHaptic(40); setIsAiChatOpen(true); setActiveTab('chats'); }}
+              className={`flex-1 flex flex-col items-center gap-0.5 py-2 text-[10px] font-semibold ${isAiChatOpen ? 'text-purple-300' : 'text-stone-500'}`}
+            >
+              <Sparkles size={20} />
+              AI
+            </button>
+          </nav>
+        )}
+
         {/* iOS standalone PWA installer instructions dialog overlay */}
         {showIOSInstallDialog && (
           <div className="absolute bottom-4 left-4 right-4 bg-stone-900 border border-stone-850 rounded-2xl p-4 shadow-2xl z-50 text-left space-y-3 animate-in slide-in-from-bottom-5 duration-300">
             <div className="flex justify-between items-start">
               <div className="flex items-center gap-2">
-                <div className="w-8 h-8 rounded-lg bg-purple-600 flex items-center justify-center text-white font-sans font-extrabold text-[15px] select-none">
-                  M
-                </div>
+                <MotionAILogo size={32} />
                 <div>
                   <h4 className="text-xs font-bold text-stone-200">Install MotionAI</h4>
                   <p className="text-[10px] text-stone-500">Add to Home Screen for fullscreen + mic access</p>
